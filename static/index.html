@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V2</span></header>
+
+<section id="home" class="screen active">
+  <div class="hero"><small id="greeting">Good morning</small><h2>Dress well with what you already own.</h2><p>Your wardrobe, fit profile and feedback shape every recommendation.</p></div>
+  <div class="grid">
+    <button class="tile" data-go="outfits">☀️<b>What should I wear?</b><span>Outfits for the occasion and weather.</span></button>
+    <button class="tile" data-go="wardrobe">👕<b>Build around an item</b><span>Select one real piece from your wardrobe.</span></button>
+    <button class="tile" data-go="wardrobe">🧥<b>My Wardrobe</b><span id="count">0 saved items</span></button>
+    <button class="tile" data-go="profile">📏<b>My Fit Profile</b><span>Measurements, brands and preferences.</span></button>
+  </div>
+  <div class="section"><div class="notice"><b>Wardrobe first.</b> The stylist should only suggest shopping where it identifies a genuine gap.</div></div>
+</section>
+
+<section id="wardrobe" class="screen">
+ <div class="section">
+  <div class="row between"><h3>My Wardrobe</h3><button class="primary" data-go="add">＋ Add item</button></div>
+  <div class="two"><input id="search" placeholder="Search wardrobe…"><select id="filter"><option value="">All categories</option></select></div>
+  <div id="garments" class="garments"></div>
+ </div>
+</section>
+
+<section id="add" class="screen">
+ <div class="section">
+  <div class="row between"><h3>Add to Wardrobe</h3><button class="ghost" data-go="wardrobe">Cancel</button></div>
+  <div class="card form">
+   <label class="upload"><input id="photo" type="file" accept="image/*" capture="environment"><span>📷 Photograph or choose garment</span></label>
+   <img id="preview" class="preview hidden">
+   <div id="analysisMsg" class="notice hidden"></div>
+   <div class="two"><label>CATEGORY<input id="category"></label><label>GARMENT TYPE<input id="garment_type"></label></div>
+   <div class="two"><label>BRAND<input id="brand"></label><label>MODEL / LINE<input id="model_line"></label></div>
+   <div class="three"><label>SIZE<input id="labelled_size"></label><label>COLOUR<input id="colour"></label><label>MATERIAL<input id="material"></label></div>
+   <div class="two"><label>PATTERN<input id="pattern"></label><label>FIT / CUT<input id="fit_cut"></label></div>
+   <div class="two"><label>FIT FEEDBACK<select id="fit_feedback"><option>Unknown</option><option>Perfect fit</option><option>Slightly tight</option><option>Slightly loose</option><option>Too tight</option><option>Too loose</option></select></label><label>SEASON<input id="season"></label></div>
+   <label>FORMALITY<input id="formality"></label>
+   <label>NOTES / GARMENT MEASUREMENTS<textarea id="notes" rows="3"></textarea></label>
+   <button id="saveGarment" class="primary full">Save to wardrobe</button>
+  </div>
+ </div>
+</section>
+
+<section id="outfits" class="screen">
+ <div class="section"><h3>What should I wear?</h3>
+  <div class="card form">
+   <div class="two"><label>OCCASION<select id="occasion"><option>Casual daytime</option><option>Smart casual</option><option>Dinner</option><option>Date night</option><option>Business casual</option><option>Wedding / event</option><option>Holiday / resort</option></select></label><label>TEMPERATURE °C<input id="temperature" type="number" value="22"></label></div>
+   <div class="two"><label>WEATHER<select id="weather"><option>Dry</option><option>Sunny</option><option>Cloudy</option><option>Rain likely</option><option>Windy</option></select></label><label>LOCATION<input id="location" placeholder="e.g. Mallorca"></label></div>
+   <label>BUILD AROUND<select id="anchor"><option value="">Let the stylist choose</option></select></label>
+   <button id="makeOutfits" class="primary full">Create outfit ideas</button>
+  </div>
+  <div id="results"></div>
+ </div>
+</section>
+
+<section id="profile" class="screen">
+ <div class="section"><h3>My Profile & Fit</h3>
+  <div class="card form">
+   <div class="two"><label>NAME<input id="name"></label><label>HEIGHT (cm)<input id="height_cm" type="number"></label></div>
+   <div class="three"><label>CHEST (cm)<input id="chest_cm" type="number"></label><label>WAIST (cm)<input id="waist_cm" type="number"></label><label>HIPS / SEAT (cm)<input id="hips_cm" type="number"></label></div>
+   <div class="three"><label>THIGH (cm)<input id="thigh_cm" type="number"></label><label>INSIDE LEG (cm)<input id="inseam_cm" type="number"></label><label>SLEEVE (cm)<input id="sleeve_cm" type="number"></label></div>
+   <div class="two"><label>NECK (cm)<input id="neck_cm" type="number"></label><label>PREFERRED FIT<select id="preferred_fit"><option>Tailored / regular</option><option>Slim</option><option>Relaxed</option><option>Mixed by garment</option></select></label></div>
+   <label>STYLE NOTES<textarea id="style_notes" rows="3"></textarea></label>
+   <label>BRAND / SIZE NOTES<textarea id="brand_notes" rows="3" placeholder="e.g. Ralph Lauren Custom Slim Fit L works well…"></textarea></label>
+   <button id="saveProfile" class="primary full">Save profile</button>
+  </div>
+ </div>
+</section>
+</div>
+
+<nav><div class="navinner">
+<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="outfits">✦<span>Outfits</span></button><button data-go="profile">◎<span>Profile</span></button>
+</div></nav>
+<script src="/static/app.js"></script>
+</body></html>

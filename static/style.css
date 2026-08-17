@@ -1,0 +1,23 @@
+
+:root{--bg:#f6f1e8;--card:#fffdf9;--ink:#13263f;--muted:#6e7783;--line:#ded8cd;--accent:#203c61;--soft:#ebe3d6;--ok:#416b55;--radius:22px;--shadow:0 10px 30px rgba(31,45,62,.07)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif}
+button,input,select,textarea{font:inherit}button{cursor:pointer}.app{max-width:760px;margin:auto;min-height:100vh;padding-bottom:90px}
+header{position:sticky;top:0;z-index:8;background:rgba(246,241,232,.95);backdrop-filter:blur(12px);padding:17px 18px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(222,216,205,.7)}
+h1{font-size:22px;margin:0}header small{color:var(--muted)}.badge{background:var(--soft);padding:6px 9px;border-radius:999px;font-size:11px;font-weight:800}
+.screen{display:none}.screen.active{display:block}.hero{padding:24px 18px 8px}.hero h2{font-size:32px;line-height:1.06;margin:5px 0 8px}.hero p,small{color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px}.tile,.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.tile{padding:18px;text-align:left;min-height:132px;color:var(--ink)}.tile b{font-size:18px;display:block;margin:15px 0 5px}.tile span{color:var(--muted);font-size:13px}
+.section{padding:14px 18px 28px}.section h3{font-size:22px;margin:4px 0 14px}.card{padding:16px;margin-bottom:13px}.row{display:flex;align-items:center;gap:10px}.between{justify-content:space-between}
+.primary,.ghost,.secondary,.danger{border-radius:14px;padding:11px 13px;font-weight:800;border:0}.primary{background:var(--accent);color:#fff}.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}.secondary{background:var(--soft);color:var(--ink)}.danger{background:#f2dedd;color:#79362e}.full{width:100%}
+.form{display:grid;gap:12px}.form label{font-size:11px;font-weight:800;color:var(--muted);display:block}.form input,.form select,.form textarea,#search,#filter{width:100%;margin-top:6px;border:1px solid var(--line);border-radius:14px;padding:12px;background:white;color:var(--ink)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.notice{padding:12px 13px;border-radius:16px;background:#eef1ea;border:1px solid #d7dfd2;color:#365342;font-size:13px}
+.upload{border:1px dashed #aaa096;border-radius:18px;padding:22px;text-align:center;background:#fbf7f0}.upload input{display:none!important}.upload span{color:var(--ink);font-size:15px}
+.preview{width:100%;max-height:330px;object-fit:contain;border-radius:18px;background:#eee7dc}.hidden{display:none!important}
+.garments{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.garment{overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:18px}.garment img{width:100%;height:190px;object-fit:cover;background:#eee7dc}.meta{padding:11px}.meta b{display:block}.pill{display:inline-block;background:var(--soft);border-radius:999px;padding:6px 9px;font-size:11px;margin:5px 4px 0 0}
+.outfitPiece{display:grid;grid-template-columns:85px 1fr;gap:12px;align-items:center;margin:11px 0}.outfitPiece img{width:85px;height:85px;object-fit:cover;border-radius:16px;background:#eee7dc}
+.feedback{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.feedback button{border:1px solid var(--line);background:white;border-radius:999px;padding:8px 10px}
+nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,253,249,.97);backdrop-filter:blur(12px);border-top:1px solid var(--line);z-index:10}.navinner{max-width:760px;margin:auto;display:grid;grid-template-columns:repeat(5,1fr);padding:6px 4px calc(7px + env(safe-area-inset-bottom))}
+nav button{border:0;background:none;font-size:20px;color:var(--ink);padding:6px}nav button span{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.empty{text-align:center;color:var(--muted);padding:28px 10px}
+@media(max-width:500px){.hero h2{font-size:29px}.three{grid-template-columns:1fr}.garment img{height:170px}}
