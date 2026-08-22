@@ -23,3 +23,7 @@ nav button{border:0;background:none;font-size:20px;color:var(--ink);padding:6px}
 @media(max-width:500px){.hero h2{font-size:29px}.three{grid-template-columns:1fr}.garment img{height:170px}}
 
 .photo-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.photo-actions .upload{display:block}
+
+.batch-status{padding:11px 13px;border-radius:14px;background:#f3eee5;border:1px solid var(--line);font-size:13px;color:var(--ink)}
+.save-actions{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
+.save-actions .full{width:100%}

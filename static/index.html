@@ -32,8 +32,9 @@
  <div class="section">
   <div class="row between"><h3>Add to Wardrobe</h3><button class="ghost" data-go="wardrobe">Cancel</button></div>
   <div class="card form">
-   <div class="photo-actions"><label class="upload"><input id="cameraPhoto" type="file" accept="image/*" capture="environment"><span>📷 Take Photo</span></label><label class="upload"><input id="libraryPhoto" type="file" accept="image/*"><span>🖼️ Choose from Photos</span></label></div>
+   <div class="photo-actions"><label class="upload"><input id="cameraPhoto" type="file" accept="image/*" capture="environment"><span>📷 Take Photo</span></label><label class="upload"><input id="libraryPhoto" type="file" accept="image/*" multiple><span>🖼️ Choose Multiple Photos</span></label></div>
    <img id="preview" class="preview hidden">
+   <div id="batchStatus" class="batch-status hidden"></div>
    <div id="analysisMsg" class="notice hidden"></div>
    <div class="two"><label>CATEGORY<input id="category"></label><label>GARMENT TYPE<input id="garment_type"></label></div>
    <div class="two"><label>BRAND<input id="brand"></label><label>MODEL / LINE<input id="model_line"></label></div>
@@ -42,7 +43,7 @@
    <div class="two"><label>FIT FEEDBACK<select id="fit_feedback"><option>Unknown</option><option>Perfect fit</option><option>Slightly tight</option><option>Slightly loose</option><option>Too tight</option><option>Too loose</option></select></label><label>SEASON<input id="season"></label></div>
    <label>FORMALITY<input id="formality"></label>
    <label>NOTES / GARMENT MEASUREMENTS<textarea id="notes" rows="3"></textarea></label>
-   <button id="saveGarment" class="primary full">Save to wardrobe</button>
+   <div class="save-actions"><button id="skipGarment" class="ghost hidden" type="button">Skip</button><button id="saveGarment" class="primary full" type="button">Save to wardrobe</button></div>
   </div>
  </div>
 </section>

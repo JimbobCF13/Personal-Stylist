@@ -1,6 +1,7 @@
 
 const $=id=>document.getElementById(id);
 let garments=[], uploadedPath="", aiConfidence=0;
+let photoQueue=[], currentPhotoIndex=-1, batchMode=false;
 
 async function api(url,opts={}){
  const r=await fetch(url,opts); const data=await r.json().catch(()=>({}));
@@ -26,14 +27,39 @@ function renderGarments(){
 $("search").addEventListener("input",renderGarments);$("filter").addEventListener("change",renderGarments);
 async function del(id){if(confirm("Remove this garment?")){await api(`/api/garments/${id}`,{method:"DELETE"});await loadGarments()}}
 function buildAround(id){go("outfits");$("anchor").value=String(id)}
+function clearGarmentFields(){
+ const ids=["category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","season","formality","notes"];
+ ids.forEach(id=>$(id).value="");
+ $("fit_feedback").value="Unknown";
+ uploadedPath="";
+ aiConfidence=0;
+}
+
+function updateBatchUI(){
+ const status=$("batchStatus");
+ const skip=$("skipGarment");
+ if(batchMode && photoQueue.length){
+   status.classList.remove("hidden");
+   status.innerHTML=`<b>Batch upload:</b> item ${currentPhotoIndex+1} of ${photoQueue.length}. Check the AI details, then Save & Next.`;
+   $("saveGarment").textContent=currentPhotoIndex < photoQueue.length-1 ? "Save & Next" : "Save final item";
+   skip.classList.remove("hidden");
+ }else{
+   status.classList.add("hidden");
+   $("saveGarment").textContent="Save to wardrobe";
+   skip.classList.add("hidden");
+ }
+}
+
 async function handleGarmentPhoto(file){
  if(!file)return;
+ clearGarmentFields();
  $("preview").src=URL.createObjectURL(file);
  $("preview").classList.remove("hidden");
  const fd=new FormData();
  fd.append("file",file);
  $("analysisMsg").classList.remove("hidden");
  $("analysisMsg").textContent="Analysing garment…";
+ updateBatchUI();
  try{
   const x=await api("/api/analyse-garment",{method:"POST",body:fd});
   uploadedPath=x.image_path;
@@ -41,22 +67,62 @@ async function handleGarmentPhoto(file){
    Object.entries(x.analysis).forEach(([k,v])=>{if($(k)&&k!=="confidence")$(k).value=v||""});
    aiConfidence=x.analysis.confidence||0;
    $("analysisMsg").textContent=`AI analysis complete (${Math.round(aiConfidence*100)}% confidence). Please check and correct anything before saving.`;
-  } else {
+  }else{
    $("analysisMsg").textContent="Photo saved. AI is not connected yet, so enter the garment details manually.";
   }
  }catch(err){
   $("analysisMsg").textContent=err.message;
  }
 }
-$("cameraPhoto").addEventListener("change",e=>handleGarmentPhoto(e.target.files[0]));
-$("libraryPhoto").addEventListener("change",e=>handleGarmentPhoto(e.target.files[0]));
+
+async function startBatch(files){
+ photoQueue=Array.from(files||[]);
+ if(!photoQueue.length)return;
+ batchMode=photoQueue.length>1;
+ currentPhotoIndex=0;
+ await handleGarmentPhoto(photoQueue[currentPhotoIndex]);
+}
+
+async function advanceBatch(){
+ if(batchMode && currentPhotoIndex < photoQueue.length-1){
+   currentPhotoIndex++;
+   await handleGarmentPhoto(photoQueue[currentPhotoIndex]);
+   return true;
+ }
+ photoQueue=[];
+ currentPhotoIndex=-1;
+ batchMode=false;
+ updateBatchUI();
+ return false;
+}
+
+$("cameraPhoto").addEventListener("change",async e=>{
+ photoQueue=[]; currentPhotoIndex=-1; batchMode=false;
+ await handleGarmentPhoto(e.target.files[0]);
+});
+$("libraryPhoto").addEventListener("change",async e=>{await startBatch(e.target.files);});
+$("skipGarment").addEventListener("click",async()=>{if(batchMode)await advanceBatch();});
 
 $("saveGarment").addEventListener("click",async()=>{
  if(!uploadedPath)return alert("Add a photo first.");
  const ids=["category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","fit_feedback","season","formality","notes"];
- const fd=new FormData();fd.append("image_path",uploadedPath);ids.forEach(id=>fd.append(id,$(id).value));fd.append("ai_confidence",aiConfidence);
- await api("/api/garments",{method:"POST",body:fd});ids.forEach(id=>$(id).value=id==="fit_feedback"?"Unknown":"");$("cameraPhoto").value="";$("libraryPhoto").value="";$("preview").classList.add("hidden");$("analysisMsg").classList.add("hidden");uploadedPath="";aiConfidence=0;await loadGarments();go("wardrobe");
+ const fd=new FormData();
+ fd.append("image_path",uploadedPath);
+ ids.forEach(id=>fd.append(id,$(id).value));
+ fd.append("ai_confidence",aiConfidence);
+ await api("/api/garments",{method:"POST",body:fd});
+ await loadGarments();
+ const moved=await advanceBatch();
+ if(!moved){
+   clearGarmentFields();
+   $("cameraPhoto").value="";
+   $("libraryPhoto").value="";
+   $("preview").classList.add("hidden");
+   $("analysisMsg").classList.add("hidden");
+   go("wardrobe");
+ }
 });
+
 async function loadProfile(){
  const p=await api("/api/profile");Object.entries(p).forEach(([k,v])=>{if($(k)&&v!==null)$(k).value=v});if(p.name)$("greeting").textContent=`Good morning, ${p.name}`;
 }

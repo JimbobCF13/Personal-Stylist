@@ -59,3 +59,7 @@ Add to Wardrobe now offers:
 - Choose from Photos
 
 Both routes use the same AI garment-analysis workflow.
+
+
+## V2.3 batch wardrobe upload
+Choose Multiple Photos lets you select several garment photos in one go. The app queues them, analyses one at a time, and shows Save & Next until the batch is complete.
