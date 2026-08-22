@@ -21,3 +21,5 @@ nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,253,249,.97);back
 nav button{border:0;background:none;font-size:20px;color:var(--ink);padding:6px}nav button span{display:block;font-size:10px;color:var(--muted);margin-top:2px}
 .empty{text-align:center;color:var(--muted);padding:28px 10px}
 @media(max-width:500px){.hero h2{font-size:29px}.three{grid-template-columns:1fr}.garment img{height:170px}}
+
+.photo-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.photo-actions .upload{display:block}

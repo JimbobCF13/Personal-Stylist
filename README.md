@@ -47,3 +47,15 @@ A simple deployment target can run this FastAPI app with persistent disk storage
 The server uses the Responses API. Garment analysis sends the clothing photo as image input and requests a strict JSON-schema response. Outfit generation sends the stored wardrobe/profile as structured context and requests structured outfit recommendations.
 
 The default model is configurable by `OPENAI_MODEL` and is set to `gpt-5.6-terra` in the example configuration.
+
+
+## V2.1 iPhone photo fix
+The server now automatically converts iPhone HEIC/HEIF garment photos to JPEG before sending them to OpenAI. It also corrects EXIF orientation and returns clearer AI error messages.
+
+
+## V2.2 photo-source update
+Add to Wardrobe now offers:
+- Take Photo
+- Choose from Photos
+
+Both routes use the same AI garment-analysis workflow.

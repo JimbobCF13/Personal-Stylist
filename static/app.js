@@ -26,21 +26,36 @@ function renderGarments(){
 $("search").addEventListener("input",renderGarments);$("filter").addEventListener("change",renderGarments);
 async function del(id){if(confirm("Remove this garment?")){await api(`/api/garments/${id}`,{method:"DELETE"});await loadGarments()}}
 function buildAround(id){go("outfits");$("anchor").value=String(id)}
-$("photo").addEventListener("change",async e=>{
- const file=e.target.files[0];if(!file)return;
- $("preview").src=URL.createObjectURL(file);$("preview").classList.remove("hidden");
- const fd=new FormData();fd.append("file",file);$("analysisMsg").classList.remove("hidden");$("analysisMsg").textContent="Analysing garment…";
+async function handleGarmentPhoto(file){
+ if(!file)return;
+ $("preview").src=URL.createObjectURL(file);
+ $("preview").classList.remove("hidden");
+ const fd=new FormData();
+ fd.append("file",file);
+ $("analysisMsg").classList.remove("hidden");
+ $("analysisMsg").textContent="Analysing garment…";
  try{
-  const x=await api("/api/analyse-garment",{method:"POST",body:fd});uploadedPath=x.image_path;
-  if(x.analysis){Object.entries(x.analysis).forEach(([k,v])=>{if($(k)&&k!=="confidence")$(k).value=v||""});aiConfidence=x.analysis.confidence||0;$("analysisMsg").textContent=`AI analysis complete (${Math.round(aiConfidence*100)}% confidence). Please check and correct anything before saving.`}
-  else $("analysisMsg").textContent="Photo saved. AI is not connected yet, so enter the garment details manually.";
- }catch(err){$("analysisMsg").textContent=err.message}
-});
+  const x=await api("/api/analyse-garment",{method:"POST",body:fd});
+  uploadedPath=x.image_path;
+  if(x.analysis){
+   Object.entries(x.analysis).forEach(([k,v])=>{if($(k)&&k!=="confidence")$(k).value=v||""});
+   aiConfidence=x.analysis.confidence||0;
+   $("analysisMsg").textContent=`AI analysis complete (${Math.round(aiConfidence*100)}% confidence). Please check and correct anything before saving.`;
+  } else {
+   $("analysisMsg").textContent="Photo saved. AI is not connected yet, so enter the garment details manually.";
+  }
+ }catch(err){
+  $("analysisMsg").textContent=err.message;
+ }
+}
+$("cameraPhoto").addEventListener("change",e=>handleGarmentPhoto(e.target.files[0]));
+$("libraryPhoto").addEventListener("change",e=>handleGarmentPhoto(e.target.files[0]));
+
 $("saveGarment").addEventListener("click",async()=>{
  if(!uploadedPath)return alert("Add a photo first.");
  const ids=["category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","fit_feedback","season","formality","notes"];
  const fd=new FormData();fd.append("image_path",uploadedPath);ids.forEach(id=>fd.append(id,$(id).value));fd.append("ai_confidence",aiConfidence);
- await api("/api/garments",{method:"POST",body:fd});ids.forEach(id=>$(id).value=id==="fit_feedback"?"Unknown":"");$("photo").value="";$("preview").classList.add("hidden");$("analysisMsg").classList.add("hidden");uploadedPath="";aiConfidence=0;await loadGarments();go("wardrobe");
+ await api("/api/garments",{method:"POST",body:fd});ids.forEach(id=>$(id).value=id==="fit_feedback"?"Unknown":"");$("cameraPhoto").value="";$("libraryPhoto").value="";$("preview").classList.add("hidden");$("analysisMsg").classList.add("hidden");uploadedPath="";aiConfidence=0;await loadGarments();go("wardrobe");
 });
 async function loadProfile(){
  const p=await api("/api/profile");Object.entries(p).forEach(([k,v])=>{if($(k)&&v!==null)$(k).value=v});if(p.name)$("greeting").textContent=`Good morning, ${p.name}`;
