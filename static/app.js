@@ -333,6 +333,63 @@ function garmentMini(id){
  return `<div class="mini-garment"><img src="${g.image_path}" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`;
 }
 
+
+function synergyLabel(score){
+ if(score>=75)return "Excellent";
+ if(score>=55)return "Good";
+ if(score>=35)return "Moderate";
+ return "Low";
+}
+
+async function sourceProducts(serialised,index){
+ const r=JSON.parse(serialised);
+ const box=$(`productResults-${index}`);
+ box.innerHTML='<div class="product-loading">Searching current UK retailers…</div>';
+ try{
+  const x=await api("/api/source-products",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    search_phrase:r.search_phrase||"",
+    shopping_spec:r.shopping_spec||"",
+    budget:$("shopBudget").value||"",
+    category:r.category||"",
+    size_fit_guidance:r.size_fit_guidance||""
+   })
+  });
+  if(!(x.products||[]).length){
+   box.innerHTML=`<div class="notice">I couldn't find a sufficiently reliable current match. ${esc(x.search_note||"")}</div>`;
+   return;
+  }
+  box.innerHTML=`<div class="live-search-note">${esc(x.search_note||"")}</div>`+
+   x.products.map(renderLiveProduct).join("");
+ }catch(err){
+  box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }
+}
+
+function safeProductUrl(url){
+ try{
+  const u=new URL(url);
+  return (u.protocol==="https:"||u.protocol==="http:")?u.href:"#";
+ }catch{return "#";}
+}
+
+function renderLiveProduct(p){
+ const url=safeProductUrl(p.url||"");
+ const image=p.image_url?`<img class="live-product-img" src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`:"";
+ return `<div class="live-product-card">
+   ${image}
+   <div class="live-product-body">
+    <div class="row between"><div><small>${esc(p.brand||p.retailer)}</small><h4>${esc(p.name)}</h4></div><b>${esc(p.price||"Price check")}</b></div>
+    <p>${esc(p.why_it_matches)}</p>
+    <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
+    <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
+    <div class="row between product-footer"><span class="confidence">${esc(p.confidence)} confidence</span><a class="primary product-link" href="${url}" target="_blank" rel="noopener">View at ${esc(p.retailer||"retailer")}</a></div>
+   </div>
+  </div>`;
+}
+
 function renderGapRecommendation(r,i){
  const owned=[...(r.owned_garment_ids||[])].slice(0,6).map(garmentMini).join("");
  const outfitIdeas=(r.outfit_ideas||[]).map(o=>{
@@ -343,7 +400,7 @@ function renderGapRecommendation(r,i){
  return `<div class="card gap-card">
    <div class="row between">
     <div><span class="priority ${esc(r.priority)}">${esc(r.priority)} priority</span><h3>${esc(r.title)}</h3></div>
-    <div class="synergy"><b>${Number(r.wardrobe_synergy_score||0)}%</b><span>synergy</span></div>
+    <div class="synergy"><b>${synergyLabel(Number(r.wardrobe_synergy_score||0))}</b><span>${Number(r.wardrobe_synergy_score||0)}/100</span></div>
    </div>
    <div class="spec-grid">
     <div><small>COLOUR</small><b>${esc(r.ideal_colour)}</b></div>
@@ -356,7 +413,9 @@ function renderGapRecommendation(r,i){
    ${owned?`<div><small>WORKS WITH ITEMS YOU OWN</small><div class="mini-row">${owned}</div></div>`:""}
    ${outfitIdeas?`<div class="shopping-outfits"><small>OUTFIT IDEAS</small>${outfitIdeas}</div>`:""}
    <div class="shopping-spec"><small>SHOPPING SPECIFICATION</small><p>${esc(r.shopping_spec)}</p></div>
-   <div class="future-search"><b>Suggested retailer search:</b> ${esc(r.search_phrase)}<br><small>Live retailer sourcing is the next connection for this screen.</small></div>
+   <div class="future-search"><b>Suggested retailer search:</b> ${esc(r.search_phrase)}</div>
+   <button class="primary full source-products-btn" type="button" onclick='sourceProducts(${JSON.stringify(JSON.stringify(r))},${i})'>Find products to buy</button>
+   <div id="productResults-${i}" class="product-results"></div>
   </div>`;
 }
 

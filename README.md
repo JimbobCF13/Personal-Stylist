@@ -158,3 +158,17 @@ Each recommendation includes:
 - a retailer-search phrase ready for future live web sourcing.
 
 This version deliberately does not claim live retailer products, prices or stock. Live retailer sourcing is the next integration.
+
+
+## V3.0 Live Shopping
+- Wardrobe-gap recommendations now show an understandable synergy label: Excellent / Good / Moderate / Low, alongside the 0–100 score.
+- Each recommended wardrobe gap has **Find products to buy**.
+- The backend uses the OpenAI Responses API web-search tool to look for current UK retailer/product pages.
+- Product cards can show brand, retailer, current price when found, colour/material/fit, sizing guidance, confidence and a retailer link.
+- Product images are shown only when a direct usable image URL is actually available; they are never fabricated.
+- The search is designed to cover core garments, footwear, outerwear, ties/accessories and headwear.
+- Current product facts are not stored as permanent truth because price/stock can change.
+
+Optional environment variable:
+`OPENAI_SHOPPING_MODEL=gpt-5.6-terra`
+If omitted, the normal OPENAI_MODEL is used.

@@ -825,6 +825,93 @@ def wardrobe_gaps(req: WardrobeGapRequest):
     result["recommendations"] = result.get("recommendations", [])[:max_recs]
     return result
 
+
+class ProductSourceRequest(BaseModel):
+    search_phrase: str
+    shopping_spec: Optional[str] = ""
+    budget: Optional[str] = ""
+    category: Optional[str] = ""
+    size_fit_guidance: Optional[str] = ""
+
+PRODUCT_SOURCE_SCHEMA = {
+  "type": "object",
+  "properties": {
+    "products": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "brand": {"type": "string"},
+          "retailer": {"type": "string"},
+          "price": {"type": "string"},
+          "url": {"type": "string"},
+          "image_url": {"type": "string"},
+          "colour": {"type": "string"},
+          "material": {"type": "string"},
+          "fit": {"type": "string"},
+          "size_note": {"type": "string"},
+          "why_it_matches": {"type": "string"},
+          "confidence": {"type": "string", "enum": ["high","medium","low"]}
+        },
+        "required": ["name","brand","retailer","price","url","image_url","colour","material","fit","size_note","why_it_matches","confidence"],
+        "additionalProperties": False
+      }
+    },
+    "search_note": {"type": "string"}
+  },
+  "required": ["products","search_note"],
+  "additionalProperties": False
+}
+
+@app.post("/api/source-products")
+def source_products(req: ProductSourceRequest):
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(400, "OpenAI is not connected.")
+
+    prompt = f"""
+Search the live web for men's clothing products currently offered by reputable retailers that match this specification.
+
+SEARCH PHRASE: {req.search_phrase}
+CATEGORY: {req.category or 'not specified'}
+SHOPPING SPECIFICATION: {req.shopping_spec or 'not specified'}
+BUDGET: {req.budget or 'not specified'}
+SIZE/FIT GUIDANCE: {req.size_fit_guidance or 'not specified'}
+
+The user is in the United Kingdom. Prefer UK retailer/product pages and GBP prices.
+Find up to 6 genuinely relevant products across useful price points where possible.
+
+Rules:
+- Only return a product if you found a real product or retailer page for it on the live web.
+- URL must be the actual source/product URL you found; never invent a URL.
+- Never invent price, stock, material, fit or sizing. If not found, return an empty string for that field.
+- image_url is optional in practice: only return it when a direct usable product image URL is explicitly available in the search result/source; otherwise return an empty string.
+- Do not claim a size is in stock unless the source explicitly establishes it.
+- size_note should explain how the known product/brand fit relates to the supplied fit guidance; if evidence is insufficient, say sizing needs confirmation.
+- Prefer official brand or retailer product pages over aggregators.
+"""
+
+    client = OpenAI()
+    try:
+        response = client.responses.create(
+            model=os.getenv("OPENAI_SHOPPING_MODEL", os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
+            reasoning={"effort":"medium"},
+            tools=[{"type":"web_search"}],
+            tool_choice="auto",
+            include=["web_search_call.action.sources"],
+            input=prompt,
+            text={"format":{
+                "type":"json_schema",
+                "name":"live_product_results",
+                "schema":PRODUCT_SOURCE_SCHEMA,
+                "strict":True
+            }}
+        )
+        return json.loads(response.output_text)
+    except Exception as exc:
+        raise HTTPException(502, f"Live product search failed: {str(exc)[:350]}")
+
 class Feedback(BaseModel):
     outfit: dict
     rating: str
