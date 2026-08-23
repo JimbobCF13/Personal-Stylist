@@ -9,7 +9,7 @@ async function api(url,opts={}){
  if(!r.ok) throw new Error(data.detail||"Something went wrong");
  return data;
 }
-function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="outfits")populateAnchor();if(id==="profile"){loadProfile();loadStyleLearning()}}
+function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="outfits")populateAnchor();if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b)go(b.dataset.go)});
 async function init(){
  try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
@@ -194,6 +194,36 @@ async function loadStyleLearning(){
  }
 }
 
+
+async function loadModelPhotos(){
+ try{
+  const photos=await api("/api/model-photos");
+  $("modelPhotos").innerHTML=photos.length?photos.map(p=>`
+    <div class="model-photo-card">
+      <img src="${p.image_path}" alt="Saved reference photo">
+      <button type="button" class="danger tiny-btn" onclick="deleteModelPhoto(${p.id})">Remove</button>
+    </div>`).join(""):'<div class="empty-model">No reference photos yet.</div>';
+ }catch(err){
+  $("modelPhotos").innerHTML=`<small>${esc(err.message)}</small>`;
+ }
+}
+async function deleteModelPhoto(id){
+ if(!confirm("Remove this reference photo?"))return;
+ await api(`/api/model-photos/${id}`,{method:"DELETE"});
+ await loadModelPhotos();
+}
+$("modelPhotoInput").addEventListener("change",async e=>{
+ const files=Array.from(e.target.files||[]).slice(0,4);
+ if(!files.length)return;
+ for(let i=0;i<files.length;i++){
+  const fd=new FormData();
+  fd.append("file",files[i]);
+  fd.append("label",`Reference ${i+1}`);
+  await api("/api/model-photos",{method:"POST",body:fd});
+ }
+ $("modelPhotoInput").value="";
+ await loadModelPhotos();
+});
 async function loadProfile(){
  const p=await api("/api/profile");Object.entries(p).forEach(([k,v])=>{if($(k)&&v!==null)$(k).value=v});if(p.name)$("greeting").textContent=`Good morning, ${p.name}`;
 }
@@ -221,19 +251,19 @@ function renderOutfit(o,i){
    <small>${esc(o.weather_note)} · ${esc(o.occasion_note)}</small>
    ${gap}
    <div class="visual-actions">
-     <button class="primary" type="button" onclick="seeOnModel('${outfitPayload}',${i})">See on model</button>
-     <button class="ghost" type="button" disabled title="Coming next">View on me · coming next</button>
+     <button class="primary" type="button" onclick="seeOnModel('${outfitPayload}',${i},false)">See on model</button>
+     <button class="ghost" type="button" onclick="seeOnModel('${outfitPayload}',${i},true)">View on me</button>
    </div>
    <div id="modelVisual-${i}" class="model-visual hidden"></div>
    <div class="feedback">${["Love it","Like it","Not for me","Too smart","Too casual"].map(r=>`<button onclick='rate(${JSON.stringify(JSON.stringify(o))},${JSON.stringify(r)})'>${r}</button>`).join("")}</div>
  </div>`;
 }
 
-async function seeOnModel(encoded,index){
+async function seeOnModel(encoded,index,useMyLikeness=false){
  const o=JSON.parse(decodeURIComponent(encoded));
  const box=$(`modelVisual-${index}`);
  box.classList.remove("hidden");
- box.innerHTML='<div class="visual-loading">Creating your outfit visualisation… this can take a little while.</div>';
+ box.innerHTML=`<div class="visual-loading">${useMyLikeness?"Creating your personalised outfit visualisation…":"Creating your outfit visualisation…"} this can take a little while.</div>`;
 
  try{
    const payload={
@@ -241,7 +271,8 @@ async function seeOnModel(encoded,index){
      label:o.label||"Outfit",
      reason:o.reason||"",
      occasion:$("occasion").value,
-     temperature_c:Number($("temperature").value||0)
+     temperature_c:Number($("temperature").value||0),
+     use_my_likeness:useMyLikeness
    };
    const x=await api("/api/outfit-visualisation",{
      method:"POST",

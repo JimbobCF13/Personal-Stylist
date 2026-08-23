@@ -32,10 +32,14 @@ UPLOADS.mkdir(parents=True, exist_ok=True)
 GENERATED = DATA_DIR / "generated"
 GENERATED.mkdir(parents=True, exist_ok=True)
 
+MODEL_PHOTOS = DATA_DIR / "model_photos"
+MODEL_PHOTOS.mkdir(parents=True, exist_ok=True)
+
 app = FastAPI(title="Personal Stylist V2")
 app.mount("/static", StaticFiles(directory=ROOT/"static"), name="static")
 app.mount("/uploads", StaticFiles(directory=UPLOADS), name="uploads")
 app.mount("/generated", StaticFiles(directory=GENERATED), name="generated")
+app.mount("/model-photos", StaticFiles(directory=MODEL_PHOTOS), name="model-photos")
 
 def db():
     con = sqlite3.connect(DB)
@@ -65,6 +69,12 @@ def init_db():
     CREATE TABLE IF NOT EXISTS feedback (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       outfit_json TEXT, rating TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS model_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      image_path TEXT NOT NULL,
+      label TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     """)
     con.commit()
@@ -480,12 +490,60 @@ def fallback_outfits(garments, req):
     }
 
 
+
+@app.get("/api/model-photos")
+def get_model_photos():
+    con = db()
+    rows = [dict(r) for r in con.execute("SELECT * FROM model_photos ORDER BY id ASC").fetchall()]
+    con.close()
+    return rows
+
+@app.post("/api/model-photos")
+async def add_model_photo(file: UploadFile = File(...), label: str = Form("")):
+    suffix = Path(file.filename or "portrait").suffix.lower() or ".upload"
+    raw_path = MODEL_PHOTOS / f"{uuid.uuid4().hex}{suffix}"
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "The uploaded photo was empty.")
+    if len(data) > 20 * 1024 * 1024:
+        raise HTTPException(400, "That photo is too large. Please choose an image under 20 MB.")
+    raw_path.write_bytes(data)
+    image_path = normalise_image_for_ai(raw_path)
+    if image_path.parent != MODEL_PHOTOS:
+        target = MODEL_PHOTOS / image_path.name
+        target.write_bytes(image_path.read_bytes())
+        image_path = target
+    con = db()
+    cur = con.execute("INSERT INTO model_photos(image_path,label) VALUES (?,?)",
+                      (f"/model-photos/{image_path.name}", label or ""))
+    con.commit()
+    pid = cur.lastrowid
+    con.close()
+    return {"ok": True, "id": pid, "image_path": f"/model-photos/{image_path.name}"}
+
+@app.delete("/api/model-photos/{photo_id}")
+def delete_model_photo(photo_id: int):
+    con = db()
+    row = con.execute("SELECT image_path FROM model_photos WHERE id=?", (photo_id,)).fetchone()
+    con.execute("DELETE FROM model_photos WHERE id=?", (photo_id,))
+    con.commit()
+    con.close()
+    if row:
+        p = MODEL_PHOTOS / Path(row["image_path"]).name
+        try:
+            if p.exists():
+                p.unlink()
+        except Exception:
+            pass
+    return {"ok": True}
+
 class OutfitVisualisationRequest(BaseModel):
     garment_ids: list[int]
     label: Optional[str] = "Outfit"
     reason: Optional[str] = ""
     occasion: Optional[str] = ""
     temperature_c: Optional[float] = None
+    use_my_likeness: Optional[bool] = False
 
 @app.post("/api/outfit-visualisation")
 def outfit_visualisation(req: OutfitVisualisationRequest):
@@ -502,6 +560,9 @@ def outfit_visualisation(req: OutfitVisualisationRequest):
         f"SELECT * FROM garments WHERE id IN ({placeholders})", ids
     ).fetchall()]
     profile = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    model_photos = [dict(r) for r in con.execute(
+        "SELECT * FROM model_photos ORDER BY id ASC LIMIT 4"
+    ).fetchall()]
     con.close()
 
     if not rows:
@@ -512,7 +573,7 @@ def outfit_visualisation(req: OutfitVisualisationRequest):
     garments = [by_id[i] for i in ids if i in by_id]
 
     descriptions = []
-    image_files = []
+    garment_image_files = []
     for n, g in enumerate(garments, start=1):
         descriptions.append(
             f"{n}. {g.get('brand') or ''} {g.get('garment_type') or g.get('category') or 'garment'}; "
@@ -525,7 +586,16 @@ def outfit_visualisation(req: OutfitVisualisationRequest):
         else:
             p = ROOT / rel
         if p.exists():
-            image_files.append(p)
+            garment_image_files.append(p)
+
+    likeness_files = []
+    if req.use_my_likeness:
+        for mp in model_photos:
+            p = MODEL_PHOTOS / Path(mp.get("image_path") or "").name
+            if p.exists():
+                likeness_files.append(p)
+        if not likeness_files:
+            raise HTTPException(400, "Add at least one photo in My Model before using View on me.")
 
     height = profile.get("height_cm")
     preferred_fit = profile.get("preferred_fit") or "natural contemporary fit"
@@ -555,9 +625,12 @@ Important:
 - Show the entire outfit head-to-toe, including footwear.
 - Natural standing pose, premium contemporary menswear editorial photography.
 - Neutral understated studio or softly lit architectural background.
-- The model is generic and must not resemble any particular real person.
+- If use_my_likeness is true, use the supplied personal reference photos to preserve the user's visible identity, face, hair, skin tone and overall proportions as closely as reasonably possible.
+- If use_my_likeness is false, use a generic adult male model who does not resemble any particular real person.
 - This is a styling visualisation, not a claim of exact garment fit.
 """
+    prompt += f"\nuse_my_likeness: {bool(req.use_my_likeness)}\n"
+
 
     client = OpenAI()
     image_model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
@@ -566,8 +639,12 @@ Important:
     # First choice: use the saved garment photographs as high-fidelity visual references.
     opened = []
     try:
-        if image_files:
-            opened = [open(p, "rb") for p in image_files[:6]]
+        reference_files = []
+        if req.use_my_likeness:
+            reference_files.extend(likeness_files[:3])
+        reference_files.extend(garment_image_files[:5])
+        if reference_files:
+            opened = [open(p, "rb") for p in reference_files[:8]]
             result = client.images.edit(
                 model=image_model,
                 image=opened,
@@ -620,7 +697,9 @@ Important:
         "ok": True,
         "image_path": f"/generated/{filename}",
         "label": req.label or "Outfit",
-        "notice": "AI outfit visualisation — useful for judging the overall look, not exact fit or garment reproduction."
+        "notice": ("AI personalised outfit visualisation — intended to show the overall look on you, not exact fit or exact garment reproduction."
+                   if req.use_my_likeness else
+                   "AI outfit visualisation — useful for judging the overall look, not exact fit or garment reproduction.")
     }
 
 class Feedback(BaseModel):

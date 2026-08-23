@@ -128,3 +128,9 @@ If omitted, `gpt-image-2` is used automatically.
 ## V2.7.1 deployment fix
 Adds Pillow, which provides the PIL module required by garment image processing.
 Includes V2.6 garment editing, persistent storage and V2.7 See on Model.
+
+## V2.8 View on Me
+Profile includes My Model for 1–4 persistent personal reference photos.
+Outfit cards support See on model and View on me.
+Personalised previews use saved reference photos plus wardrobe garment images.
+These remain AI styling visualisations, not exact virtual fitting-room simulations.
