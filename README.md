@@ -140,3 +140,21 @@ These remain AI styling visualisations, not exact virtual fitting-room simulatio
 - Cache-busts app.js and style.css so Safari loads the new V2.8 code after deployment.
 - Adds visible upload progress and success/error messages to My Model.
 - Guards the model-photo event listener to avoid silent frontend failures.
+
+
+## V2.9 Wardrobe Gaps & Shopping
+Adds a Shop screen that analyses the persistent wardrobe and recommends the highest-value additions.
+
+The user can ask for a specific item (for example, a new blazer) or ask what the wardrobe is missing.
+
+Each recommendation includes:
+- ideal colour, material, fit and formality;
+- wardrobe synergy score;
+- why the purchase adds value;
+- fit/size guidance using profile and garment history;
+- existing wardrobe items it works with;
+- outfit ideas using owned garments;
+- a precise shopping specification;
+- a retailer-search phrase ready for future live web sourcing.
+
+This version deliberately does not claim live retailer products, prices or stock. Live retailer sourcing is the next integration.

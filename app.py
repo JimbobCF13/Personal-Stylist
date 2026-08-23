@@ -702,6 +702,129 @@ Important:
                    "AI outfit visualisation — useful for judging the overall look, not exact fit or garment reproduction.")
     }
 
+
+class WardrobeGapRequest(BaseModel):
+    goal: Optional[str] = ""
+    budget: Optional[str] = ""
+    occasion: Optional[str] = ""
+    season: Optional[str] = ""
+    max_recommendations: Optional[int] = 4
+
+GAP_SCHEMA = {
+  "type": "object",
+  "properties": {
+    "summary": {"type": "string"},
+    "recommendations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "category": {"type": "string"},
+          "ideal_colour": {"type": "string"},
+          "ideal_material": {"type": "string"},
+          "ideal_fit": {"type": "string"},
+          "formality": {"type": "string"},
+          "why_this_adds_value": {"type": "string"},
+          "wardrobe_synergy_score": {"type": "integer", "minimum": 0, "maximum": 100},
+          "owned_garment_ids": {"type": "array", "items": {"type": "integer"}},
+          "outfit_ideas": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "owned_garment_ids": {"type": "array", "items": {"type": "integer"}},
+                "description": {"type": "string"}
+              },
+              "required": ["owned_garment_ids", "description"],
+              "additionalProperties": False
+            }
+          },
+          "size_fit_guidance": {"type": "string"},
+          "shopping_spec": {"type": "string"},
+          "search_phrase": {"type": "string"},
+          "priority": {"type": "string", "enum": ["high", "medium", "low"]}
+        },
+        "required": [
+          "title","category","ideal_colour","ideal_material","ideal_fit","formality",
+          "why_this_adds_value","wardrobe_synergy_score","owned_garment_ids",
+          "outfit_ideas","size_fit_guidance","shopping_spec","search_phrase","priority"
+        ],
+        "additionalProperties": False
+      }
+    }
+  },
+  "required": ["summary", "recommendations"],
+  "additionalProperties": False
+}
+
+SHOPPING_STYLIST_INSTRUCTIONS = """You are the wardrobe-planning and shopping specialist for one male user.
+
+Your job is not to recommend random fashionable products. Analyse the user's ACTUAL wardrobe,
+measurements, fit history, brand notes, and style feedback, then identify purchases that add the most value.
+
+PRINCIPLES:
+- Wardrobe first. Do not recommend replacing something the user already owns unless there is a clear reason.
+- Maximise wardrobe synergy: favour a purchase that creates many strong outfits with existing pieces.
+- Respect the user's requested goal. If they ask for a blazer, recommend the best blazer specification rather than changing category.
+- Be specific about shade, fabric, texture, construction, seasonality, formality and fit.
+- Use only supplied wardrobe garment IDs when referencing owned items.
+- Never claim a live product, price, stock level or retailer availability unless live retailer data is actually supplied.
+- For size guidance, combine body measurements, brand/model notes and perfect-fit garment history, but express uncertainty clearly.
+- Produce recommendations that are meaningfully different from one another.
+- The shopping_spec should be precise enough to search retailers later.
+- search_phrase should be concise and useful for a future live shopping search.
+"""
+
+@app.post("/api/wardrobe-gaps")
+def wardrobe_gaps(req: WardrobeGapRequest):
+    con = db()
+    garments = [dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    feedback = [dict(r) for r in con.execute(
+        "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 30"
+    ).fetchall()]
+    con.close()
+
+    if not garments:
+        raise HTTPException(400, "Add some wardrobe items first so I can identify useful gaps.")
+
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(400, "OpenAI is not connected.")
+
+    max_recs = max(1, min(int(req.max_recommendations or 4), 5))
+    context = {
+      "goal": req.goal or "Identify the most useful additions to this wardrobe",
+      "budget": req.budget or "not specified",
+      "occasion": req.occasion or "not specified",
+      "season": req.season or "not specified",
+      "max_recommendations": max_recs,
+      "profile": profile,
+      "wardrobe": garments,
+      "recent_feedback": feedback
+    }
+
+    client = OpenAI()
+    response = client.responses.create(
+      model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+      reasoning={"effort":"medium"},
+      instructions=SHOPPING_STYLIST_INSTRUCTIONS,
+      input=json.dumps(context, ensure_ascii=False),
+      text={"format":{
+        "type":"json_schema",
+        "name":"wardrobe_gap_recommendations",
+        "schema":GAP_SCHEMA,
+        "strict":True
+      }}
+    )
+    result = json.loads(response.output_text)
+    result["recommendations"] = result.get("recommendations", [])[:max_recs]
+    return result
+
 class Feedback(BaseModel):
     outfit: dict
     rating: str

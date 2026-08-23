@@ -304,4 +304,60 @@ async function seeOnModel(encoded,index,useMyLikeness=false){
 
 async function rate(s,r){await api("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({outfit:JSON.parse(s),rating:r})});alert("Feedback saved. The stylist will use repeated feedback patterns in future recommendations.");}
 function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+
+$("analyseGaps").addEventListener("click",async()=>{
+ const box=$("gapResults");
+ box.innerHTML='<div class="card">Analysing your wardrobe and looking for the highest-value gaps…</div>';
+ try{
+  const x=await api("/api/wardrobe-gaps",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    goal:$("shopGoal").value,
+    budget:$("shopBudget").value,
+    occasion:$("shopOccasion").value,
+    season:$("shopSeason").value,
+    max_recommendations:4
+   })
+  });
+  box.innerHTML=`<div class="notice"><b>Wardrobe analysis:</b> ${esc(x.summary)}</div>`+
+   (x.recommendations||[]).map((r,i)=>renderGapRecommendation(r,i)).join("");
+ }catch(err){
+  box.innerHTML=`<div class="card">${esc(err.message)}</div>`;
+ }
+});
+
+function garmentMini(id){
+ const g=garments.find(x=>x.id===id);
+ if(!g)return "";
+ return `<div class="mini-garment"><img src="${g.image_path}" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`;
+}
+
+function renderGapRecommendation(r,i){
+ const owned=[...(r.owned_garment_ids||[])].slice(0,6).map(garmentMini).join("");
+ const outfitIdeas=(r.outfit_ideas||[]).map(o=>{
+   const imgs=(o.owned_garment_ids||[]).map(garmentMini).join("");
+   return `<div class="shop-outfit"><div class="mini-row">${imgs}</div><small>${esc(o.description)}</small></div>`;
+ }).join("");
+
+ return `<div class="card gap-card">
+   <div class="row between">
+    <div><span class="priority ${esc(r.priority)}">${esc(r.priority)} priority</span><h3>${esc(r.title)}</h3></div>
+    <div class="synergy"><b>${Number(r.wardrobe_synergy_score||0)}%</b><span>synergy</span></div>
+   </div>
+   <div class="spec-grid">
+    <div><small>COLOUR</small><b>${esc(r.ideal_colour)}</b></div>
+    <div><small>MATERIAL</small><b>${esc(r.ideal_material)}</b></div>
+    <div><small>FIT</small><b>${esc(r.ideal_fit)}</b></div>
+    <div><small>FORMALITY</small><b>${esc(r.formality)}</b></div>
+   </div>
+   <p><b>Why it adds value:</b> ${esc(r.why_this_adds_value)}</p>
+   <p><b>Fit guidance:</b> ${esc(r.size_fit_guidance)}</p>
+   ${owned?`<div><small>WORKS WITH ITEMS YOU OWN</small><div class="mini-row">${owned}</div></div>`:""}
+   ${outfitIdeas?`<div class="shopping-outfits"><small>OUTFIT IDEAS</small>${outfitIdeas}</div>`:""}
+   <div class="shopping-spec"><small>SHOPPING SPECIFICATION</small><p>${esc(r.shopping_spec)}</p></div>
+   <div class="future-search"><b>Suggested retailer search:</b> ${esc(r.search_phrase)}<br><small>Live retailer sourcing is the next connection for this screen.</small></div>
+  </div>`;
+}
+
 init();

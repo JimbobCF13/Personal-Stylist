@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
-<link rel="stylesheet" href="/static/style.css?v=2.8.1">
+<link rel="stylesheet" href="/static/style.css?v=2.9">
 </head>
 <body>
 <div class="app">
@@ -16,6 +16,7 @@
     <button class="tile" data-go="wardrobe">👕<b>Build around an item</b><span>Select one real piece from your wardrobe.</span></button>
     <button class="tile" data-go="wardrobe">🧥<b>My Wardrobe</b><span id="count">0 saved items</span></button>
     <button class="tile" data-go="profile">📏<b>My Fit Profile</b><span>Measurements, brands and preferences.</span></button>
+    <button class="tile" data-go="shopping">🛍️<b>Wardrobe Gaps & Shop</b><span>Find the purchases that add the most to your wardrobe.</span></button>
   </div>
   <div class="section"><div class="notice"><b>Wardrobe first.</b> The stylist should only suggest shopping where it identifies a genuine gap.</div></div>
 </section>
@@ -78,6 +79,43 @@
  </div>
 </section>
 
+
+<section id="shopping" class="screen">
+ <div class="section">
+  <h3>Wardrobe Gaps & Shopping</h3>
+  <div class="card form">
+   <label>WHAT ARE YOU LOOKING FOR?
+    <textarea id="shopGoal" rows="3" placeholder="e.g. I want a new blazer that adds something different to my grey and navy blazers"></textarea>
+   </label>
+   <div class="two">
+    <label>BUDGET
+     <select id="shopBudget">
+      <option value="">No fixed budget</option>
+      <option>Under £100</option>
+      <option>£100–£250</option>
+      <option>£250–£500</option>
+      <option>£500+</option>
+      <option>Show me different budgets</option>
+     </select>
+    </label>
+    <label>SEASON
+     <select id="shopSeason">
+      <option value="">Any season</option>
+      <option>Spring/Summer</option>
+      <option>Autumn/Winter</option>
+      <option>All-season</option>
+     </select>
+    </label>
+   </div>
+   <label>OCCASION / USE
+    <input id="shopOccasion" placeholder="e.g. smart casual dinners, work, holiday">
+   </label>
+   <button id="analyseGaps" class="primary full" type="button">Analyse my wardrobe</button>
+  </div>
+  <div id="gapResults"></div>
+ </div>
+</section>
+
 <section id="profile" class="screen">
  <div class="section"><h3>My Profile & Fit</h3>
   <div class="card form">
@@ -105,7 +143,7 @@
 </div>
 
 <nav><div class="navinner">
-<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="outfits">✦<span>Outfits</span></button><button data-go="profile">◎<span>Profile</span></button>
+<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="outfits">✦<span>Outfits</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=2.8.1"></script>
+<script src="/static/app.js?v=2.9"></script>
 </body></html>
