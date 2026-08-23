@@ -3,6 +3,7 @@ const $=id=>document.getElementById(id);
 let garments=[], uploadedPath="", aiConfidence=0;
 let editingGarmentId=null;
 let photoQueue=[], currentPhotoIndex=-1, batchMode=false;
+const cleanupInProgress=new Set();
 
 async function api(url,opts={}){
  const r=await fetch(url,opts); const data=await r.json().catch(()=>({}));
@@ -23,23 +24,31 @@ async function loadGarments(){
 function renderGarments(){
  const q=$("search").value.toLowerCase(),f=$("filter").value;
  const list=garments.filter(g=>(!f||g.category===f)&&(!q||JSON.stringify(g).toLowerCase().includes(q)));
- $("garments").innerHTML=list.length?list.map(g=>`<div class="garment"><img class="garment-photo" src="${g.image_path}" alt="${esc((g.brand?g.brand+" ":"")+g.garment_type)}" onclick="editGarment(${g.id})" title="Open garment"><div class="meta"><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button><button class="ghost" onclick="cleanupPhoto(${g.id})">Clean up photo</button>${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
+ $("garments").innerHTML=list.length?list.map(g=>{
+  const cleaning=cleanupInProgress.has(g.id);
+  const label=esc((g.brand?g.brand+" ":"")+g.garment_type);
+  return `<div class="garment${cleaning?" is-cleaning":""}"><div class="garment-photo-wrap"><img class="garment-photo" src="${g.image_path}" alt="${label}" onclick="editGarment(${g.id})" title="Open garment" onerror="this.classList.add('image-missing')">${cleaning?`<div class="cleanup-overlay" role="status" aria-live="polite"><span class="cleanup-spinner" aria-hidden="true"></span><b>Cleaning up photo…</b><small>Removing the background and preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})" ${cleaning?"disabled":""}>Build around</button><button class="ghost" onclick="editGarment(${g.id})" ${cleaning?"disabled":""}>Edit</button><button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})" ${cleaning?"disabled":""}>${cleaning?'<span class="inline-spinner" aria-hidden="true"></span> Cleaning…':'Clean up photo'}</button>${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})" ${cleaning?"disabled":""}>Original photo</button>`:""}<button class="danger" onclick="del(${g.id})" ${cleaning?"disabled":""}>Delete</button></div></div></div>`;
+ }).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
 }
 $("search").addEventListener("input",renderGarments);$("filter").addEventListener("change",renderGarments);
 
 
 async function cleanupPhoto(id){
  const g=garments.find(x=>x.id===id);
- if(!g)return;
+ if(!g||cleanupInProgress.has(id))return;
  if(!confirm("Clean up this photo? The original will be kept so you can restore it later."))return;
 
- const originalButtonText="Clean up photo";
+ cleanupInProgress.add(id);
+ renderGarments();
  try{
-  const x=await api(`/api/garments/${id}/cleanup-image`,{method:"POST"});
+  await api(`/api/garments/${id}/cleanup-image`,{method:"POST"});
   await loadGarments();
-  alert("Photo cleaned up. The original is still saved.");
+  alert("Photo cleaned up. Your original is still safely stored.");
  }catch(err){
   alert(err.message);
+ }finally{
+  cleanupInProgress.delete(id);
+  renderGarments();
  }
 }
 

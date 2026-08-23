@@ -232,3 +232,12 @@ If the segmentation is not confident enough, the app refuses the cleanup rather 
 
 ### One-time setup for better photo cleanup
 Add `REMOVE_BG_API_KEY` to Render Environment. Until it is configured, Clean up photo will show a clear setup message and leave the original unchanged.
+
+## V3.6 — cleanup reliability + visible progress
+- Fixes the remove.bg multipart request used by V3.5 and surfaces the real remove.bg/API error instead of incorrectly reporting every failure as a missing API key.
+- Adds a visible `Cleaning up photo…` overlay and spinner while background removal is running; actions are temporarily disabled to prevent duplicate requests.
+- Cleanup is fully non-destructive: the uploaded original is the source of truth and cleanup creates a separate derivative.
+- Wardrobe loading self-heals a missing display derivative by falling back to the stored original when that original still exists.
+- Older rows are safely backfilled when their current image is a real `/uploads/` source image.
+- Processed derivatives are no longer automatically deleted during cleanup/restore, avoiding accidental loss with legacy wardrobe rows.
+- Keeps V3.5 Help Me Pack, full-garment `object-fit: contain` cards, and tap/click-photo-to-edit behaviour.

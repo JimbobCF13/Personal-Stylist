@@ -134,6 +134,32 @@ def save_profile(p: Profile):
 def garments():
     con = db()
     rows = [dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+
+    # V3.6 safety repair: a cleaned/display image is disposable; the uploaded
+    # original is the source of truth. If a display file has disappeared, fall
+    # back to the original automatically. Also backfill original_image_path for
+    # older rows where the current image is itself an uploaded source image.
+    changed = False
+    for row in rows:
+        image_rel = row.get("image_path") or ""
+        original_rel = row.get("original_image_path") or ""
+        image_exists = bool(image_rel) and resolve_saved_image_path(image_rel).exists()
+        original_exists = bool(original_rel) and resolve_saved_image_path(original_rel).exists()
+
+        if not original_exists and image_exists and str(image_rel).startswith("/uploads/"):
+            original_rel = image_rel
+            row["original_image_path"] = original_rel
+            con.execute("UPDATE garments SET original_image_path=? WHERE id=?", (original_rel, row["id"]))
+            original_exists = True
+            changed = True
+
+        if not image_exists and original_exists:
+            row["image_path"] = original_rel
+            con.execute("UPDATE garments SET image_path=? WHERE id=?", (original_rel, row["id"]))
+            changed = True
+
+    if changed:
+        con.commit()
     con.close()
     return rows
 
@@ -165,36 +191,40 @@ def cleanup_garment_image(gid: int):
         con.close()
         raise HTTPException(404, "Garment not found")
 
-    source_rel = row["original_image_path"] or row["image_path"]
+    # The original upload is always preferred as the cleanup source. For an
+    # older row, only promote image_path to original when it is a real upload.
+    original_rel = row["original_image_path"] or ""
+    if not original_rel and str(row["image_path"] or "").startswith("/uploads/"):
+        original_rel = row["image_path"]
+        con.execute("UPDATE garments SET original_image_path=? WHERE id=?", (original_rel, gid))
+        con.commit()
+
+    source_rel = original_rel or row["image_path"]
     source_path = resolve_saved_image_path(source_rel)
     if not source_path.exists():
         con.close()
-        raise HTTPException(404, "The original garment photo could not be found.")
+        raise HTTPException(404, "The original garment photo could not be found. Cleanup was not attempted and no image was changed.")
 
-    cleaned_path = premium_remove_background(source_path)
-    if cleaned_path is None:
+    try:
+        cleaned_path = premium_remove_background(source_path)
+    except CleanupNotConfigured as exc:
         con.close()
-        raise HTTPException(503, "AI photo cleanup is not configured yet. Add REMOVE_BG_API_KEY in Render Environment, then try again. Your original photo is unchanged.")
+        raise HTTPException(503, str(exc))
+    except CleanupServiceError as exc:
+        con.close()
+        raise HTTPException(502, str(exc))
+
     new_rel = f"/cleaned/{cleaned_path.name}"
 
-    # Remove the previous cleaned display image if there was one.
-    old_display = row["image_path"]
-    if old_display and str(old_display).startswith("/cleaned/"):
-        old_path = resolve_saved_image_path(old_display)
-        if old_path != cleaned_path:
-            try:
-                if old_path.exists():
-                    old_path.unlink()
-            except Exception:
-                pass
-
+    # V3.6 deliberately does NOT delete either the original or a previous
+    # cleaned file here. Cleanup is non-destructive and can always fall back.
     con.execute(
-        "UPDATE garments SET image_path=?, original_image_path=COALESCE(NULLIF(original_image_path,''), ?) WHERE id=?",
-        (new_rel, source_rel, gid)
+        "UPDATE garments SET image_path=?, original_image_path=? WHERE id=?",
+        (new_rel, original_rel or source_rel, gid)
     )
     con.commit()
     con.close()
-    return {"ok": True, "image_path": new_rel}
+    return {"ok": True, "image_path": new_rel, "original_image_path": original_rel or source_rel}
 
 @app.post("/api/garments/{gid}/restore-original")
 def restore_original_garment_image(gid: int):
@@ -217,14 +247,8 @@ def restore_original_garment_image(gid: int):
     con.commit()
     con.close()
 
-    if old_display and str(old_display).startswith("/cleaned/"):
-        try:
-            p = resolve_saved_image_path(old_display)
-            if p.exists():
-                p.unlink()
-        except Exception:
-            pass
-
+    # Keep the processed derivative on disk. It is disposable, but retaining it
+    # avoids any chance of deleting the only usable image because of legacy data.
     return {"ok": True, "image_path": original}
 
 @app.put("/api/garments/{gid}")
@@ -365,55 +389,110 @@ def create_catalogue_image(source_path: Path) -> Path:
 
 
 
-def premium_remove_background(source_path: Path) -> Optional[Path]:
-    """Specialist non-generative background removal.
-    A bounded JPEG copy is created before upload to keep Render memory use low.
-    The original garment photo is never overwritten.
+class CleanupNotConfigured(Exception):
+    pass
+
+
+class CleanupServiceError(Exception):
+    pass
+
+
+
+def premium_remove_background(source_path: Path) -> Path:
+    """Remove the background using remove.bg without altering the source file.
+
+    V3.6 fixes the multipart body used in V3.5 (real CRLF separators rather
+    than escaped text), preserves useful API errors, and keeps memory bounded.
     """
     api_key = os.getenv("REMOVE_BG_API_KEY", "").strip()
     if not api_key:
-        return None
+        raise CleanupNotConfigured(
+            "Photo cleanup is not configured on the running service. REMOVE_BG_API_KEY was not visible to this process. Your original photo is unchanged."
+        )
+
+    import io
     try:
-        import io
         with Image.open(source_path) as im:
             im = ImageOps.exif_transpose(im).convert("RGB")
             im.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
             buf = io.BytesIO()
-            im.save(buf, "JPEG", quality=88, optimize=True)
+            im.save(buf, "JPEG", quality=86, optimize=True)
             raw = buf.getvalue()
+    except Exception as exc:
+        raise CleanupServiceError(f"I couldn't prepare this photo for cleanup: {exc}")
 
-        boundary = "----PersonalStylist" + uuid.uuid4().hex
-        parts = []
-        def field(name, value):
-            parts.append((f"--{boundary}\\r\\nContent-Disposition: form-data; name=\\\"{name}\\\"\\r\\n\\r\\n{value}\\r\\n").encode())
-        field("size", "auto")
-        field("format", "png")
-        parts.append((f"--{boundary}\\r\\nContent-Disposition: form-data; name=\\\"image_file\\\"; filename=\\\"garment.jpg\\\"\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n").encode())
-        parts.append(raw); parts.append(b"\\r\\n"); parts.append((f"--{boundary}--\\r\\n").encode())
-        req = urllib.request.Request(
-            "https://api.remove.bg/v1.0/removebg",
-            data=b"".join(parts),
-            headers={"X-Api-Key": api_key, "Content-Type": f"multipart/form-data; boundary={boundary}"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=60) as response:
+    boundary = "----PersonalStylist" + uuid.uuid4().hex
+    crlf = "\r\n"
+    parts = []
+
+    def field(name, value):
+        parts.append((
+            f"--{boundary}{crlf}"
+            f'Content-Disposition: form-data; name="{name}"{crlf}{crlf}'
+            f"{value}{crlf}"
+        ).encode("utf-8"))
+
+    field("size", "auto")
+    field("format", "png")
+    parts.append((
+        f"--{boundary}{crlf}"
+        f'Content-Disposition: form-data; name="image_file"; filename="garment.jpg"{crlf}'
+        f"Content-Type: image/jpeg{crlf}{crlf}"
+    ).encode("utf-8"))
+    parts.append(raw)
+    parts.append(crlf.encode("ascii"))
+    parts.append(f"--{boundary}--{crlf}".encode("ascii"))
+
+    req = urllib.request.Request(
+        "https://api.remove.bg/v1.0/removebg",
+        data=b"".join(parts),
+        headers={
+            "X-Api-Key": api_key,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "User-Agent": "Personal-Stylist/3.6",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=75) as response:
             png = response.read()
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")
+            parsed = json.loads(detail)
+            errors = parsed.get("errors") or []
+            message = errors[0].get("title") if errors and isinstance(errors[0], dict) else detail
+        except Exception:
+            message = f"HTTP {exc.code}"
+        raise CleanupServiceError(f"Background-removal service returned an error: {message}. Your original photo is unchanged.")
+    except urllib.error.URLError as exc:
+        raise CleanupServiceError(f"Background-removal service could not be reached: {exc.reason}. Your original photo is unchanged.")
+    except Exception as exc:
+        raise CleanupServiceError(f"Photo cleanup failed: {exc}. Your original photo is unchanged.")
 
+    try:
         cutout = Image.open(io.BytesIO(png)).convert("RGBA")
         bbox = cutout.getbbox()
         if not bbox:
-            return None
+            raise CleanupServiceError("The cleanup service returned an empty image. Your original photo is unchanged.")
         cutout = cutout.crop(bbox)
         canvas_w, canvas_h, margin = 1200, 1500, 90
-        scale = min((canvas_w-2*margin)/cutout.width, (canvas_h-2*margin)/cutout.height)
-        cutout = cutout.resize((max(1,round(cutout.width*scale)),max(1,round(cutout.height*scale))), Image.Resampling.LANCZOS)
-        canvas = Image.new("RGBA", (canvas_w, canvas_h), (249,249,248,255))
-        canvas.alpha_composite(cutout, ((canvas_w-cutout.width)//2,(canvas_h-cutout.height)//2))
+        scale = min((canvas_w - 2 * margin) / cutout.width, (canvas_h - 2 * margin) / cutout.height)
+        cutout = cutout.resize(
+            (max(1, round(cutout.width * scale)), max(1, round(cutout.height * scale))),
+            Image.Resampling.LANCZOS,
+        )
+        canvas = Image.new("RGBA", (canvas_w, canvas_h), (249, 249, 248, 255))
+        canvas.alpha_composite(cutout, ((canvas_w - cutout.width) // 2, (canvas_h - cutout.height) // 2))
         out = CLEANED / f"ai_isolated_{uuid.uuid4().hex}.png"
         canvas.convert("RGB").save(out, "PNG", optimize=True)
         return out
-    except Exception:
-        return None
+    except CleanupServiceError:
+        raise
+    except Exception as exc:
+        raise CleanupServiceError(f"The cleaned image could not be prepared: {exc}. Your original photo is unchanged.")
+
 
 def resolve_saved_image_path(rel_path: str) -> Path:
     rel = str(rel_path or "").lstrip("/")
