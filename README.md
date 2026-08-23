@@ -212,3 +212,10 @@ The cleanup is non-generative:
 - adds **Original photo** so the user can revert.
 
 If the segmentation is not confident enough, the app refuses the cleanup rather than damaging the garment image.
+
+
+## V3.4 — Stylist Context + upgraded cleanup path
+- Adds occasion, dress code, desired smartness, season, weather, temperature, location, wardrobe/shopping preference and free-text context to outfit requests.
+- The AI stylist now receives those fields as explicit situation constraints alongside wardrobe, fit profile and learned feedback.
+- Adds an optional specialist AI background-removal path using `REMOVE_BG_API_KEY`. If no key is configured, cleanup safely falls back to the existing local segmentation, so deployment does not depend on another service.
+- The specialist path is non-generative: it removes the background from the real garment photo and keeps the original.

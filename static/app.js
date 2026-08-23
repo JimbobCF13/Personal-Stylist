@@ -278,7 +278,7 @@ function populateAnchor(){$("anchor").innerHTML='<option value="">Let the stylis
 $("makeOutfits").addEventListener("click",async()=>{
  $("results").innerHTML='<div class="card">Stylist is thinking…</div>';
  try{
-  const x=await api("/api/outfits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occasion:$("occasion").value,temperature_c:Number($("temperature").value),weather:$("weather").value,location:$("location").value,anchor_id:$("anchor").value?Number($("anchor").value):null})});
+  const x=await api("/api/outfits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occasion:$("occasion").value,temperature_c:Number($("temperature").value),weather:$("weather").value,location:$("location").value,anchor_id:$("anchor").value?Number($("anchor").value):null,dress_code:$("dress_code").value,smartness:$("smartness").value,season:$("outfit_season").value,wardrobe_mode:$("wardrobe_mode").value,context_notes:$("context_notes").value})});
   $("results").innerHTML=`<div class="notice">${esc(x.summary)}</div>`+x.outfits.map((o,i)=>renderOutfit(o,i)).join("");
  }catch(err){$("results").innerHTML=`<div class="card">${esc(err.message)}</div>`}
 });

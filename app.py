@@ -1,5 +1,5 @@
 
-import os, json, base64, sqlite3, mimetypes, uuid
+import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -173,7 +173,7 @@ def cleanup_garment_image(gid: int):
         con.close()
         raise HTTPException(404, "The original garment photo could not be found.")
 
-    cleaned_path = isolate_garment_background(source_path)
+    cleaned_path = premium_remove_background(source_path) or isolate_garment_background(source_path)
     new_rel = f"/cleaned/{cleaned_path.name}"
 
     # Remove the previous cleaned display image if there was one.
@@ -362,6 +362,50 @@ def create_catalogue_image(source_path: Path) -> Path:
         return source_path
 
 
+
+
+def premium_remove_background(source_path: Path) -> Optional[Path]:
+    """Use a specialist background-removal service when configured.
+    This is segmentation, not generative redrawing: the photographed garment pixels are retained.
+    Falls back to the local cleanup when no key is configured or the service is unavailable.
+    """
+    api_key = os.getenv("REMOVE_BG_API_KEY", "").strip()
+    if not api_key:
+        return None
+    boundary = "----PersonalStylist" + uuid.uuid4().hex
+    raw = source_path.read_bytes()
+    mime = mimetypes.guess_type(source_path.name)[0] or "image/jpeg"
+    parts = []
+    def field(name, value):
+        parts.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").encode())
+    field("size", "auto")
+    field("format", "png")
+    parts.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"image_file\"; filename=\"{source_path.name}\"\r\nContent-Type: {mime}\r\n\r\n").encode())
+    parts.append(raw); parts.append(b"\r\n"); parts.append((f"--{boundary}--\r\n").encode())
+    req = urllib.request.Request(
+        "https://api.remove.bg/v1.0/removebg",
+        data=b"".join(parts),
+        headers={"X-Api-Key": api_key, "Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as response:
+            png = response.read()
+        cutout = Image.open(__import__('io').BytesIO(png)).convert("RGBA")
+        bbox = cutout.getbbox()
+        if not bbox:
+            return None
+        cutout = cutout.crop(bbox)
+        canvas_w, canvas_h, margin = 1200, 1500, 100
+        scale = min((canvas_w-2*margin)/cutout.width, (canvas_h-2*margin)/cutout.height)
+        cutout = cutout.resize((max(1,round(cutout.width*scale)),max(1,round(cutout.height*scale))), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGBA", (canvas_w, canvas_h), (249,249,248,255))
+        canvas.alpha_composite(cutout, ((canvas_w-cutout.width)//2,(canvas_h-cutout.height)//2))
+        out = CLEANED / f"ai_isolated_{uuid.uuid4().hex}.png"
+        canvas.convert("RGB").save(out, "PNG", optimize=True)
+        return out
+    except Exception:
+        return None
 
 def isolate_garment_background(source_path: Path) -> Path:
     """
@@ -616,6 +660,11 @@ class OutfitRequest(BaseModel):
     weather: str=""
     location: str=""
     anchor_id: Optional[int]=None
+    dress_code: str="Use your judgement"
+    smartness: str="Balanced"
+    season: str="Auto / current"
+    wardrobe_mode: str="Wardrobe first; suggest gaps only when useful"
+    context_notes: str=""
 
 OUTFIT_SCHEMA = {
  "type":"object",
@@ -654,6 +703,8 @@ PERSONALISATION:
 - Use brand/model/size notes and fit feedback when choosing between otherwise similar pieces.
 - Do not overfit; preserve useful variety.
 
+Treat the SITUATION fields as explicit styling instructions: occasion, dress code, requested smartness, season, weather, temperature, location and free-text context all matter.
+Respect wardrobe_mode: if it is wardrobe-only, do not suggest missing pieces; if shopping is allowed, still prefer strong outfits from the wardrobe and suggest a gap only when it materially improves the result.
 Prefer strong outfits fully from the wardrobe over marginally better outfits requiring purchases.
 If a useful piece is missing, name only the category/style/colour/material needed; do not invent a product.
 Produce genuinely different outfit options. Use only garment IDs supplied in the wardrobe JSON.

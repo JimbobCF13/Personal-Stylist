@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
-<link rel="stylesheet" href="/static/style.css?v=3.3">
+<link rel="stylesheet" href="/static/style.css?v=3.4">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V2</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V3.4</span></header>
 
 <section id="home" class="screen active">
   <div class="hero"><small id="greeting">Good morning</small><h2>Dress well with what you already own.</h2><p>Your wardrobe, fit profile and feedback shape every recommendation.</p></div>
@@ -70,10 +70,15 @@
 <section id="outfits" class="screen">
  <div class="section"><h3>What should I wear?</h3>
   <div class="card form">
-   <div class="two"><label>OCCASION<select id="occasion"><option>Casual daytime</option><option>Smart casual</option><option>Dinner</option><option>Date night</option><option>Business casual</option><option>Wedding / event</option><option>Holiday / resort</option></select></label><label>TEMPERATURE °C<input id="temperature" type="number" value="22"></label></div>
-   <div class="two"><label>WEATHER<select id="weather"><option>Dry</option><option>Sunny</option><option>Cloudy</option><option>Rain likely</option><option>Windy</option></select></label><label>LOCATION<input id="location" placeholder="e.g. Mallorca"></label></div>
+   <div class="stylist-intro"><span class="eyebrow">STYLIST CONTEXT</span><p>Tell me where you're going and how you want to feel. I'll balance that against your wardrobe, fit history and style feedback.</p></div>
+   <div class="two"><label>OCCASION<select id="occasion"><option>Casual daytime</option><option>Smart casual</option><option>Dinner</option><option>Date night</option><option>Business meeting</option><option>Business casual</option><option>Wedding / event</option><option>Holiday / resort</option><option>Travel day</option></select></label><label>DRESS CODE<select id="dress_code"><option>Use your judgement</option><option>Casual</option><option>Smart casual</option><option>Business casual</option><option>Business</option><option>Cocktail</option><option>Formal</option></select></label></div>
+   <div class="two"><label>HOW SMART?<select id="smartness"><option>Balanced</option><option>Relaxed</option><option>Polished but not overdressed</option><option>Smart</option><option>Very smart</option></select></label><label>SEASON<select id="outfit_season"><option>Auto / current</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>Transitional</option></select></label></div>
+   <div class="two"><label>TEMPERATURE °C<input id="temperature" type="number" value="22"></label><label>WEATHER<select id="weather"><option>Dry</option><option>Sunny</option><option>Cloudy</option><option>Rain likely</option><option>Windy</option><option>Cold / crisp</option><option>Hot / humid</option></select></label></div>
+   <label>LOCATION<input id="location" placeholder="e.g. San Francisco"></label>
+   <label>USE MY WARDROBE / SHOPPING<select id="wardrobe_mode"><option>Wardrobe first; suggest gaps only when useful</option><option>My wardrobe only</option><option>Open to one new piece</option><option>Open to new pieces / a new outfit</option></select></label>
+   <label>ANYTHING ELSE?<textarea id="context_notes" rows="3" placeholder="e.g. Client meeting followed by a relaxed dinner; I want to look polished but contemporary"></textarea></label>
    <label>BUILD AROUND<select id="anchor"><option value="">Let the stylist choose</option></select></label>
-   <button id="makeOutfits" class="primary full">Create outfit ideas</button>
+   <button id="makeOutfits" class="primary full">Ask my stylist</button>
   </div>
   <div id="results"></div>
  </div>
@@ -145,5 +150,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="outfits">✦<span>Outfits</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=3.3"></script>
+<script src="/static/app.js?v=3.4"></script>
 </body></html>

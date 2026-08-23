@@ -120,3 +120,6 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 .catalogue-note{display:block;color:var(--muted);font-size:11px;line-height:1.4;margin-top:-4px}
 
 .garment .row .ghost,.garment .row .secondary,.garment .row .danger{font-size:11px;padding:8px 9px}
+
+/* V3.4 stylist context */
+.stylist-intro{padding:4px 2px 8px}.stylist-intro p{margin:7px 0 2px;color:var(--muted);line-height:1.45}.eyebrow{font-size:11px;letter-spacing:.14em;font-weight:800;color:#111}.form textarea{resize:vertical}.outfit-card{border-top:3px solid #111}
