@@ -11,7 +11,7 @@ try:
 except Exception:
     OpenAI = None
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps, ImageEnhance, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 
 # Enables Pillow to read iPhone HEIC/HEIF photos.
@@ -29,6 +29,9 @@ DB = DATA_DIR / "stylist.db"
 UPLOADS = DATA_DIR / "uploads"
 UPLOADS.mkdir(parents=True, exist_ok=True)
 
+CLEANED = DATA_DIR / "cleaned"
+CLEANED.mkdir(parents=True, exist_ok=True)
+
 GENERATED = DATA_DIR / "generated"
 GENERATED.mkdir(parents=True, exist_ok=True)
 
@@ -38,6 +41,7 @@ MODEL_PHOTOS.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Personal Stylist V2")
 app.mount("/static", StaticFiles(directory=ROOT/"static"), name="static")
 app.mount("/uploads", StaticFiles(directory=UPLOADS), name="uploads")
+app.mount("/cleaned", StaticFiles(directory=CLEANED), name="cleaned")
 app.mount("/generated", StaticFiles(directory=GENERATED), name="generated")
 app.mount("/model-photos", StaticFiles(directory=MODEL_PHOTOS), name="model-photos")
 
@@ -60,6 +64,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS garments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       image_path TEXT NOT NULL,
+      original_image_path TEXT,
       category TEXT, garment_type TEXT, brand TEXT, model_line TEXT,
       labelled_size TEXT, colour TEXT, material TEXT, pattern TEXT,
       fit_cut TEXT, fit_feedback TEXT, season TEXT, formality TEXT,
@@ -77,6 +82,10 @@ def init_db():
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     """)
+    try:
+        con.execute("ALTER TABLE garments ADD COLUMN original_image_path TEXT")
+    except sqlite3.OperationalError:
+        pass
     con.commit()
     con.close()
 
@@ -166,15 +175,25 @@ def update_garment(gid: int, g: GarmentUpdate):
 @app.delete("/api/garments/{gid}")
 def delete_garment(gid: int):
     con = db()
-    row = con.execute("SELECT image_path FROM garments WHERE id=?", (gid,)).fetchone()
+    row = con.execute("SELECT image_path, original_image_path FROM garments WHERE id=?", (gid,)).fetchone()
     con.execute("DELETE FROM garments WHERE id=?", (gid,))
     con.commit(); con.close()
     if row:
-        try:
-            p = ROOT / row["image_path"].lstrip("/")
-            if p.exists(): p.unlink()
-        except Exception:
-            pass
+        for rel in [row["image_path"], row["original_image_path"]]:
+            if not rel:
+                continue
+            try:
+                rel_path = str(rel).lstrip("/")
+                if rel_path.startswith("cleaned/"):
+                    p = DATA_DIR / rel_path
+                elif rel_path.startswith("uploads/"):
+                    p = DATA_DIR / rel_path
+                else:
+                    p = ROOT / rel_path
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
     return {"ok": True}
 
 def normalise_image_for_ai(source_path: Path) -> Path:
@@ -218,6 +237,56 @@ def normalise_image_for_ai(source_path: Path) -> Path:
 def encode_image(path: Path):
     data = base64.b64encode(path.read_bytes()).decode()
     return f"data:image/jpeg;base64,{data}"
+
+
+def create_catalogue_image(source_path: Path) -> Path:
+    """
+    Create a cleaner wardrobe display image from the real uploaded garment photo.
+    This is non-generative: it does not invent or redraw the garment.
+    It corrects orientation, lightly normalises contrast/brightness, applies a
+    conservative subject crop, and places the real pixels on a neutral canvas.
+
+    Note: fully automatic semantic background removal is intentionally conservative
+    in this build. We avoid aggressive segmentation that could cut away sleeves,
+    hems, laces, straps, or other garment details.
+    """
+    try:
+        with Image.open(source_path) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+
+            # Light photographic normalisation only.
+            im = ImageEnhance.Contrast(im).enhance(1.04)
+            im = ImageEnhance.Brightness(im).enhance(1.02)
+
+            # Conservative crop: remove only a small outer margin.
+            w, h = im.size
+            pad_x = int(w * 0.03)
+            pad_y = int(h * 0.03)
+            if w > 300 and h > 300:
+                im = im.crop((pad_x, pad_y, w - pad_x, h - pad_y))
+
+            # Fit onto a consistent portrait catalogue canvas without distortion.
+            canvas_w, canvas_h = 1200, 1500
+            margin = 80
+            available_w = canvas_w - 2 * margin
+            available_h = canvas_h - 2 * margin
+
+            scale = min(available_w / im.width, available_h / im.height)
+            new_size = (max(1, round(im.width * scale)), max(1, round(im.height * scale)))
+            im = im.resize(new_size)
+
+            canvas = Image.new("RGB", (canvas_w, canvas_h), (248, 248, 247))
+            x = (canvas_w - im.width) // 2
+            y = (canvas_h - im.height) // 2
+            canvas.paste(im, (x, y))
+
+            out_path = CLEANED / f"catalogue_{uuid.uuid4().hex}.jpg"
+            canvas.save(out_path, format="JPEG", quality=92, optimize=True)
+            return out_path
+    except Exception:
+        # Never block wardrobe upload just because the display cleanup failed.
+        return source_path
+
 
 GARMENT_SCHEMA = {
   "type":"object",
@@ -306,8 +375,15 @@ async def analyse_garment(file: UploadFile = File(...)):
 
         raise HTTPException(status_code=502, detail=detail) from exc
 
+    catalogue_path = create_catalogue_image(image_path)
+
     return {
-      "image_path": f"/uploads/{image_path.name}",
+      "image_path": (
+          f"/cleaned/{catalogue_path.name}"
+          if catalogue_path.parent == CLEANED
+          else f"/uploads/{image_path.name}"
+      ),
+      "original_image_path": f"/uploads/{image_path.name}",
       "analysis": result,
       "ai_enabled": result is not None
     }
@@ -315,6 +391,7 @@ async def analyse_garment(file: UploadFile = File(...)):
 @app.post("/api/garments")
 async def add_garment(
     image_path: str = Form(...),
+    original_image_path: str = Form(""),
     category: str = Form(""),
     garment_type: str = Form(""),
     brand: str = Form(""),
@@ -332,9 +409,9 @@ async def add_garment(
 ):
     con = db()
     cur = con.execute("""INSERT INTO garments
-      (image_path,category,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-      (image_path,category,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence))
+      (image_path,original_image_path,category,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+      (image_path,original_image_path or image_path,category,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence))
     con.commit(); gid=cur.lastrowid; con.close()
     return {"ok":True,"id":gid}
 

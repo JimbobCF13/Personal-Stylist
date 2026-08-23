@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
-<link rel="stylesheet" href="/static/style.css?v=3.1">
+<link rel="stylesheet" href="/static/style.css?v=3.2">
 </head>
 <body>
 <div class="app">
@@ -36,7 +36,7 @@
    <div class="photo-actions"><label class="upload"><input id="cameraPhoto" type="file" accept="image/*" capture="environment"><span>📷 Take Photo</span></label><label class="upload"><input id="libraryPhoto" type="file" accept="image/*" multiple><span>🖼️ Choose Multiple Photos</span></label></div>
    <img id="preview" class="preview hidden">
    <div id="batchStatus" class="batch-status hidden"></div>
-   <div id="analysisMsg" class="notice hidden"></div>
+   <div id="analysisMsg" class="notice hidden"></div><small class="catalogue-note">Your real photo is kept; the wardrobe view uses a cleaned catalogue-style display image.</small>
    <div class="two"><label>CATEGORY<input id="category"></label><label>GARMENT TYPE<input id="garment_type"></label></div>
    <div class="two"><label>BRAND<input id="brand"></label><label>MODEL / LINE<input id="model_line"></label></div>
    <div class="three"><label>SIZE<input id="labelled_size"></label><label>COLOUR<input id="colour"></label><label>MATERIAL<input id="material"></label></div>
@@ -145,5 +145,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="outfits">✦<span>Outfits</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=3.1"></script>
+<script src="/static/app.js?v=3.2"></script>
 </body></html>

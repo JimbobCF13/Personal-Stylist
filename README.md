@@ -185,3 +185,15 @@ Direction:
 - reduced visual noise
 - wardrobe images presented against light neutral surfaces
 - monochrome navigation and controls
+
+
+## V3.2 wardrobe image cleanup
+Wardrobe display images now use a non-generative cleanup pipeline:
+- original source photo is retained;
+- orientation correction;
+- light brightness/contrast normalisation;
+- conservative crop;
+- consistent catalogue-style portrait canvas;
+- neutral near-white background.
+
+This build intentionally avoids aggressive automatic background segmentation that could remove real garment details. A stronger subject-isolation/background-removal stage can be added later with a dedicated segmentation model/service, while still preserving the original photograph.
