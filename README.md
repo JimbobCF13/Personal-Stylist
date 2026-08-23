@@ -172,3 +172,16 @@ This version deliberately does not claim live retailer products, prices or stock
 Optional environment variable:
 `OPENAI_SHOPPING_MODEL=gpt-5.6-terra`
 If omitted, the normal OPENAI_MODEL is used.
+
+
+## V3.1 Modern Monochrome theme
+Purely visual refresh. No workflow or backend behaviour changes.
+
+Direction:
+- off-white/light-grey canvas
+- clean white cards
+- near-black typography and actions
+- subtle borders and shadows
+- reduced visual noise
+- wardrobe images presented against light neutral surfaces
+- monochrome navigation and controls
