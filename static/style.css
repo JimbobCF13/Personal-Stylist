@@ -118,3 +118,5 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 .garment .meta b{font-weight:650}
 
 .catalogue-note{display:block;color:var(--muted);font-size:11px;line-height:1.4;margin-top:-4px}
+
+.garment .row .ghost,.garment .row .secondary,.garment .row .danger{font-size:11px;padding:8px 9px}

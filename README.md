@@ -197,3 +197,18 @@ Wardrobe display images now use a non-generative cleanup pipeline:
 - neutral near-white background.
 
 This build intentionally avoids aggressive automatic background segmentation that could remove real garment details. A stronger subject-isolation/background-removal stage can be added later with a dedicated segmentation model/service, while still preserving the original photograph.
+
+
+## V3.3 genuine photo isolation
+Adds a visible **Clean up photo** action to saved garments.
+
+The cleanup is non-generative:
+- uses the real uploaded photograph;
+- isolates the garment using OpenCV GrabCut segmentation;
+- preserves garment pixels rather than redrawing the item;
+- removes the surrounding floor/wardrobe/background where segmentation is confident;
+- centres the isolated item on a consistent near-white catalogue canvas;
+- keeps the untouched original photograph;
+- adds **Original photo** so the user can revert.
+
+If the segmentation is not confident enough, the app refuses the cleanup rather than damaging the garment image.

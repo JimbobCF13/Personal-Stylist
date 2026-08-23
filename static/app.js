@@ -23,9 +23,35 @@ async function loadGarments(){
 function renderGarments(){
  const q=$("search").value.toLowerCase(),f=$("filter").value;
  const list=garments.filter(g=>(!f||g.category===f)&&(!q||JSON.stringify(g).toLowerCase().includes(q)));
- $("garments").innerHTML=list.length?list.map(g=>`<div class="garment"><img src="${g.image_path}"><div class="meta"><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button><button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
+ $("garments").innerHTML=list.length?list.map(g=>`<div class="garment"><img src="${g.image_path}"><div class="meta"><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button><button class="ghost" onclick="cleanupPhoto(${g.id})">Clean up photo</button>${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
 }
 $("search").addEventListener("input",renderGarments);$("filter").addEventListener("change",renderGarments);
+
+
+async function cleanupPhoto(id){
+ const g=garments.find(x=>x.id===id);
+ if(!g)return;
+ if(!confirm("Clean up this photo? The original will be kept so you can restore it later."))return;
+
+ const originalButtonText="Clean up photo";
+ try{
+  const x=await api(`/api/garments/${id}/cleanup-image`,{method:"POST"});
+  await loadGarments();
+  alert("Photo cleaned up. The original is still saved.");
+ }catch(err){
+  alert(err.message);
+ }
+}
+
+async function restoreOriginal(id){
+ if(!confirm("Show the original uploaded photo again?"))return;
+ try{
+  await api(`/api/garments/${id}/restore-original`,{method:"POST"});
+  await loadGarments();
+ }catch(err){
+  alert(err.message);
+ }
+}
 
 function editGarment(id){
  const g=garments.find(x=>x.id===id);
