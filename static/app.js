@@ -212,18 +212,34 @@ async function deleteModelPhoto(id){
  await api(`/api/model-photos/${id}`,{method:"DELETE"});
  await loadModelPhotos();
 }
-$("modelPhotoInput").addEventListener("change",async e=>{
- const files=Array.from(e.target.files||[]).slice(0,4);
- if(!files.length)return;
- for(let i=0;i<files.length;i++){
-  const fd=new FormData();
-  fd.append("file",files[i]);
-  fd.append("label",`Reference ${i+1}`);
-  await api("/api/model-photos",{method:"POST",body:fd});
- }
- $("modelPhotoInput").value="";
- await loadModelPhotos();
-});
+const modelPhotoInput=$("modelPhotoInput");
+if(modelPhotoInput){
+ modelPhotoInput.addEventListener("change",async e=>{
+  const files=Array.from(e.target.files||[]).slice(0,4);
+  const status=$("modelUploadStatus");
+  if(!files.length)return;
+
+  status.classList.remove("hidden");
+  status.textContent=`Preparing ${files.length} photo${files.length===1?"":"s"}…`;
+
+  try{
+   for(let i=0;i<files.length;i++){
+    status.textContent=`Uploading photo ${i+1} of ${files.length}…`;
+    const fd=new FormData();
+    fd.append("file",files[i]);
+    fd.append("label",`Reference ${i+1}`);
+    await api("/api/model-photos",{method:"POST",body:fd});
+   }
+
+   modelPhotoInput.value="";
+   await loadModelPhotos();
+   status.textContent=`Uploaded ${files.length} reference photo${files.length===1?"":"s"} successfully.`;
+   setTimeout(()=>status.classList.add("hidden"),2500);
+  }catch(err){
+   status.textContent=`Upload failed: ${err.message}`;
+  }
+ });
+}
 async function loadProfile(){
  const p=await api("/api/profile");Object.entries(p).forEach(([k,v])=>{if($(k)&&v!==null)$(k).value=v});if(p.name)$("greeting").textContent=`Good morning, ${p.name}`;
 }

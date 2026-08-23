@@ -134,3 +134,9 @@ Profile includes My Model for 1–4 persistent personal reference photos.
 Outfit cards support See on model and View on me.
 Personalised previews use saved reference photos plus wardrobe garment images.
 These remain AI styling visualisations, not exact virtual fitting-room simulations.
+
+
+## V2.8.1 My Model upload fix
+- Cache-busts app.js and style.css so Safari loads the new V2.8 code after deployment.
+- Adds visible upload progress and success/error messages to My Model.
+- Guards the model-photo event listener to avoid silent frontend failures.
