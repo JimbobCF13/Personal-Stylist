@@ -213,8 +213,48 @@ $("makeOutfits").addEventListener("click",async()=>{
 function renderOutfit(o,i){
  const pieces=o.garment_ids.map(id=>garments.find(g=>g.id===id)).filter(Boolean).map(g=>`<div class="outfitPiece"><img src="${g.image_path}"><div><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small></div></div>`).join("");
  const gap=o.missing_piece?`<div class="notice"><b>Potential wardrobe gap:</b> ${esc(o.missing_piece)} · shopping priority: ${esc(o.shopping_priority)}</div>`:"";
- return `<div class="card"><div class="row between"><h3 style="margin:0">${esc(o.label)}</h3><span class="pill">Wardrobe first</span></div>${pieces}<p><b>Why it works:</b> ${esc(o.reason)}</p><small>${esc(o.weather_note)} · ${esc(o.occasion_note)}</small>${gap}<div class="feedback">${["Love it","Like it","Not for me","Too smart","Too casual"].map(r=>`<button onclick='rate(${JSON.stringify(JSON.stringify(o))},${JSON.stringify(r)})'>${r}</button>`).join("")}</div></div>`;
+ const outfitPayload=encodeURIComponent(JSON.stringify(o));
+ return `<div class="card outfit-card">
+   <div class="row between"><h3 style="margin:0">${esc(o.label)}</h3><span class="pill">Wardrobe first</span></div>
+   ${pieces}
+   <p><b>Why it works:</b> ${esc(o.reason)}</p>
+   <small>${esc(o.weather_note)} · ${esc(o.occasion_note)}</small>
+   ${gap}
+   <div class="visual-actions">
+     <button class="primary" type="button" onclick="seeOnModel('${outfitPayload}',${i})">See on model</button>
+     <button class="ghost" type="button" disabled title="Coming next">View on me · coming next</button>
+   </div>
+   <div id="modelVisual-${i}" class="model-visual hidden"></div>
+   <div class="feedback">${["Love it","Like it","Not for me","Too smart","Too casual"].map(r=>`<button onclick='rate(${JSON.stringify(JSON.stringify(o))},${JSON.stringify(r)})'>${r}</button>`).join("")}</div>
+ </div>`;
 }
+
+async function seeOnModel(encoded,index){
+ const o=JSON.parse(decodeURIComponent(encoded));
+ const box=$(`modelVisual-${index}`);
+ box.classList.remove("hidden");
+ box.innerHTML='<div class="visual-loading">Creating your outfit visualisation… this can take a little while.</div>';
+
+ try{
+   const payload={
+     garment_ids:o.garment_ids||[],
+     label:o.label||"Outfit",
+     reason:o.reason||"",
+     occasion:$("occasion").value,
+     temperature_c:Number($("temperature").value||0)
+   };
+   const x=await api("/api/outfit-visualisation",{
+     method:"POST",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify(payload)
+   });
+   box.innerHTML=`<img src="${x.image_path}" alt="AI model wearing a visualisation of the suggested outfit">
+     <div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
+ }catch(err){
+   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }
+}
+
 async function rate(s,r){await api("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({outfit:JSON.parse(s),rating:r})});alert("Feedback saved. The stylist will use repeated feedback patterns in future recommendations.");}
 function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 init();

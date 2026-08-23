@@ -29,9 +29,13 @@ DB = DATA_DIR / "stylist.db"
 UPLOADS = DATA_DIR / "uploads"
 UPLOADS.mkdir(parents=True, exist_ok=True)
 
+GENERATED = DATA_DIR / "generated"
+GENERATED.mkdir(parents=True, exist_ok=True)
+
 app = FastAPI(title="Personal Stylist V2")
 app.mount("/static", StaticFiles(directory=ROOT/"static"), name="static")
 app.mount("/uploads", StaticFiles(directory=UPLOADS), name="uploads")
+app.mount("/generated", StaticFiles(directory=GENERATED), name="generated")
 
 def db():
     con = sqlite3.connect(DB)
@@ -473,6 +477,150 @@ def fallback_outfits(garments, req):
         "missing_piece":missing,
         "shopping_priority":"medium" if missing else "none"
       }]
+    }
+
+
+class OutfitVisualisationRequest(BaseModel):
+    garment_ids: list[int]
+    label: Optional[str] = "Outfit"
+    reason: Optional[str] = ""
+    occasion: Optional[str] = ""
+    temperature_c: Optional[float] = None
+
+@app.post("/api/outfit-visualisation")
+def outfit_visualisation(req: OutfitVisualisationRequest):
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(400, "OpenAI image generation is not connected.")
+
+    ids = [int(x) for x in req.garment_ids if isinstance(x, int) or str(x).isdigit()]
+    if not ids:
+        raise HTTPException(400, "This outfit does not contain any saved garments.")
+
+    con = db()
+    placeholders = ",".join("?" for _ in ids)
+    rows = [dict(r) for r in con.execute(
+        f"SELECT * FROM garments WHERE id IN ({placeholders})", ids
+    ).fetchall()]
+    profile = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    con.close()
+
+    if not rows:
+        raise HTTPException(404, "The outfit garments could not be found.")
+
+    # Preserve outfit order supplied by the client.
+    by_id = {g["id"]: g for g in rows}
+    garments = [by_id[i] for i in ids if i in by_id]
+
+    descriptions = []
+    image_files = []
+    for n, g in enumerate(garments, start=1):
+        descriptions.append(
+            f"{n}. {g.get('brand') or ''} {g.get('garment_type') or g.get('category') or 'garment'}; "
+            f"colour: {g.get('colour') or 'unknown'}; material: {g.get('material') or 'unknown'}; "
+            f"pattern: {g.get('pattern') or 'none/unknown'}; fit: {g.get('fit_cut') or 'unknown'}."
+        )
+        rel = (g.get("image_path") or "").lstrip("/")
+        if rel.startswith("uploads/"):
+            p = DATA_DIR / rel
+        else:
+            p = ROOT / rel
+        if p.exists():
+            image_files.append(p)
+
+    height = profile.get("height_cm")
+    preferred_fit = profile.get("preferred_fit") or "natural contemporary fit"
+    style_notes = profile.get("style_notes") or ""
+
+    prompt = f"""
+Create a photorealistic full-body men's fashion lookbook image showing one adult male model
+wearing the outfit represented by the supplied garment reference images.
+
+OUTFIT:
+{chr(10).join(descriptions)}
+
+Context:
+- Outfit label: {req.label or 'Outfit'}
+- Occasion: {req.occasion or 'general smart/casual use'}
+- Approximate temperature: {req.temperature_c if req.temperature_c is not None else 'not specified'} C
+- Preferred fit: {preferred_fit}
+- User style notes: {style_notes}
+- User height, if supplied: {height or 'not supplied'} cm
+
+Important:
+- Use the reference garment images as closely as reasonably possible for colour, material,
+  silhouette, pattern and footwear.
+- Do not add visible logos or brand marks that are not clearly present in the reference images.
+- Do not invent extra statement garments.
+- If a small neutral accessory is needed for realism, keep it unobtrusive.
+- Show the entire outfit head-to-toe, including footwear.
+- Natural standing pose, premium contemporary menswear editorial photography.
+- Neutral understated studio or softly lit architectural background.
+- The model is generic and must not resemble any particular real person.
+- This is a styling visualisation, not a claim of exact garment fit.
+"""
+
+    client = OpenAI()
+    image_model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
+    result = None
+
+    # First choice: use the saved garment photographs as high-fidelity visual references.
+    opened = []
+    try:
+        if image_files:
+            opened = [open(p, "rb") for p in image_files[:6]]
+            result = client.images.edit(
+                model=image_model,
+                image=opened,
+                prompt=prompt,
+                size="1024x1536",
+                quality="medium"
+            )
+        else:
+            result = client.images.generate(
+                model=image_model,
+                prompt=prompt,
+                size="1024x1536",
+                quality="medium"
+            )
+    except Exception as first_exc:
+        # Safe fallback: if multi-image editing is unavailable to this account/SDK,
+        # create a visual from the stored garment metadata rather than failing outright.
+        try:
+            result = client.images.generate(
+                model=image_model,
+                prompt=prompt,
+                size="1024x1536",
+                quality="medium"
+            )
+        except Exception as second_exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Outfit visualisation failed: {str(second_exc)[:300]}"
+            ) from second_exc
+    finally:
+        for f in opened:
+            try:
+                f.close()
+            except Exception:
+                pass
+
+    if not result or not getattr(result, "data", None):
+        raise HTTPException(502, "The image model did not return an image.")
+
+    item = result.data[0]
+    b64 = getattr(item, "b64_json", None)
+    if not b64:
+        raise HTTPException(502, "The image model returned an unsupported image response.")
+
+    filename = f"outfit_{uuid.uuid4().hex}.png"
+    out_path = GENERATED / filename
+    out_path.write_bytes(base64.b64decode(b64))
+
+    return {
+        "ok": True,
+        "image_path": f"/generated/{filename}",
+        "label": req.label or "Outfit",
+        "notice": "AI outfit visualisation — useful for judging the overall look, not exact fit or garment reproduction."
     }
 
 class Feedback(BaseModel):

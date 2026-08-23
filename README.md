@@ -104,3 +104,27 @@ Editable fields include:
 - notes / garment measurements
 
 The original saved photo remains attached to the garment.
+
+
+## V2.7 See on Model
+Outfit cards now include **See on model**.
+
+The server:
+- takes the saved garment IDs in the recommended outfit;
+- uses the garment photographs as image references where supported;
+- sends them to `gpt-image-2` by default;
+- generates a realistic full-body generic male model wearing a close visual representation of the outfit;
+- saves generated previews on the persistent disk under `/var/data/generated`.
+
+The image is explicitly labelled as an AI styling visualisation rather than an exact fit simulation.
+
+Optional environment variable:
+`OPENAI_IMAGE_MODEL=gpt-image-2`
+
+If omitted, `gpt-image-2` is used automatically.
+
+`View on me` is shown as the next planned feature but remains disabled in this build.
+
+## V2.7.1 deployment fix
+Adds Pillow, which provides the PIL module required by garment image processing.
+Includes V2.6 garment editing, persistent storage and V2.7 See on Model.
