@@ -63,3 +63,44 @@ Both routes use the same AI garment-analysis workflow.
 
 ## V2.3 batch wardrobe upload
 Choose Multiple Photos lets you select several garment photos in one go. The app queues them, analyses one at a time, and shows Save & Next until the batch is complete.
+
+
+## V2.4 personal style learning
+- Outfit feedback is now passed into the Stylist Agent on future recommendations.
+- Repeated Loved/Liked/Not for me/Too smart/Too casual patterns influence future styling.
+- Garments marked Perfect fit receive higher styling weight.
+- Profile now includes a Style Learning panel summarising feedback and perfect-fit brand patterns.
+
+
+## V2.5 persistent wardrobe storage
+The wardrobe database and garment photographs can now live on Render's persistent disk.
+
+In Render add the environment variable:
+
+`DATA_DIR=/var/data`
+
+With the disk mounted at `/var/data`, the following persist across deploys/restarts:
+- wardrobe items
+- garment photos
+- measurements/profile
+- outfit feedback
+- style-learning history
+
+Local development falls back to a `data/` directory inside the project.
+
+
+## V2.6 garment editing
+Saved wardrobe items can now be edited without deleting/re-uploading them.
+
+Editable fields include:
+- category and garment type
+- brand and model/line
+- size
+- colour and material
+- pattern
+- fit/cut and fit feedback
+- season
+- formality
+- notes / garment measurements
+
+The original saved photo remains attached to the garment.

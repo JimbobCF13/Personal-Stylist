@@ -27,3 +27,9 @@ nav button{border:0;background:none;font-size:20px;color:var(--ink);padding:6px}
 .batch-status{padding:11px 13px;border-radius:14px;background:#f3eee5;border:1px solid var(--line);font-size:13px;color:var(--ink)}
 .save-actions{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
 .save-actions .full{width:100%}
+
+.learning-card{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:18px;background:#f8f4ed}
+.learning-card h4{margin:0;font-size:17px}
+.learning-card p{margin:10px 0 6px;line-height:1.5}
+
+.garment .row{display:flex;flex-wrap:wrap;gap:7px}

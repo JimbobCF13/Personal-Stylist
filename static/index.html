@@ -48,6 +48,24 @@
  </div>
 </section>
 
+
+<section id="edit" class="screen">
+ <div class="section">
+  <div class="row between"><h3>Edit Garment</h3><button class="ghost" data-go="wardrobe">Cancel</button></div>
+  <div class="card form">
+   <img id="editPreview" class="preview" alt="Garment photo">
+   <div class="two"><label>CATEGORY<input id="e_category"></label><label>GARMENT TYPE<input id="e_garment_type"></label></div>
+   <div class="two"><label>BRAND<input id="e_brand"></label><label>MODEL / LINE<input id="e_model_line"></label></div>
+   <div class="three"><label>SIZE<input id="e_labelled_size"></label><label>COLOUR<input id="e_colour"></label><label>MATERIAL<input id="e_material"></label></div>
+   <div class="two"><label>PATTERN<input id="e_pattern"></label><label>FIT / CUT<input id="e_fit_cut"></label></div>
+   <div class="two"><label>FIT FEEDBACK<select id="e_fit_feedback"><option>Unknown</option><option>Perfect fit</option><option>Slightly tight</option><option>Slightly loose</option><option>Too tight</option><option>Too loose</option></select></label><label>SEASON<input id="e_season"></label></div>
+   <label>FORMALITY<input id="e_formality"></label>
+   <label>NOTES / GARMENT MEASUREMENTS<textarea id="e_notes" rows="3"></textarea></label>
+   <button id="saveEdit" class="primary full" type="button">Save changes</button>
+  </div>
+ </div>
+</section>
+
 <section id="outfits" class="screen">
  <div class="section"><h3>What should I wear?</h3>
   <div class="card form">
@@ -70,6 +88,10 @@
    <label>STYLE NOTES<textarea id="style_notes" rows="3"></textarea></label>
    <label>BRAND / SIZE NOTES<textarea id="brand_notes" rows="3" placeholder="e.g. Ralph Lauren Custom Slim Fit L works well…"></textarea></label>
    <button id="saveProfile" class="primary full">Save profile</button>
+   <div class="learning-card">
+    <div class="row between"><h4>Style Learning</h4><span class="pill">Learns over time</span></div>
+    <div id="styleLearning"><small>No feedback yet. Rate outfits and mark garments as Perfect fit to teach the stylist.</small></div>
+   </div>
   </div>
  </div>
 </section>

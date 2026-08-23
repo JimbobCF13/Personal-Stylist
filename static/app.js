@@ -1,6 +1,7 @@
 
 const $=id=>document.getElementById(id);
 let garments=[], uploadedPath="", aiConfidence=0;
+let editingGarmentId=null;
 let photoQueue=[], currentPhotoIndex=-1, batchMode=false;
 
 async function api(url,opts={}){
@@ -8,7 +9,7 @@ async function api(url,opts={}){
  if(!r.ok) throw new Error(data.detail||"Something went wrong");
  return data;
 }
-function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="outfits")populateAnchor();if(id==="profile")loadProfile()}
+function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="outfits")populateAnchor();if(id==="profile"){loadProfile();loadStyleLearning()}}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b)go(b.dataset.go)});
 async function init(){
  try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
@@ -22,9 +23,62 @@ async function loadGarments(){
 function renderGarments(){
  const q=$("search").value.toLowerCase(),f=$("filter").value;
  const list=garments.filter(g=>(!f||g.category===f)&&(!q||JSON.stringify(g).toLowerCase().includes(q)));
- $("garments").innerHTML=list.length?list.map(g=>`<div class="garment"><img src="${g.image_path}"><div class="meta"><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
+ $("garments").innerHTML=list.length?list.map(g=>`<div class="garment"><img src="${g.image_path}"><div class="meta"><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button><button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
 }
 $("search").addEventListener("input",renderGarments);$("filter").addEventListener("change",renderGarments);
+
+function editGarment(id){
+ const g=garments.find(x=>x.id===id);
+ if(!g)return;
+ editingGarmentId=id;
+ $("editPreview").src=g.image_path;
+
+ const map={
+  category:"e_category",
+  garment_type:"e_garment_type",
+  brand:"e_brand",
+  model_line:"e_model_line",
+  labelled_size:"e_labelled_size",
+  colour:"e_colour",
+  material:"e_material",
+  pattern:"e_pattern",
+  fit_cut:"e_fit_cut",
+  fit_feedback:"e_fit_feedback",
+  season:"e_season",
+  formality:"e_formality",
+  notes:"e_notes"
+ };
+ Object.entries(map).forEach(([k,id])=>{$(id).value=g[k]||""});
+ go("edit");
+}
+
+$("saveEdit").addEventListener("click",async()=>{
+ if(!editingGarmentId)return;
+ const body={
+  category:$("e_category").value,
+  garment_type:$("e_garment_type").value,
+  brand:$("e_brand").value,
+  model_line:$("e_model_line").value,
+  labelled_size:$("e_labelled_size").value,
+  colour:$("e_colour").value,
+  material:$("e_material").value,
+  pattern:$("e_pattern").value,
+  fit_cut:$("e_fit_cut").value,
+  fit_feedback:$("e_fit_feedback").value,
+  season:$("e_season").value,
+  formality:$("e_formality").value,
+  notes:$("e_notes").value
+ };
+ await api(`/api/garments/${editingGarmentId}`,{
+  method:"PUT",
+  headers:{"Content-Type":"application/json"},
+  body:JSON.stringify(body)
+ });
+ editingGarmentId=null;
+ await loadGarments();
+ go("wardrobe");
+});
+
 async function del(id){if(confirm("Remove this garment?")){await api(`/api/garments/${id}`,{method:"DELETE"});await loadGarments()}}
 function buildAround(id){go("outfits");$("anchor").value=String(id)}
 function clearGarmentFields(){
@@ -123,6 +177,23 @@ $("saveGarment").addEventListener("click",async()=>{
  }
 });
 
+
+async function loadStyleLearning(){
+ try{
+  const x=await api("/api/style-learning");
+  const ratings=x.ratings||{};
+  const total=x.feedback_count||0;
+  const brands=(x.perfect_fit_brands||[]).map(b=>`${esc(b.brand)} (${b.count})`).join(", ");
+  const ratingText=total
+    ? `Based on ${total} outfit rating${total===1?"":"s"}: ${["Love it","Like it","Not for me","Too smart","Too casual"].filter(k=>ratings[k]).map(k=>`${k}: ${ratings[k]}`).join(" · ")}`
+    : "No outfit feedback yet.";
+  const brandText=brands ? `<br><b>Perfect-fit brands:</b> ${brands}` : "";
+  $("styleLearning").innerHTML=`<p>${ratingText}${brandText}</p><small>${esc(x.message||"")}</small>`;
+ }catch{
+  $("styleLearning").innerHTML="<small>Style learning data is temporarily unavailable.</small>";
+ }
+}
+
 async function loadProfile(){
  const p=await api("/api/profile");Object.entries(p).forEach(([k,v])=>{if($(k)&&v!==null)$(k).value=v});if(p.name)$("greeting").textContent=`Good morning, ${p.name}`;
 }
@@ -144,6 +215,6 @@ function renderOutfit(o,i){
  const gap=o.missing_piece?`<div class="notice"><b>Potential wardrobe gap:</b> ${esc(o.missing_piece)} · shopping priority: ${esc(o.shopping_priority)}</div>`:"";
  return `<div class="card"><div class="row between"><h3 style="margin:0">${esc(o.label)}</h3><span class="pill">Wardrobe first</span></div>${pieces}<p><b>Why it works:</b> ${esc(o.reason)}</p><small>${esc(o.weather_note)} · ${esc(o.occasion_note)}</small>${gap}<div class="feedback">${["Love it","Like it","Not for me","Too smart","Too casual"].map(r=>`<button onclick='rate(${JSON.stringify(JSON.stringify(o))},${JSON.stringify(r)})'>${r}</button>`).join("")}</div></div>`;
 }
-async function rate(s,r){await api("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({outfit:JSON.parse(s),rating:r})});alert("Feedback saved.");}
+async function rate(s,r){await api("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({outfit:JSON.parse(s),rating:r})});alert("Feedback saved. The stylist will use repeated feedback patterns in future recommendations.");}
 function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 init();
