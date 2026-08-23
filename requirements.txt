@@ -5,5 +5,3 @@ openai>=1.99
 pydantic>=2.10
 Pillow>=11.0
 pillow-heif>=0.20
-opencv-python-headless>=4.10,<5
-numpy>=2.0,<3

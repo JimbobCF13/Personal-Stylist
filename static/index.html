@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
-<link rel="stylesheet" href="/static/style.css?v=3.4">
+<link rel="stylesheet" href="/static/style.css?v=3.5">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V3.4</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V3.5</span></header>
 
 <section id="home" class="screen active">
   <div class="hero"><small id="greeting">Good morning</small><h2>Dress well with what you already own.</h2><p>Your wardrobe, fit profile and feedback shape every recommendation.</p></div>
@@ -17,6 +17,7 @@
     <button class="tile" data-go="wardrobe">🧥<b>My Wardrobe</b><span id="count">0 saved items</span></button>
     <button class="tile" data-go="profile">📏<b>My Fit Profile</b><span>Measurements, brands and preferences.</span></button>
     <button class="tile" data-go="shopping">🛍️<b>Wardrobe Gaps & Shop</b><span>Find the purchases that add the most to your wardrobe.</span></button>
+    <button class="tile" data-go="packing">🧳<b>Help Me Pack</b><span>Build an efficient capsule and outfit plan for a trip.</span></button>
   </div>
   <div class="section"><div class="notice"><b>Wardrobe first.</b> The stylist should only suggest shopping where it identifies a genuine gap.</div></div>
 </section>
@@ -85,6 +86,23 @@
 </section>
 
 
+
+<section id="packing" class="screen">
+ <div class="section"><h3>Help Me Pack</h3>
+  <div class="card form">
+   <div class="stylist-intro"><span class="eyebrow">TRAVEL STYLIST</span><p>Tell me about the trip. I'll reuse versatile pieces from your wardrobe to create a compact packing list and outfit plan.</p></div>
+   <label>DESTINATION<input id="pack_destination" placeholder="e.g. San Francisco"></label>
+   <div class="two"><label>DAYS<input id="pack_days" type="number" min="1" max="30" value="5"></label><label>TRIP TYPE<select id="pack_trip_type"><option>Mixed</option><option>Business</option><option>City break</option><option>Holiday / resort</option><option>Wedding / event</option><option>Weekend</option></select></label></div>
+   <label>EXPECTED WEATHER<input id="pack_weather" placeholder="e.g. 15–22°C, cool mornings, dry"></label>
+   <label>ACTIVITIES<textarea id="pack_activities" rows="2" placeholder="e.g. lectures, walking around the city, drinks, dinners"></textarea></label>
+   <label>DRESS NEEDS<textarea id="pack_dress_needs" rows="2" placeholder="e.g. smart casual daytime, two business meetings, one smarter dinner"></textarea></label>
+   <div class="two"><label>LAUNDRY<select id="pack_laundry"><option>No</option><option>Yes</option><option>Possibly</option></select></label><label>CAN SUGGEST MISSING ITEMS?<select id="pack_shopping"><option>Yes</option><option>No</option></select></label></div>
+   <label>ANYTHING ELSE?<textarea id="pack_notes" rows="2" placeholder="e.g. hand luggage only; comfortable shoes are important"></textarea></label>
+   <button id="makePackingPlan" class="primary full" type="button">Build my packing plan</button>
+  </div><div id="packingResults"></div>
+ </div>
+</section>
+
 <section id="shopping" class="screen">
  <div class="section">
   <h3>Wardrobe Gaps & Shopping</h3>
@@ -148,7 +166,7 @@
 </div>
 
 <nav><div class="navinner">
-<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="outfits">✦<span>Outfits</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="profile">◎<span>Profile</span></button>
+<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="outfits">✦<span>Outfits</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=3.4"></script>
+<script src="/static/app.js?v=3.5"></script>
 </body></html>

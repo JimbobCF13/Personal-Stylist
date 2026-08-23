@@ -219,3 +219,16 @@ If the segmentation is not confident enough, the app refuses the cleanup rather 
 - The AI stylist now receives those fields as explicit situation constraints alongside wardrobe, fit profile and learned feedback.
 - Adds an optional specialist AI background-removal path using `REMOVE_BG_API_KEY`. If no key is configured, cleanup safely falls back to the existing local segmentation, so deployment does not depend on another service.
 - The specialist path is non-generative: it removes the background from the real garment photo and keeps the original.
+
+
+## V3.5 — Help Me Pack + lighter image architecture
+- Adds Help Me Pack: destination, trip length, weather, activities, dress needs, laundry and shopping preference.
+- Builds an efficient capsule from the real wardrobe and reuses versatile pieces across a trip.
+- Wardrobe photos now show the whole garment (`object-fit: contain`) and tapping/clicking the photo opens Edit.
+- Removes OpenCV and NumPy from the Render service to reduce memory pressure.
+- Clean up photo now uses the specialist remove.bg API only; it never silently falls back to the rough local GrabCut result.
+- Before sending a cleanup request, the server creates a bounded 1600px JPEG working copy to reduce memory spikes.
+- Original photos remain untouched and restorable.
+
+### One-time setup for better photo cleanup
+Add `REMOVE_BG_API_KEY` to Render Environment. Until it is configured, Clean up photo will show a clear setup message and leave the original unchanged.

@@ -23,7 +23,7 @@ async function loadGarments(){
 function renderGarments(){
  const q=$("search").value.toLowerCase(),f=$("filter").value;
  const list=garments.filter(g=>(!f||g.category===f)&&(!q||JSON.stringify(g).toLowerCase().includes(q)));
- $("garments").innerHTML=list.length?list.map(g=>`<div class="garment"><img src="${g.image_path}"><div class="meta"><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button><button class="ghost" onclick="cleanupPhoto(${g.id})">Clean up photo</button>${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
+ $("garments").innerHTML=list.length?list.map(g=>`<div class="garment"><img class="garment-photo" src="${g.image_path}" alt="${esc((g.brand?g.brand+" ":"")+g.garment_type)}" onclick="editGarment(${g.id})" title="Open garment"><div class="meta"><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button><button class="ghost" onclick="cleanupPhoto(${g.id})">Clean up photo</button>${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
 }
 $("search").addEventListener("input",renderGarments);$("filter").addEventListener("change",renderGarments);
 
@@ -446,3 +446,17 @@ function renderGapRecommendation(r,i){
 }
 
 init();
+
+
+$("makePackingPlan")?.addEventListener("click",async()=>{
+ const box=$("packingResults");
+ box.innerHTML='<div class="card">Building the most useful capsule from your wardrobe…</div>';
+ try{
+  const payload={destination:$("pack_destination").value,days:Number($("pack_days").value||5),trip_type:$("pack_trip_type").value,weather:$("pack_weather").value,activities:$("pack_activities").value,dress_needs:$("pack_dress_needs").value,laundry:$("pack_laundry").value,shopping_allowed:$("pack_shopping").value==="Yes",notes:$("pack_notes").value};
+  const x=await api("/api/help-me-pack",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  const packed=(x.packing_list||[]).map(p=>{const g=garments.find(z=>z.id===p.garment_id);return g?`<div class="outfitPiece"><img src="${g.image_path}"><div><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc(p.why_pack)} · wear ~${p.wear_count}×</small></div></div>`:""}).join("");
+  const days=(x.outfit_plan||[]).map(d=>`<div class="pack-day"><b>${esc(d.day)} — ${esc(d.occasion)}</b><div class="mini-strip">${(d.garment_ids||[]).map(id=>{const g=garments.find(z=>z.id===id);return g?`<div class="mini-garment"><img src="${g.image_path}"><span>${esc(g.garment_type)}</span></div>`:""}).join("")}</div><small>${esc(d.note)}</small></div>`).join("");
+  const missing=(x.missing_items||[]).length?`<div class="notice"><b>Useful gaps:</b> ${x.missing_items.map(esc).join(" · ")}</div>`:"";
+  box.innerHTML=`<div class="notice">${esc(x.summary)}</div><div class="card"><h3>Pack these</h3>${packed}</div><div class="card"><h3>Outfit plan</h3>${days}</div>${missing}<div class="card"><b>Packing tip</b><p>${esc(x.packing_tip)}</p></div>`;
+ }catch(err){box.innerHTML=`<div class="card">${esc(err.message)}</div>`}
+});

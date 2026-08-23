@@ -12,8 +12,6 @@ except Exception:
     OpenAI = None
 
 from PIL import Image, ImageOps, ImageEnhance, UnidentifiedImageError
-import cv2
-import numpy as np
 
 from pillow_heif import register_heif_opener
 
@@ -173,7 +171,10 @@ def cleanup_garment_image(gid: int):
         con.close()
         raise HTTPException(404, "The original garment photo could not be found.")
 
-    cleaned_path = premium_remove_background(source_path) or isolate_garment_background(source_path)
+    cleaned_path = premium_remove_background(source_path)
+    if cleaned_path is None:
+        con.close()
+        raise HTTPException(503, "AI photo cleanup is not configured yet. Add REMOVE_BG_API_KEY in Render Environment, then try again. Your original photo is unchanged.")
     new_rel = f"/cleaned/{cleaned_path.name}"
 
     # Remove the previous cleaned display image if there was one.
@@ -365,38 +366,45 @@ def create_catalogue_image(source_path: Path) -> Path:
 
 
 def premium_remove_background(source_path: Path) -> Optional[Path]:
-    """Use a specialist background-removal service when configured.
-    This is segmentation, not generative redrawing: the photographed garment pixels are retained.
-    Falls back to the local cleanup when no key is configured or the service is unavailable.
+    """Specialist non-generative background removal.
+    A bounded JPEG copy is created before upload to keep Render memory use low.
+    The original garment photo is never overwritten.
     """
     api_key = os.getenv("REMOVE_BG_API_KEY", "").strip()
     if not api_key:
         return None
-    boundary = "----PersonalStylist" + uuid.uuid4().hex
-    raw = source_path.read_bytes()
-    mime = mimetypes.guess_type(source_path.name)[0] or "image/jpeg"
-    parts = []
-    def field(name, value):
-        parts.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").encode())
-    field("size", "auto")
-    field("format", "png")
-    parts.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"image_file\"; filename=\"{source_path.name}\"\r\nContent-Type: {mime}\r\n\r\n").encode())
-    parts.append(raw); parts.append(b"\r\n"); parts.append((f"--{boundary}--\r\n").encode())
-    req = urllib.request.Request(
-        "https://api.remove.bg/v1.0/removebg",
-        data=b"".join(parts),
-        headers={"X-Api-Key": api_key, "Content-Type": f"multipart/form-data; boundary={boundary}"},
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=45) as response:
+        import io
+        with Image.open(source_path) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+            im.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=88, optimize=True)
+            raw = buf.getvalue()
+
+        boundary = "----PersonalStylist" + uuid.uuid4().hex
+        parts = []
+        def field(name, value):
+            parts.append((f"--{boundary}\\r\\nContent-Disposition: form-data; name=\\\"{name}\\\"\\r\\n\\r\\n{value}\\r\\n").encode())
+        field("size", "auto")
+        field("format", "png")
+        parts.append((f"--{boundary}\\r\\nContent-Disposition: form-data; name=\\\"image_file\\\"; filename=\\\"garment.jpg\\\"\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n").encode())
+        parts.append(raw); parts.append(b"\\r\\n"); parts.append((f"--{boundary}--\\r\\n").encode())
+        req = urllib.request.Request(
+            "https://api.remove.bg/v1.0/removebg",
+            data=b"".join(parts),
+            headers={"X-Api-Key": api_key, "Content-Type": f"multipart/form-data; boundary={boundary}"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as response:
             png = response.read()
-        cutout = Image.open(__import__('io').BytesIO(png)).convert("RGBA")
+
+        cutout = Image.open(io.BytesIO(png)).convert("RGBA")
         bbox = cutout.getbbox()
         if not bbox:
             return None
         cutout = cutout.crop(bbox)
-        canvas_w, canvas_h, margin = 1200, 1500, 100
+        canvas_w, canvas_h, margin = 1200, 1500, 90
         scale = min((canvas_w-2*margin)/cutout.width, (canvas_h-2*margin)/cutout.height)
         cutout = cutout.resize((max(1,round(cutout.width*scale)),max(1,round(cutout.height*scale))), Image.Resampling.LANCZOS)
         canvas = Image.new("RGBA", (canvas_w, canvas_h), (249,249,248,255))
@@ -406,120 +414,6 @@ def premium_remove_background(source_path: Path) -> Optional[Path]:
         return out
     except Exception:
         return None
-
-def isolate_garment_background(source_path: Path) -> Path:
-    """
-    Non-generative garment isolation using OpenCV GrabCut.
-    The garment pixels come from the user's real photograph; no garment is redrawn.
-    The original file is preserved separately.
-    """
-    try:
-        with Image.open(source_path) as pil:
-            pil = ImageOps.exif_transpose(pil).convert("RGB")
-            original = np.array(pil)
-
-        h, w = original.shape[:2]
-        if w < 80 or h < 80:
-            raise ValueError("Image too small")
-
-        # Work on a smaller image for speed/memory, then scale the mask back up.
-        max_side = 1400
-        scale = min(1.0, max_side / max(w, h))
-        if scale < 1.0:
-            work_img = cv2.resize(
-                original,
-                (max(1, round(w * scale)), max(1, round(h * scale))),
-                interpolation=cv2.INTER_AREA
-            )
-        else:
-            work_img = original.copy()
-
-        wh, ww = work_img.shape[:2]
-        # Keep a small border as likely background while allowing large garments.
-        inset_x = max(4, round(ww * 0.025))
-        inset_y = max(4, round(wh * 0.025))
-        rect = (
-            inset_x,
-            inset_y,
-            max(1, ww - inset_x * 2),
-            max(1, wh - inset_y * 2)
-        )
-
-        mask = np.zeros((wh, ww), np.uint8)
-        bgd_model = np.zeros((1, 65), np.float64)
-        fgd_model = np.zeros((1, 65), np.float64)
-
-        cv2.grabCut(
-            work_img,
-            mask,
-            rect,
-            bgd_model,
-            fgd_model,
-            7,
-            cv2.GC_INIT_WITH_RECT
-        )
-
-        fg = np.where(
-            (mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD),
-            255,
-            0
-        ).astype("uint8")
-
-        # Clean tiny specks and softly feather the garment boundary.
-        kernel = np.ones((3, 3), np.uint8)
-        fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, kernel, iterations=1)
-        fg = cv2.morphologyEx(fg, cv2.MORPH_CLOSE, kernel, iterations=2)
-        fg = cv2.GaussianBlur(fg, (0, 0), sigmaX=1.2)
-
-        if scale < 1.0:
-            fg = cv2.resize(fg, (w, h), interpolation=cv2.INTER_LINEAR)
-
-        # Guard against a bad segmentation result.
-        visible_ratio = float(np.count_nonzero(fg > 80)) / float(w * h)
-        if visible_ratio < 0.04 or visible_ratio > 0.92:
-            raise ValueError("Segmentation confidence too low")
-
-        rgba = np.dstack([original, fg])
-
-        # Crop to visible content with breathing room.
-        ys, xs = np.where(fg > 40)
-        left, right = xs.min(), xs.max()
-        top, bottom = ys.min(), ys.max()
-        pad = max(20, round(max(w, h) * 0.035))
-        left = max(0, left - pad)
-        right = min(w - 1, right + pad)
-        top = max(0, top - pad)
-        bottom = min(h - 1, bottom + pad)
-        rgba = rgba[top:bottom+1, left:right+1]
-
-        garment = Image.fromarray(rgba, mode="RGBA")
-
-        # Consistent catalogue canvas.
-        canvas_w, canvas_h = 1200, 1500
-        margin = 100
-        available_w = canvas_w - margin * 2
-        available_h = canvas_h - margin * 2
-        scale2 = min(available_w / garment.width, available_h / garment.height)
-        garment = garment.resize(
-            (max(1, round(garment.width * scale2)), max(1, round(garment.height * scale2))),
-            Image.Resampling.LANCZOS
-        )
-
-        canvas = Image.new("RGBA", (canvas_w, canvas_h), (249, 249, 248, 255))
-        x = (canvas_w - garment.width) // 2
-        y = (canvas_h - garment.height) // 2
-        canvas.alpha_composite(garment, (x, y))
-
-        out_path = CLEANED / f"isolated_{uuid.uuid4().hex}.png"
-        canvas.convert("RGB").save(out_path, format="PNG", optimize=True)
-        return out_path
-
-    except Exception as exc:
-        raise HTTPException(
-            status_code=422,
-            detail="I couldn't isolate this garment cleanly enough. The original photo has been left unchanged."
-        ) from exc
-
 
 def resolve_saved_image_path(rel_path: str) -> Path:
     rel = str(rel_path or "").lstrip("/")
@@ -813,6 +707,49 @@ def fallback_outfits(garments, req):
     }
 
 
+
+
+class PackingRequest(BaseModel):
+    destination: str
+    days: int = 5
+    trip_type: str = "Mixed"
+    weather: str = ""
+    activities: str = ""
+    dress_needs: str = ""
+    laundry: str = "No"
+    shopping_allowed: bool = True
+    notes: str = ""
+
+PACKING_SCHEMA = {
+ "type":"object","properties":{
+  "summary":{"type":"string"},
+  "packing_list":{"type":"array","items":{"type":"object","properties":{
+   "garment_id":{"type":"integer"},"why_pack":{"type":"string"},"wear_count":{"type":"integer"}
+  },"required":["garment_id","why_pack","wear_count"],"additionalProperties":False}},
+  "outfit_plan":{"type":"array","items":{"type":"object","properties":{
+   "day":{"type":"string"},"occasion":{"type":"string"},"garment_ids":{"type":"array","items":{"type":"integer"}},"note":{"type":"string"}
+  },"required":["day","occasion","garment_ids","note"],"additionalProperties":False}},
+  "missing_items":{"type":"array","items":{"type":"string"}},
+  "packing_tip":{"type":"string"}
+ },"required":["summary","packing_list","outfit_plan","missing_items","packing_tip"],"additionalProperties":False
+}
+
+@app.post("/api/help-me-pack")
+def help_me_pack(req: PackingRequest):
+    con=db()
+    garments=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    feedback=[dict(r) for r in con.execute("SELECT rating,outfit_json,created_at FROM feedback ORDER BY id DESC LIMIT 30").fetchall()]
+    con.close()
+    if len(garments)<3:
+        raise HTTPException(400,"Add at least three wardrobe items before using Help Me Pack.")
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(503,"Help Me Pack needs the AI stylist connection.")
+    instructions="""You are a meticulous personal menswear stylist and efficient travel packer. Build a practical capsule from the user's ACTUAL wardrobe. Reuse versatile garments across outfits to reduce luggage. Respect destination, trip length, activities, dress needs, weather, laundry access, fit history and style feedback. Use only supplied garment IDs for owned pieces. Never claim the user owns something absent from the wardrobe. If something genuinely useful is missing, list it briefly under missing_items; if shopping_allowed is false, keep missing_items empty. Include enough outfit planning to make the suitcase useful, but do not force a unique outfit for every day when rewearing is sensible."""
+    context={"trip":req.model_dump(),"profile":profile,"wardrobe":garments,"recent_feedback":feedback}
+    client=OpenAI()
+    response=client.responses.create(model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"medium"},instructions=instructions,input=json.dumps(context,ensure_ascii=False),text={"format":{"type":"json_schema","name":"packing_plan","schema":PACKING_SCHEMA,"strict":True}})
+    return json.loads(response.output_text)
 
 @app.get("/api/model-photos")
 def get_model_photos():

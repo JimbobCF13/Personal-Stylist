@@ -14,7 +14,7 @@ h1{font-size:22px;margin:0}header small{color:var(--muted)}.badge{background:var
 .notice{padding:12px 13px;border-radius:16px;background:#eef1ea;border:1px solid #d7dfd2;color:#365342;font-size:13px}
 .upload{border:1px dashed #aaa096;border-radius:18px;padding:22px;text-align:center;background:#fbf7f0}.upload input{display:none!important}.upload span{color:var(--ink);font-size:15px}
 .preview{width:100%;max-height:330px;object-fit:contain;border-radius:18px;background:#eee7dc}.hidden{display:none!important}
-.garments{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.garment{overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:18px}.garment img{width:100%;height:190px;object-fit:cover;background:#eee7dc}.meta{padding:11px}.meta b{display:block}.pill{display:inline-block;background:var(--soft);border-radius:999px;padding:6px 9px;font-size:11px;margin:5px 4px 0 0}
+.garments{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.garment{overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:18px}.garment img{width:100%;height:210px;object-fit:contain;background:#f9f9f8;padding:8px}.garment-photo{cursor:pointer;transition:opacity .15s ease}.garment-photo:active{opacity:.72}.meta{padding:11px}.meta b{display:block}.pill{display:inline-block;background:var(--soft);border-radius:999px;padding:6px 9px;font-size:11px;margin:5px 4px 0 0}
 .outfitPiece{display:grid;grid-template-columns:85px 1fr;gap:12px;align-items:center;margin:11px 0}.outfitPiece img{width:85px;height:85px;object-fit:cover;border-radius:16px;background:#eee7dc}
 .feedback{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.feedback button{border:1px solid var(--line);background:white;border-radius:999px;padding:8px 10px}
 nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,253,249,.97);backdrop-filter:blur(12px);border-top:1px solid var(--line);z-index:10}.navinner{max-width:760px;margin:auto;display:grid;grid-template-columns:repeat(6,1fr);padding:6px 4px calc(7px + env(safe-area-inset-bottom))}
@@ -123,3 +123,5 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 
 /* V3.4 stylist context */
 .stylist-intro{padding:4px 2px 8px}.stylist-intro p{margin:7px 0 2px;color:var(--muted);line-height:1.45}.eyebrow{font-size:11px;letter-spacing:.14em;font-weight:800;color:#111}.form textarea{resize:vertical}.outfit-card{border-top:3px solid #111}
+
+.pack-day{padding:14px 0;border-bottom:1px solid var(--line)}.pack-day:last-child{border-bottom:0}.pack-day .mini-strip{margin:10px 0}
