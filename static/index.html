@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
-<link rel="stylesheet" href="/static/style.css?v=3.6">
+<link rel="stylesheet" href="/static/style.css?v=4.0">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V3.6</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V4.0</span></header>
 
 <section id="home" class="screen active">
   <div class="hero"><small id="greeting">Good morning</small><h2>Dress well with what you already own.</h2><p>Your wardrobe, fit profile and feedback shape every recommendation.</p></div>
   <div class="grid">
-    <button class="tile" data-go="outfits">☀️<b>What should I wear?</b><span>Outfits for the occasion and weather.</span></button>
+    <button class="tile" data-go="stylistv4">🎙️<b>Ask My Stylist</b><span>Describe what you need — type it or dictate it.</span></button>
     <button class="tile" data-go="wardrobe">👕<b>Build around an item</b><span>Select one real piece from your wardrobe.</span></button>
     <button class="tile" data-go="wardrobe">🧥<b>My Wardrobe</b><span id="count">0 saved items</span></button>
     <button class="tile" data-go="profile">📏<b>My Fit Profile</b><span>Measurements, brands and preferences.</span></button>
@@ -65,6 +65,36 @@
    <label>NOTES / GARMENT MEASUREMENTS<textarea id="e_notes" rows="3"></textarea></label>
    <button id="saveEdit" class="primary full" type="button">Save changes</button>
   </div>
+ </div>
+</section>
+
+
+<section id="stylistv4" class="screen">
+ <div class="section">
+  <div class="row between"><h3>Ask My Stylist</h3><span class="pill">V4</span></div>
+  <div class="card form">
+   <div class="stylist-intro"><span class="eyebrow">PERSONAL STYLIST</span><p>Tell me what you're dressing for in your own words. I’ll combine the request with your wardrobe, fit profile and what I’ve learned about your style.</p></div>
+   <label>WHAT DO YOU NEED?
+    <div class="dictation-wrap">
+     <textarea id="v4Request" rows="4" placeholder="e.g. I have a business dinner tomorrow. Smart but not too formal. I'd like to wear my grey Hackett trousers if possible."></textarea>
+     <button id="v4Dictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+    </div>
+   </label>
+   <div id="dictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+   <div class="two">
+    <label>BUILD AROUND
+     <select id="v4Anchor"><option value="">Let the stylist choose</option></select>
+    </label>
+    <label>SHOPPING
+     <select id="v4Shopping">
+      <option value="open">Can suggest one useful missing piece</option>
+      <option value="owned">My wardrobe only</option>
+     </select>
+    </label>
+   </div>
+   <button id="runStylistV4" class="primary full" type="button">Style me</button>
+  </div>
+  <div id="v4Results"></div>
  </div>
 </section>
 
@@ -166,7 +196,7 @@
 </div>
 
 <nav><div class="navinner">
-<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="outfits">✦<span>Outfits</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
+<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=3.6"></script>
+<script src="/static/app.js?v=4.0"></script>
 </body></html>

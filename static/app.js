@@ -10,7 +10,7 @@ async function api(url,opts={}){
  if(!r.ok) throw new Error(data.detail||"Something went wrong");
  return data;
 }
-function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="outfits")populateAnchor();if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}}
+function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="outfits")populateAnchor();if(id==="stylistv4")populateV4Anchor();if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b)go(b.dataset.go)});
 async function init(){
  try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
@@ -115,7 +115,7 @@ $("saveEdit").addEventListener("click",async()=>{
 });
 
 async function del(id){if(confirm("Remove this garment?")){await api(`/api/garments/${id}`,{method:"DELETE"});await loadGarments()}}
-function buildAround(id){go("outfits");$("anchor").value=String(id)}
+function buildAround(id){go("stylistv4");populateV4Anchor();$("v4Anchor").value=String(id);const g=garments.find(x=>x.id===id);if(g&&!$("v4Request").value.trim())$("v4Request").value=`Build me an outfit around my ${(g.brand?g.brand+" ":"")+(g.garment_type||g.category||"garment")}.`; }
 function clearGarmentFields(){
  const ids=["category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","season","formality","notes"];
  ids.forEach(id=>$(id).value="");
@@ -283,6 +283,104 @@ $("saveProfile").addEventListener("click",async()=>{
  keys.forEach(k=>{let v=$(k).value;p[k]=["height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm"].includes(k)?(v?Number(v):null):v});
  await api("/api/profile",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});alert("Profile saved.");await loadProfile();
 });
+
+function populateV4Anchor(){
+ const el=$("v4Anchor");
+ if(!el)return;
+ const current=el.value;
+ el.innerHTML='<option value="">Let the stylist choose</option>'+
+  garments.map(g=>`<option value="${g.id}">${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))} — ${esc(g.colour||"")}</option>`).join("");
+ if([...el.options].some(o=>o.value===current))el.value=current;
+}
+
+function setupV4Dictation(){
+ const btn=$("v4Dictate"), field=$("v4Request"), status=$("dictationStatus");
+ if(!btn||!field||!status)return;
+
+ const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!Recognition){
+  btn.textContent="🎙️ Use keyboard mic";
+  btn.addEventListener("click",()=>{
+   field.focus();
+   status.classList.remove("hidden");
+   status.textContent="Use the microphone on your iPhone or Mac keyboard to dictate into this box.";
+  });
+  return;
+ }
+
+ let recognition=null, listening=false;
+
+ btn.addEventListener("click",()=>{
+  if(listening&&recognition){recognition.stop();return;}
+
+  recognition=new Recognition();
+  recognition.lang="en-GB";
+  recognition.interimResults=true;
+  recognition.continuous=false;
+
+  const original=field.value.trim();
+  let finalText="";
+
+  recognition.onstart=()=>{
+   listening=true;
+   btn.textContent="■ Stop";
+   btn.classList.add("recording");
+   status.classList.remove("hidden");
+   status.textContent="Listening… speak naturally.";
+  };
+
+  recognition.onresult=e=>{
+   let interim="";
+   for(let i=e.resultIndex;i<e.results.length;i++){
+    const t=e.results[i][0].transcript;
+    if(e.results[i].isFinal)finalText+=t;
+    else interim+=t;
+   }
+   const spoken=(finalText||interim).trim();
+   field.value=[original,spoken].filter(Boolean).join(original&&spoken?" ":"");
+   status.textContent=interim?"Listening…":"Got it.";
+  };
+
+  recognition.onerror=e=>{
+   status.classList.remove("hidden");
+   status.textContent=e.error==="not-allowed"
+    ?"Microphone permission was not granted. You can still use the keyboard microphone."
+    :"Dictation stopped. Try again or use the keyboard microphone.";
+  };
+
+  recognition.onend=()=>{
+   listening=false;
+   btn.textContent="🎙️ Dictate";
+   btn.classList.remove("recording");
+  };
+
+  try{recognition.start()}catch{}
+ });
+}
+
+function renderV4Outfit(o){
+ const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
+ const pieceHtml=pieces.map(g=>`<div class="v4-piece">
+  <img src="${g.image_path}" alt="">
+  <div><b>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small></div>
+ </div>`).join("");
+
+ const gap=o.missing_piece?`<div class="v4-missing"><b>Suggested addition:</b> ${esc(o.missing_piece)}<br><small>${esc(o.missing_piece_reason||"")}</small></div>`:"";
+
+ return `<div class="card v4-outfit">
+  <div class="row between"><div><span class="rank-pill">#${o.rank}</span><h3>${esc(o.label)}</h3></div><div class="v4-score"><b>${o.score}</b><span>/100</span></div></div>
+  ${pieceHtml}
+  ${gap}
+  <p><b>Why it works:</b> ${esc(o.why_it_works)}</p>
+  <div class="v4-notes">
+   <small><b>Occasion:</b> ${esc(o.occasion_fit)}</small>
+   <small><b>Weather:</b> ${esc(o.weather_fit)}</small>
+   <small><b>Formality:</b> ${esc(o.formality_fit)}</small>
+   <small><b>Stylist note:</b> ${esc(o.style_note)}</small>
+  </div>
+ </div>`;
+}
+
 function populateAnchor(){$("anchor").innerHTML='<option value="">Let the stylist choose</option>'+garments.map(g=>`<option value="${g.id}">${esc((g.brand?g.brand+" ":"")+g.garment_type+" — "+(g.colour||""))}</option>`).join("")}
 $("makeOutfits").addEventListener("click",async()=>{
  $("results").innerHTML='<div class="card">Stylist is thinking…</div>';
@@ -453,6 +551,39 @@ function renderGapRecommendation(r,i){
    <div id="productResults-${i}" class="product-results"></div>
   </div>`;
 }
+
+
+const runStylistV4Btn=$("runStylistV4");
+if(runStylistV4Btn){
+ runStylistV4Btn.addEventListener("click",async()=>{
+  const text=$("v4Request").value.trim();
+  if(!text){alert("Tell me what you are dressing for.");return;}
+
+  const box=$("v4Results");
+  box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span> Styling from your wardrobe…</div>';
+  runStylistV4Btn.disabled=true;
+
+  try{
+   const x=await api("/api/stylist-v4",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+     request_text:text,
+     anchor_garment_id:$("v4Anchor").value?Number($("v4Anchor").value):null,
+     owned_only:$("v4Shopping").value==="owned",
+     max_options:3
+    })
+   });
+   box.innerHTML=`<div class="notice"><b>Stylist view:</b> ${esc(x.summary)}</div>`+
+    (x.outfits||[]).map(renderV4Outfit).join("");
+  }catch(err){
+   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+  }finally{
+   runStylistV4Btn.disabled=false;
+  }
+ });
+}
+setupV4Dictation();
 
 init();
 

@@ -1251,6 +1251,125 @@ Rules:
     except Exception as exc:
         raise HTTPException(502, f"Live product search failed: {str(exc)[:350]}")
 
+
+class StylistV4Request(BaseModel):
+    request_text: str
+    anchor_garment_id: Optional[int] = None
+    owned_only: Optional[bool] = False
+    max_options: Optional[int] = 3
+
+STYLIST_V4_SCHEMA = {
+  "type": "object",
+  "properties": {
+    "summary": {"type": "string"},
+    "outfits": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {"type": "string"},
+          "rank": {"type": "integer", "minimum": 1, "maximum": 4},
+          "score": {"type": "integer", "minimum": 0, "maximum": 100},
+          "owned_garment_ids": {"type": "array", "items": {"type": "integer"}},
+          "missing_piece": {"type": "string"},
+          "missing_piece_reason": {"type": "string"},
+          "why_it_works": {"type": "string"},
+          "occasion_fit": {"type": "string"},
+          "weather_fit": {"type": "string"},
+          "formality_fit": {"type": "string"},
+          "style_note": {"type": "string"}
+        },
+        "required": [
+          "label","rank","score","owned_garment_ids","missing_piece","missing_piece_reason",
+          "why_it_works","occasion_fit","weather_fit","formality_fit","style_note"
+        ],
+        "additionalProperties": False
+      }
+    }
+  },
+  "required": ["summary","outfits"],
+  "additionalProperties": False
+}
+
+STYLIST_V4_INSTRUCTIONS = """You are a high-level personal menswear stylist for one male user.
+
+Use the user's actual wardrobe, fit profile, brand/size history and previous style feedback.
+The request is free text and may contain occasion, weather, dress code, preferred garment,
+destination, season, desired smartness or social context.
+
+Priorities:
+- Return only a small number of genuinely strong, differentiated outfits.
+- Rank them best-first.
+- Prefer the user's actual wardrobe.
+- Never claim the user owns anything unless its garment ID appears in the supplied wardrobe.
+- If one missing item would materially improve an outfit, name it precisely.
+- If owned_only is true, do not recommend a missing item.
+- If an anchor garment is supplied, every outfit must contain it.
+- Reason about colour harmony, material/texture, silhouette, footwear, layering, weather,
+  seasonality, formality, occasion and practicality.
+- Use fit feedback, preferred brands and learned feedback where relevant.
+- Distinguish timelessly appropriate choices from trend-led choices when useful.
+- Keep explanations concise and specific rather than generic.
+- Score each outfit 0–100 for how well it fits the request and the user's known preferences.
+- Return only supplied wardrobe IDs in owned_garment_ids.
+"""
+
+@app.post("/api/stylist-v4")
+def stylist_v4(req: StylistV4Request):
+    request_text = (req.request_text or "").strip()
+    if not request_text:
+        raise HTTPException(400, "Tell me what you are dressing for.")
+
+    con = db()
+    garments = [dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    feedback = [dict(r) for r in con.execute(
+        "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 40"
+    ).fetchall()]
+    con.close()
+
+    if not garments:
+        raise HTTPException(400, "Add some wardrobe items first so I can style from your actual clothes.")
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(400, "OpenAI is not connected.")
+
+    anchor = None
+    if req.anchor_garment_id is not None:
+        anchor = next((g for g in garments if g["id"] == req.anchor_garment_id), None)
+        if anchor is None:
+            raise HTTPException(404, "That wardrobe item could not be found.")
+
+    max_options = max(1, min(int(req.max_options or 3), 4))
+    context = {
+      "request_text": request_text,
+      "anchor_garment": anchor,
+      "owned_only": bool(req.owned_only),
+      "max_options": max_options,
+      "profile": profile,
+      "wardrobe": garments,
+      "recent_feedback": feedback
+    }
+
+    client = OpenAI()
+    response = client.responses.create(
+      model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+      reasoning={"effort":"medium"},
+      instructions=STYLIST_V4_INSTRUCTIONS,
+      input=json.dumps(context, ensure_ascii=False),
+      text={"format":{
+        "type":"json_schema",
+        "name":"stylist_v4_outfits",
+        "schema":STYLIST_V4_SCHEMA,
+        "strict":True
+      }}
+    )
+
+    result = json.loads(response.output_text)
+    result["outfits"] = result.get("outfits", [])[:max_options]
+    return result
+
 class Feedback(BaseModel):
     outfit: dict
     rating: str

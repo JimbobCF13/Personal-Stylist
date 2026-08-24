@@ -241,3 +241,20 @@ Add `REMOVE_BG_API_KEY` to Render Environment. Until it is configured, Clean up 
 - Older rows are safely backfilled when their current image is a real `/uploads/` source image.
 - Processed derivatives are no longer automatically deleted during cleanup/restore, avoiding accidental loss with legacy wardrobe rows.
 - Keeps V3.5 Help Me Pack, full-garment `object-fit: contain` cards, and tap/click-photo-to-edit behaviour.
+
+
+## V4.0 Outfit Intelligence + Dictation
+Adds a free-text personal-stylist workflow.
+
+Examples:
+- “I have a business dinner tomorrow. Smart but not too formal.”
+- “Build me an outfit around my grey Hackett trousers.”
+- “Casual dinner, cool evening, contemporary but not too young.”
+
+The engine combines the actual wardrobe, measurements and fit profile, brand/size history,
+previous outfit feedback and an optional anchor garment. It returns a small ranked set of
+outfits with scores, concise reasoning, occasion/weather/formality notes, and a clearly
+identified missing piece only when useful.
+
+Dictation uses browser speech recognition where supported. If it is unavailable, the button
+focuses the text box and prompts the user to use the native iPhone/Mac keyboard microphone.
