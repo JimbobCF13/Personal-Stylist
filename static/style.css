@@ -158,3 +158,5 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 
 .v4-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .v4-actions button{min-height:42px}
+
+.v4-thinking small{display:block;color:var(--muted);margin-top:3px}

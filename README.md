@@ -271,3 +271,20 @@ Visualisation includes the recommended extra piece in the image prompt so the co
 Product sourcing reuses the live-shopping endpoint to search current UK retailer options.
 
 Browser speech recognition commonly stops when a tab/window loses focus. V4.1 preserves captured text, tells the user dictation paused, and automatically attempts to resume when the Personal Stylist window regains focus.
+
+
+## V4.2 reliability + continuous dictation
+Fixes a front-end rendering failure that could leave the app showing “Styling from your wardrobe…” even after the backend returned HTTP 200.
+
+Changes:
+- restores a guaranteed HTML-escaping helper used by V4 outfit cards;
+- lowers Stylist reasoning effort to improve response time;
+- shows “taking longer than usual” status after 25 seconds;
+- stops a Stylist request after 75 seconds rather than spinning forever;
+- displays useful API errors;
+- enables continuous browser speech recognition where supported;
+- automatically restarts recognition if Safari/browser ends a session unexpectedly;
+- preserves captured text across restarts;
+- pauses on tab/window loss and resumes when focus returns where the browser permits.
+
+Browser dictation accuracy still depends on the browser speech-recognition service. A future upgrade can replace this with OpenAI audio transcription for higher and more controllable accuracy.

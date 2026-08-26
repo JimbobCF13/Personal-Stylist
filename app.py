@@ -1359,7 +1359,7 @@ def stylist_v4(req: StylistV4Request):
     client = OpenAI()
     response = client.responses.create(
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
-      reasoning={"effort":"medium"},
+      reasoning={"effort":"low"},
       instructions=STYLIST_V4_INSTRUCTIONS,
       input=json.dumps(context, ensure_ascii=False),
       text={"format":{

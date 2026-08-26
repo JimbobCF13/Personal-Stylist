@@ -5,6 +5,16 @@ let editingGarmentId=null;
 let photoQueue=[], currentPhotoIndex=-1, batchMode=false;
 const cleanupInProgress=new Set();
 
+
+function esc(value){
+ return String(value??"")
+  .replaceAll("&","&amp;")
+  .replaceAll("<","&lt;")
+  .replaceAll(">","&gt;")
+  .replaceAll('"',"&quot;")
+  .replaceAll("'","&#039;");
+}
+
 async function api(url,opts={}){
  const r=await fetch(url,opts); const data=await r.json().catch(()=>({}));
  if(!r.ok) throw new Error(data.detail||"Something went wrong");
@@ -308,36 +318,56 @@ function setupV4Dictation(){
   return;
  }
 
- let recognition=null, listening=false, wantsResume=false;
+ let recognition=null;
+ let listening=false;
+ let dictationEnabled=false;
+ let restartTimer=null;
+ let sessionBase="";
+ let committed="";
+
+ function scheduleRestart(delay=250){
+  clearTimeout(restartTimer);
+  if(!dictationEnabled || document.hidden)return;
+  restartTimer=setTimeout(()=>{
+   if(dictationEnabled && !listening && !document.hidden){
+    startRecognition();
+   }
+  },delay);
+ }
 
  function startRecognition(){
+  if(listening || !dictationEnabled || document.hidden)return;
+
   recognition=new Recognition();
   recognition.lang="en-GB";
   recognition.interimResults=true;
-  recognition.continuous=false;
+  recognition.continuous=true;
 
-  const original=field.value.trim();
-  let finalText="";
+  sessionBase=field.value.trim();
+  committed="";
 
   recognition.onstart=()=>{
    listening=true;
-   wantsResume=true;
    btn.textContent="■ Stop";
    btn.classList.add("recording");
    status.classList.remove("hidden");
-   status.textContent="Listening… speak naturally.";
+   status.textContent="Listening…";
   };
 
   recognition.onresult=e=>{
    let interim="";
    for(let i=e.resultIndex;i<e.results.length;i++){
     const t=e.results[i][0].transcript;
-    if(e.results[i].isFinal)finalText+=t;
-    else interim+=t;
+    if(e.results[i].isFinal){
+     committed += (committed ? " " : "") + t.trim();
+    }else{
+     interim += (interim ? " " : "") + t.trim();
+    }
    }
-   const spoken=(finalText||interim).trim();
-   field.value=[original,spoken].filter(Boolean).join(original&&spoken?" ":"");
-   status.textContent=interim?"Listening…":"Got it.";
+
+   const spoken=[committed,interim].filter(Boolean).join(" ").trim();
+   field.value=[sessionBase,spoken].filter(Boolean).join(sessionBase&&spoken?" ":"");
+   status.textContent=interim ? "Listening…" : "Listening…";
   };
 
   recognition.onerror=e=>{
@@ -345,48 +375,84 @@ function setupV4Dictation(){
    btn.textContent="🎙️ Dictate";
    btn.classList.remove("recording");
    status.classList.remove("hidden");
-   if(e.error==="not-allowed"){
-    wantsResume=false;
+
+   if(e.error==="not-allowed" || e.error==="service-not-allowed"){
+    dictationEnabled=false;
     status.textContent="Microphone permission was not granted. You can still use the keyboard microphone.";
-   }else if(document.hidden){
-    status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
-   }else{
-    status.textContent="Dictation paused. Tap Dictate to continue.";
+    return;
    }
+
+   if(e.error==="no-speech"){
+    status.textContent="Still listening…";
+    scheduleRestart(150);
+    return;
+   }
+
+   if(document.hidden){
+    status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
+    return;
+   }
+
+   status.textContent="Dictation paused briefly. Resuming…";
+   scheduleRestart(300);
   };
 
   recognition.onend=()=>{
    listening=false;
-   btn.textContent="🎙️ Dictate";
-   btn.classList.remove("recording");
-   if(document.hidden && wantsResume){
-    status.classList.remove("hidden");
-    status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
+   btn.textContent=dictationEnabled?"■ Stop":"🎙️ Dictate";
+   btn.classList.toggle("recording",dictationEnabled);
+
+   if(dictationEnabled){
+    if(document.hidden){
+     status.classList.remove("hidden");
+     status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
+    }else{
+     status.classList.remove("hidden");
+     status.textContent="Resuming dictation…";
+     scheduleRestart(200);
+    }
    }
   };
 
-  try{recognition.start()}catch{}
+  try{
+   recognition.start();
+  }catch{
+   listening=false;
+   scheduleRestart(300);
+  }
  }
 
  btn.addEventListener("click",()=>{
-  if(listening&&recognition){
-   wantsResume=false;
-   recognition.stop();
+  if(dictationEnabled){
+   dictationEnabled=false;
+   clearTimeout(restartTimer);
+   if(recognition && listening){
+    try{recognition.stop()}catch{}
+   }
+   listening=false;
+   btn.textContent="🎙️ Dictate";
+   btn.classList.remove("recording");
+   status.classList.remove("hidden");
+   status.textContent="Dictation stopped.";
    return;
   }
-  wantsResume=true;
+
+  dictationEnabled=true;
+  status.classList.remove("hidden");
+  status.textContent="Starting dictation…";
   startRecognition();
  });
 
  document.addEventListener("visibilitychange",()=>{
-  if(!document.hidden && wantsResume && !listening){
-   setTimeout(()=>{
-    if(wantsResume && !listening){
-     status.classList.remove("hidden");
-     status.textContent="Resuming dictation…";
-     startRecognition();
-    }
-   },250);
+  if(document.hidden){
+   if(dictationEnabled){
+    status.classList.remove("hidden");
+    status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
+   }
+  }else if(dictationEnabled && !listening){
+   status.classList.remove("hidden");
+   status.textContent="Resuming dictation…";
+   scheduleRestart(250);
   }
  });
 }
@@ -481,11 +547,24 @@ if(runStylistV4Btn){
   if(!text){alert("Tell me what you are dressing for.");return;}
 
   const box=$("v4Results");
-  box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span> Styling from your wardrobe…</div>';
+  const controller=new AbortController();
+  let statusTimer=null;
+  let timeoutTimer=null;
+
+  box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Styling from your wardrobe…</b><small id="v4WaitNote">This usually takes under a minute.</small></div></div>';
   runStylistV4Btn.disabled=true;
 
+  statusTimer=setTimeout(()=>{
+   const note=$("v4WaitNote");
+   if(note)note.textContent="Still working — this request is taking longer than usual.";
+  },25000);
+
+  timeoutTimer=setTimeout(()=>{
+   controller.abort();
+  },75000);
+
   try{
-   const x=await api("/api/stylist-v4",{
+   const r=await fetch("/api/stylist-v4",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
@@ -493,13 +572,34 @@ if(runStylistV4Btn){
      anchor_garment_id:$("v4Anchor").value?Number($("v4Anchor").value):null,
      owned_only:$("v4Shopping").value==="owned",
      max_options:3
-    })
+    }),
+    signal:controller.signal
    });
-   box.innerHTML=`<div class="notice"><b>Stylist view:</b> ${esc(x.summary)}</div>`+
+
+   let payload=null;
+   try{payload=await r.json()}catch{}
+
+   if(!r.ok){
+    const msg=payload?.detail||payload?.message||`Stylist request failed (${r.status}).`;
+    throw new Error(msg);
+   }
+
+   const x=payload;
+   box.innerHTML=`<div class="notice"><b>Stylist view:</b> ${esc(x.summary||"")}</div>`+
     (x.outfits||[]).map((o,i)=>renderV4Outfit(o,i)).join("");
+
+   if(!(x.outfits||[]).length){
+    box.innerHTML+='<div class="notice">The stylist completed the request but did not return any outfit options. Please try wording the request slightly differently.</div>';
+   }
   }catch(err){
-   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+   if(err.name==="AbortError"){
+    box.innerHTML='<div class="notice"><b>This is taking too long.</b> The request was stopped after 75 seconds so the app cannot sit spinning indefinitely. Please tap Style me to try again.</div>';
+   }else{
+    box.innerHTML=`<div class="notice">${esc(err.message||"Something went wrong.")}</div>`;
+   }
   }finally{
+   clearTimeout(statusTimer);
+   clearTimeout(timeoutTimer);
    runStylistV4Btn.disabled=false;
   }
  });
