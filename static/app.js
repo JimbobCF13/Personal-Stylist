@@ -457,6 +457,8 @@ function setupV4Dictation(){
  });
 }
 
+const v4VisualCache=new Map();
+
 function renderV4Outfit(o,index){
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
  const pieceHtml=pieces.map(g=>`<div class="v4-piece">
@@ -466,6 +468,8 @@ function renderV4Outfit(o,index){
 
  const gap=o.missing_piece?`<div class="v4-missing"><b>Suggested addition:</b> ${esc(o.missing_piece)}<br><small>${esc(o.missing_piece_reason||"")}</small></div>`:"";
  const payload=encodeURIComponent(JSON.stringify(o));
+
+ setTimeout(()=>v4Visualise(payload,index,true),0);
 
  return `<div class="card v4-outfit">
   <div class="row between"><div><span class="rank-pill">#${o.rank}</span><h3>${esc(o.label)}</h3></div><div class="v4-score"><b>${o.score}</b><span>/100</span></div></div>
@@ -479,11 +483,10 @@ function renderV4Outfit(o,index){
    <small><b>Stylist note:</b> ${esc(o.style_note)}</small>
   </div>
   <div class="v4-actions">
-   <button class="primary" type="button" onclick="v4Visualise('${payload}',${index},true)">View on me</button>
    <button class="ghost" type="button" onclick="v4Visualise('${payload}',${index},false)">See on model</button>
    ${o.missing_piece?`<button class="ghost" type="button" onclick="v4FindPiece('${payload}',${index})">Find this piece</button>`:""}
   </div>
-  <div id="v4Visual-${index}" class="model-visual hidden"></div>
+  <div id="v4Visual-${index}" class="model-visual"><div class="visual-loading">Creating your look…</div></div>
   <div id="v4Products-${index}" class="product-results"></div>
  </div>`;
 }
@@ -491,8 +494,23 @@ function renderV4Outfit(o,index){
 async function v4Visualise(encoded,index,useMyLikeness){
  const o=JSON.parse(decodeURIComponent(encoded));
  const box=$(`v4Visual-${index}`);
+ const cacheKey=JSON.stringify({
+  ids:o.owned_garment_ids||[],
+  label:o.label||"",
+  extra:o.missing_piece||"",
+  likeness:useMyLikeness
+ });
+
+ if(v4VisualCache.has(cacheKey)){
+  const x=v4VisualCache.get(cacheKey);
+  box.classList.remove("hidden");
+  box.innerHTML=`<img src="${x.image_path}" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
+  return;
+ }
+
  box.classList.remove("hidden");
- box.innerHTML=`<div class="visual-loading">${useMyLikeness?"Creating your personalised look…":"Creating outfit visual…"} this can take a little while.</div>`;
+ box.innerHTML=`<div class="visual-loading">${useMyLikeness?"Creating your look…":"Creating outfit visual…"} this can take a little while.</div>`;
+
  try{
   const x=await api("/api/outfit-visualisation",{
    method:"POST",
@@ -507,6 +525,7 @@ async function v4Visualise(encoded,index,useMyLikeness){
     requested_extra_piece:o.missing_piece||""
    })
   });
+  v4VisualCache.set(cacheKey,x);
   box.innerHTML=`<img src="${x.image_path}" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
  }catch(err){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;

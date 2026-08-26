@@ -288,3 +288,15 @@ Changes:
 - pauses on tab/window loss and resumes when focus returns where the browser permits.
 
 Browser dictation accuracy still depends on the browser speech-recognition service. A future upgrade can replace this with OpenAI audio transcription for higher and more controllable accuracy.
+
+
+## V4.3 Global Auto Preview
+Outfit-level recommendations now automatically start a personalised "View on me" preview as soon as the recommendation cards are rendered. This applies to the shared outfit recommendation renderer used by Stylist and other outfit-planning flows that reuse it.
+
+Changes:
+- no need to press View on me for outfit recommendations;
+- previews start in parallel after recommendations appear;
+- each card shows "Creating your look…" while the image is generated;
+- generated previews are cached in-browser so reopening the same recommendation is instant;
+- See on model remains available as an optional alternative;
+- Find this piece remains available for missing recommended items.
