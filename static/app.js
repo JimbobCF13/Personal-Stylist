@@ -2,6 +2,8 @@
 const $=id=>document.getElementById(id);
 let garments=[], uploadedPath="", aiConfidence=0;
 let editingGarmentId=null;
+let detailGarmentId=null;
+let enrichmentPollTimer=null;
 let photoQueue=[], currentPhotoIndex=-1, batchMode=false;
 const cleanupInProgress=new Set();
 
@@ -20,7 +22,7 @@ async function api(url,opts={}){
  if(!r.ok) throw new Error(data.detail||"Something went wrong");
  return data;
 }
-function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="outfits")populateAnchor();if(id==="stylistv4")populateV4Anchor();if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}}
+function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="garmentdetail"&&detailGarmentId)loadGarmentDetail(detailGarmentId);if(id==="outfits")populateAnchor();if(id==="stylistv4")populateV4Anchor();if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b)go(b.dataset.go)});
 async function init(){
  try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
@@ -37,11 +39,143 @@ function renderGarments(){
  $("garments").innerHTML=list.length?list.map(g=>{
   const cleaning=cleanupInProgress.has(g.id);
   const label=esc((g.brand?g.brand+" ":"")+g.garment_type);
-  return `<div class="garment${cleaning?" is-cleaning":""}"><div class="garment-photo-wrap"><img class="garment-photo" src="${g.image_path}" alt="${label}" onclick="editGarment(${g.id})" title="Open garment" onerror="this.classList.add('image-missing')">${cleaning?`<div class="cleanup-overlay" role="status" aria-live="polite"><span class="cleanup-spinner" aria-hidden="true"></span><b>Cleaning up photo…</b><small>Removing the background and preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})" ${cleaning?"disabled":""}>Build around</button><button class="ghost" onclick="editGarment(${g.id})" ${cleaning?"disabled":""}>Edit</button><button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})" ${cleaning?"disabled":""}>${cleaning?'<span class="inline-spinner" aria-hidden="true"></span> Cleaning…':'Clean up photo'}</button>${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})" ${cleaning?"disabled":""}>Original photo</button>`:""}<button class="danger" onclick="del(${g.id})" ${cleaning?"disabled":""}>Delete</button></div></div></div>`;
+  return `<div class="garment${cleaning?" is-cleaning":""}"><div class="garment-photo-wrap"><img class="garment-photo" src="${g.image_path}" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="this.classList.add('image-missing')">${cleaning?`<div class="cleanup-overlay" role="status" aria-live="polite"><span class="cleanup-spinner" aria-hidden="true"></span><b>Cleaning up photo…</b><small>Removing the background and preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})" ${cleaning?"disabled":""}>Build around</button><button class="ghost" onclick="editGarment(${g.id})" ${cleaning?"disabled":""}>Edit</button><button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})" ${cleaning?"disabled":""}>${cleaning?'<span class="inline-spinner" aria-hidden="true"></span> Cleaning…':'Clean up photo'}</button>${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})" ${cleaning?"disabled":""}>Original photo</button>`:""}<button class="danger" onclick="del(${g.id})" ${cleaning?"disabled":""}>Delete</button></div></div></div>`;
  }).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
 }
 $("search").addEventListener("input",renderGarments);$("filter").addEventListener("change",renderGarments);
 
+
+
+function openGarment(id){
+ detailGarmentId=id;
+ clearTimeout(enrichmentPollTimer);
+ go("garmentdetail");
+}
+
+function detailValue(v){
+ return v ? esc(v) : '<span class="detail-empty">Not recorded</span>';
+}
+
+function enrichmentSources(sources){
+ if(!sources||!sources.length)return "";
+ return `<div class="research-sources"><small>SOURCES</small>${sources.map(s=>{
+  let u="#";
+  try{const x=new URL(s.url);if(["http:","https:"].includes(x.protocol))u=x.href}catch{}
+  return `<a href="${u}" target="_blank" rel="noopener"><b>${esc(s.title||"Source")}</b><span>${esc(s.note||"")}</span></a>`;
+ }).join("")}</div>`;
+}
+
+function renderEnrichmentPanel(g){
+ const status=g.enrichment_status||"";
+ const e=g.enrichment;
+
+ if(status==="researching"){
+  return `<div class="detail-research"><div class="research-head"><div><small>BRAND INTELLIGENCE</small><h4>Researching ${esc(g.brand||"this garment")}…</h4></div><span class="spinner"></span></div><p>I’m checking brand/line fit information, sizing, fabric and construction in the background.</p></div>`;
+ }
+ if(status==="needs_brand"){
+  return `<div class="detail-research"><small>BRAND INTELLIGENCE</small><h4>Add the brand to research this garment</h4><p>Once a brand is known I can look for line-specific fit and sizing information.</p></div>`;
+ }
+ if(status==="error"){
+  return `<div class="detail-research"><small>BRAND INTELLIGENCE</small><h4>Research couldn’t be completed</h4><p>Your garment data is unchanged.</p><button class="ghost" onclick="researchGarment(${g.id})">Try again</button></div>`;
+ }
+ if(status==="ignored"){
+  return `<div class="detail-research muted-research"><small>BRAND INTELLIGENCE</small><p>Research is hidden for this garment.</p><button class="ghost" onclick="researchGarment(${g.id})">Research again</button></div>`;
+ }
+ if(!e){
+  return `<div class="detail-research"><small>BRAND INTELLIGENCE</small><h4>Make this garment smarter</h4><p>Research the brand and model/line for fit tendencies, sizing information and construction details.</p><button class="primary" onclick="researchGarment(${g.id})" ${g.brand?"":"disabled"}>${g.brand?"Research brand & model":"Add brand first"}</button></div>`;
+ }
+
+ const exact=e.likely_exact_match?'<span class="research-confidence exact">Likely exact line</span>':'<span class="research-confidence">Best available match</span>';
+ return `<div class="detail-research research-ready">
+   <div class="research-head"><div><small>BRAND INTELLIGENCE</small><h4>${esc(e.model_line||g.brand||"Web research")}</h4></div>${exact}</div>
+   <p>${esc(e.identification_summary||"")}</p>
+   <div class="research-grid">
+    <div><small>FIT PROFILE</small><p>${detailValue(e.fit_profile)}</p></div>
+    <div><small>SIZE GUIDANCE</small><p>${detailValue(e.sizing_guidance)}</p></div>
+    <div><small>FABRIC</small><p>${detailValue(e.fabric_details)}</p></div>
+    <div><small>CONSTRUCTION</small><p>${detailValue(e.construction_details)}</p></div>
+    <div><small>SEASONALITY</small><p>${detailValue(e.seasonality)}</p></div>
+    <div><small>SIZE CHART / MEASUREMENTS</small><p>${detailValue(e.measurements_or_size_chart)}</p></div>
+   </div>
+   ${enrichmentSources(e.sources)}
+   <div class="research-actions"><button class="primary" onclick="applyEnrichment(${g.id})">Apply to blank fields</button><button class="ghost" onclick="researchGarment(${g.id})">Refresh research</button><button class="text-button" onclick="ignoreEnrichment(${g.id})">Ignore</button></div>
+   <small class="research-disclaimer">Web-enriched information is advisory. It never silently overwrites details you entered yourself.</small>
+  </div>`;
+}
+
+async function loadGarmentDetail(id){
+ clearTimeout(enrichmentPollTimer);
+ const box=$("garmentDetailContent");
+ if(!box)return;
+ box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span> Loading garment…</div>';
+
+ try{
+  const g=await api(`/api/garments/${id}/detail`);
+  detailGarmentId=id;
+  const title=esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"));
+  const hist=(g.outfit_history||[]).length
+   ? `<div class="detail-history"><small>RECENT OUTFIT FEEDBACK</small>${g.outfit_history.map(h=>`<div><b>${esc(h.label)}</b><span>${esc(h.rating||"")}</span></div>`).join("")}</div>`
+   : `<div class="detail-history"><small>OUTFIT HISTORY</small><p>This garment has not appeared in rated outfits yet.</p></div>`;
+
+  box.innerHTML=`<div class="garment-detail-hero">
+    <div class="detail-image-wrap"><img src="${g.image_path}" alt="${title}"></div>
+    <div class="detail-summary">
+     <small>${esc(g.category||"WARDROBE ITEM")}</small>
+     <h2>${title}</h2>
+     <p>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</p>
+     <div class="detail-pills"><span>${esc(g.fit_feedback||"Fit unknown")}</span>${g.season?`<span>${esc(g.season)}</span>`:""}${g.formality?`<span>${esc(g.formality)}</span>`:""}</div>
+     <div class="detail-actions"><button class="primary" onclick="buildAround(${g.id})">Build an outfit</button><button class="ghost" onclick="cleanupPhoto(${g.id})">Clean up photo</button></div>
+    </div>
+   </div>
+   <div class="detail-columns">
+    <div class="detail-card"><small>GARMENT DETAILS</small>
+     <dl>
+      <div><dt>Brand</dt><dd>${detailValue(g.brand)}</dd></div>
+      <div><dt>Model / line</dt><dd>${detailValue(g.model_line)}</dd></div>
+      <div><dt>Size</dt><dd>${detailValue(g.labelled_size)}</dd></div>
+      <div><dt>Colour</dt><dd>${detailValue(g.colour)}</dd></div>
+      <div><dt>Material</dt><dd>${detailValue(g.material)}</dd></div>
+      <div><dt>Pattern</dt><dd>${detailValue(g.pattern)}</dd></div>
+      <div><dt>Fit / cut</dt><dd>${detailValue(g.fit_cut)}</dd></div>
+      <div><dt>Notes</dt><dd>${detailValue(g.notes)}</dd></div>
+     </dl>
+    </div>
+    ${hist}
+   </div>
+   ${renderEnrichmentPanel(g)}`;
+
+  $("detailEdit").onclick=()=>editGarment(g.id);
+
+  if(g.enrichment_status==="researching"){
+   enrichmentPollTimer=setTimeout(()=>loadGarmentDetail(id),2200);
+  }
+ }catch(err){
+  box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }
+}
+
+async function researchGarment(id){
+ try{
+  await api(`/api/garments/${id}/enrich`,{method:"POST"});
+  await loadGarmentDetail(id);
+ }catch(err){alert(err.message)}
+}
+
+async function applyEnrichment(id){
+ try{
+  const x=await api(`/api/garments/${id}/apply-enrichment`,{method:"POST"});
+  await loadGarments();
+  await loadGarmentDetail(id);
+  alert(x.applied_fields?.length?`Added researched detail to: ${x.applied_fields.join(", ")}.`:"Your existing fields already contained the researched details, so nothing was overwritten.");
+ }catch(err){alert(err.message)}
+}
+
+async function ignoreEnrichment(id){
+ try{
+  await api(`/api/garments/${id}/ignore-enrichment`,{method:"POST"});
+  await loadGarmentDetail(id);
+ }catch(err){alert(err.message)}
+}
 
 async function cleanupPhoto(id){
  const g=garments.find(x=>x.id===id);
@@ -119,9 +253,17 @@ $("saveEdit").addEventListener("click",async()=>{
   headers:{"Content-Type":"application/json"},
   body:JSON.stringify(body)
  });
+ const savedId=editingGarmentId;
+ const brandForResearch=body.brand.trim();
  editingGarmentId=null;
  await loadGarments();
- go("wardrobe");
+ detailGarmentId=savedId;
+ go("garmentdetail");
+ if(brandForResearch){
+  api(`/api/garments/${savedId}/enrich`,{method:"POST"})
+   .then(()=>loadGarmentDetail(savedId))
+   .catch(()=>{});
+ }
 });
 
 async function del(id){if(confirm("Remove this garment?")){await api(`/api/garments/${id}`,{method:"DELETE"});await loadGarments()}}
@@ -209,7 +351,10 @@ $("saveGarment").addEventListener("click",async()=>{
  fd.append("image_path",uploadedPath);
  ids.forEach(id=>fd.append(id,$(id).value));
  fd.append("ai_confidence",aiConfidence);
- await api("/api/garments",{method:"POST",body:fd});
+ const saved=await api("/api/garments",{method:"POST",body:fd});
+ if($("brand").value.trim() && saved?.id){
+  api(`/api/garments/${saved.id}/enrich`,{method:"POST"}).catch(()=>{});
+ }
  await loadGarments();
  const moved=await advanceBatch();
  if(!moved){

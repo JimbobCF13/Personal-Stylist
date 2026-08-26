@@ -2,7 +2,7 @@
 import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error
 from pathlib import Path
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -69,7 +69,9 @@ def init_db():
       category TEXT, garment_type TEXT, brand TEXT, model_line TEXT,
       labelled_size TEXT, colour TEXT, material TEXT, pattern TEXT,
       fit_cut TEXT, fit_feedback TEXT, season TEXT, formality TEXT,
-      notes TEXT, ai_confidence REAL DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      notes TEXT, ai_confidence REAL DEFAULT 0,
+      enrichment_json TEXT, enrichment_status TEXT DEFAULT '', enrichment_updated_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS feedback (
@@ -87,6 +89,15 @@ def init_db():
         con.execute("ALTER TABLE garments ADD COLUMN original_image_path TEXT")
     except sqlite3.OperationalError:
         pass
+    for sql in [
+        "ALTER TABLE garments ADD COLUMN enrichment_json TEXT",
+        "ALTER TABLE garments ADD COLUMN enrichment_status TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN enrichment_updated_at TEXT"
+    ]:
+        try:
+            con.execute(sql)
+        except sqlite3.OperationalError:
+            pass
     con.commit()
     con.close()
 
@@ -163,6 +174,286 @@ def garments():
     con.close()
     return rows
 
+
+
+GARMENT_ENRICHMENT_SCHEMA = {
+  "type": "object",
+  "properties": {
+    "identification_summary": {"type": "string"},
+    "likely_exact_match": {"type": "boolean"},
+    "model_line": {"type": "string"},
+    "fit_profile": {"type": "string"},
+    "sizing_guidance": {"type": "string"},
+    "fabric_details": {"type": "string"},
+    "construction_details": {"type": "string"},
+    "seasonality": {"type": "string"},
+    "measurements_or_size_chart": {"type": "string"},
+    "confidence": {"type": "string", "enum": ["high","medium","low"]},
+    "suggested_updates": {
+      "type": "object",
+      "properties": {
+        "model_line": {"type": "string"},
+        "material": {"type": "string"},
+        "fit_cut": {"type": "string"},
+        "season": {"type": "string"},
+        "formality": {"type": "string"},
+        "notes": {"type": "string"}
+      },
+      "required": ["model_line","material","fit_cut","season","formality","notes"],
+      "additionalProperties": False
+    },
+    "sources": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "url": {"type": "string"},
+          "note": {"type": "string"}
+        },
+        "required": ["title","url","note"],
+        "additionalProperties": False
+      }
+    }
+  },
+  "required": [
+    "identification_summary","likely_exact_match","model_line","fit_profile","sizing_guidance",
+    "fabric_details","construction_details","seasonality","measurements_or_size_chart",
+    "confidence","suggested_updates","sources"
+  ],
+  "additionalProperties": False
+}
+
+def run_garment_enrichment(gid: int):
+    con = db()
+    row = con.execute("SELECT * FROM garments WHERE id=?", (gid,)).fetchone()
+    if not row:
+        con.close()
+        return
+
+    garment = dict(row)
+    profile = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    con.close()
+
+    if not garment.get("brand"):
+        con = db()
+        con.execute(
+            "UPDATE garments SET enrichment_status='needs_brand', enrichment_updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (gid,)
+        )
+        con.commit()
+        con.close()
+        return
+
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        con = db()
+        con.execute(
+            "UPDATE garments SET enrichment_status='error', enrichment_updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (gid,)
+        )
+        con.commit()
+        con.close()
+        return
+
+    prompt = f"""
+Research this real men's garment using the live web.
+
+KNOWN GARMENT DATA:
+Brand: {garment.get('brand') or ''}
+Model / line entered by user: {garment.get('model_line') or ''}
+Garment type: {garment.get('garment_type') or garment.get('category') or ''}
+Labelled size: {garment.get('labelled_size') or ''}
+Colour: {garment.get('colour') or ''}
+Material already recorded: {garment.get('material') or ''}
+Fit/cut already recorded: {garment.get('fit_cut') or ''}
+Notes: {garment.get('notes') or ''}
+
+USER FIT CONTEXT:
+Height: {profile.get('height_cm') or ''}
+Chest: {profile.get('chest_cm') or ''}
+Waist: {profile.get('waist_cm') or ''}
+Inseam: {profile.get('inseam_cm') or ''}
+Preferred fit: {profile.get('preferred_fit') or ''}
+Brand notes: {profile.get('brand_notes') or ''}
+
+GOAL:
+Find reliable information that makes this garment more useful to a personal stylist:
+brand/line fit tendencies, sizing information, fabric/construction, seasonality, and official
+or retailer size-chart information where available.
+
+If model/line is blank, you MAY identify a likely line only when the available evidence is strong.
+Do not guess an exact product from colour/type alone. Mark likely_exact_match false when uncertain.
+
+Rules:
+- Prefer official brand pages and reputable retailer/product pages.
+- Never invent a measurement, product line, URL, fabric composition or fit claim.
+- If something cannot be established, return an empty string.
+- Sources must be real URLs found during the live search.
+- suggested_updates are suggestions for the user to review; do not assume they will be applied.
+- sizing_guidance must state uncertainty clearly and must not claim a size is guaranteed to fit.
+"""
+
+    try:
+        client = OpenAI()
+        response = client.responses.create(
+            model=os.getenv("OPENAI_SHOPPING_MODEL", os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
+            reasoning={"effort":"low"},
+            tools=[{"type":"web_search"}],
+            tool_choice="auto",
+            include=["web_search_call.action.sources"],
+            input=prompt,
+            text={"format":{
+                "type":"json_schema",
+                "name":"garment_brand_enrichment",
+                "schema":GARMENT_ENRICHMENT_SCHEMA,
+                "strict":True
+            }}
+        )
+        result = json.loads(response.output_text)
+        con = db()
+        con.execute(
+            """UPDATE garments
+               SET enrichment_json=?, enrichment_status='ready', enrichment_updated_at=CURRENT_TIMESTAMP
+               WHERE id=?""",
+            (json.dumps(result, ensure_ascii=False), gid)
+        )
+        con.commit()
+        con.close()
+    except Exception as exc:
+        con = db()
+        con.execute(
+            """UPDATE garments
+               SET enrichment_json=?, enrichment_status='error', enrichment_updated_at=CURRENT_TIMESTAMP
+               WHERE id=?""",
+            (json.dumps({"error": str(exc)[:500]}), gid)
+        )
+        con.commit()
+        con.close()
+
+
+@app.get("/api/garments/{gid}/detail")
+def garment_detail(gid: int):
+    con = db()
+    row = con.execute("SELECT * FROM garments WHERE id=?", (gid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "Garment not found")
+
+    garment = dict(row)
+    feedback_rows = con.execute(
+        "SELECT rating, outfit_json, created_at FROM feedback ORDER BY id DESC LIMIT 100"
+    ).fetchall()
+    con.close()
+
+    appearances = []
+    for r in feedback_rows:
+        try:
+            outfit = json.loads(r["outfit_json"] or "{}")
+            ids = outfit.get("garment_ids") or outfit.get("owned_garment_ids") or []
+            if gid in ids:
+                appearances.append({
+                    "rating": r["rating"],
+                    "created_at": r["created_at"],
+                    "label": outfit.get("label") or "Outfit"
+                })
+        except Exception:
+            pass
+
+    enrichment = None
+    if garment.get("enrichment_json"):
+        try:
+            enrichment = json.loads(garment["enrichment_json"])
+        except Exception:
+            enrichment = None
+
+    garment["enrichment"] = enrichment
+    garment["outfit_history"] = appearances[:12]
+    garment["outfit_history_count"] = len(appearances)
+    return garment
+
+
+@app.post("/api/garments/{gid}/enrich")
+def enrich_garment(gid: int, background_tasks: BackgroundTasks):
+    con = db()
+    row = con.execute("SELECT id, brand FROM garments WHERE id=?", (gid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "Garment not found")
+    if not row["brand"]:
+        con.close()
+        raise HTTPException(400, "Add the brand first so I have something reliable to research.")
+
+    con.execute(
+        "UPDATE garments SET enrichment_status='researching', enrichment_updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (gid,)
+    )
+    con.commit()
+    con.close()
+
+    background_tasks.add_task(run_garment_enrichment, gid)
+    return {"ok": True, "status": "researching"}
+
+
+@app.post("/api/garments/{gid}/apply-enrichment")
+def apply_garment_enrichment(gid: int):
+    con = db()
+    row = con.execute("SELECT * FROM garments WHERE id=?", (gid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "Garment not found")
+
+    garment = dict(row)
+    try:
+        data = json.loads(garment.get("enrichment_json") or "{}")
+        suggestions = data.get("suggested_updates") or {}
+    except Exception:
+        suggestions = {}
+
+    if not suggestions:
+        con.close()
+        raise HTTPException(400, "There are no researched updates to apply.")
+
+    # Never overwrite user-entered metadata silently: only fill currently blank fields.
+    fields = ["model_line","material","fit_cut","season","formality"]
+    updates = {}
+    for field in fields:
+        current = garment.get(field) or ""
+        suggested = suggestions.get(field) or ""
+        if not current.strip() and suggested.strip():
+            updates[field] = suggested.strip()
+
+    notes_suggestion = (suggestions.get("notes") or "").strip()
+    if notes_suggestion:
+        current_notes = (garment.get("notes") or "").strip()
+        if notes_suggestion not in current_notes:
+            updates["notes"] = (current_notes + ("\n" if current_notes else "") + "Web research: " + notes_suggestion).strip()
+
+    if updates:
+        sets = ", ".join(f"{k}=?" for k in updates)
+        con.execute(
+            f"UPDATE garments SET {sets} WHERE id=?",
+            tuple(updates.values()) + (gid,)
+        )
+    con.commit()
+    con.close()
+    return {"ok": True, "applied_fields": list(updates.keys())}
+
+
+@app.post("/api/garments/{gid}/ignore-enrichment")
+def ignore_garment_enrichment(gid: int):
+    con = db()
+    exists = con.execute("SELECT id FROM garments WHERE id=?", (gid,)).fetchone()
+    if not exists:
+        con.close()
+        raise HTTPException(404, "Garment not found")
+    con.execute(
+        "UPDATE garments SET enrichment_status='ignored', enrichment_updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (gid,)
+    )
+    con.commit()
+    con.close()
+    return {"ok": True}
 
 class GarmentUpdate(BaseModel):
     category: Optional[str] = ""

@@ -300,3 +300,40 @@ Changes:
 - generated previews are cached in-browser so reopening the same recommendation is instant;
 - See on model remains available as an optional alternative;
 - Find this piece remains available for missing recommended items.
+
+
+## V4.4 Brand Intelligence + Garment Detail + Home Polish
+
+This build combines the next two product stages and a visual polish pass.
+
+### Brand / product intelligence
+When a garment has a brand, the app can research the brand and model/line in the background using live web search. It looks for:
+- line/model identification only where evidence is strong;
+- brand/line fit tendencies;
+- sizing and official/retailer size-chart information;
+- fabric and construction;
+- seasonality;
+- useful source pages.
+
+Research is stored separately from the user's garment metadata. It never silently overwrites user-entered details. The garment detail page offers:
+- Apply to blank fields;
+- Refresh research;
+- Ignore.
+
+Saving an edited garment with a brand automatically starts background research.
+
+### Garment detail
+Clicking a wardrobe photograph now opens a proper garment page rather than jumping directly into edit. It shows:
+- catalogue image;
+- garment metadata and fit feedback;
+- recent rated-outfit history;
+- brand intelligence;
+- actions to build an outfit, edit, or clean the photo.
+
+### Home screen
+The emoji tile dashboard has been replaced with a quieter editorial menswear layout:
+- monochrome line icons;
+- stronger typographic hierarchy;
+- one prominent Ask My Stylist action;
+- cleaner Wardrobe / Shopping / Packing / Profile navigation;
+- no generic emoji-card visual language.
