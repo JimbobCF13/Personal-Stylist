@@ -308,11 +308,9 @@ function setupV4Dictation(){
   return;
  }
 
- let recognition=null, listening=false;
+ let recognition=null, listening=false, wantsResume=false;
 
- btn.addEventListener("click",()=>{
-  if(listening&&recognition){recognition.stop();return;}
-
+ function startRecognition(){
   recognition=new Recognition();
   recognition.lang="en-GB";
   recognition.interimResults=true;
@@ -323,6 +321,7 @@ function setupV4Dictation(){
 
   recognition.onstart=()=>{
    listening=true;
+   wantsResume=true;
    btn.textContent="■ Stop";
    btn.classList.add("recording");
    status.classList.remove("hidden");
@@ -342,23 +341,57 @@ function setupV4Dictation(){
   };
 
   recognition.onerror=e=>{
+   listening=false;
+   btn.textContent="🎙️ Dictate";
+   btn.classList.remove("recording");
    status.classList.remove("hidden");
-   status.textContent=e.error==="not-allowed"
-    ?"Microphone permission was not granted. You can still use the keyboard microphone."
-    :"Dictation stopped. Try again or use the keyboard microphone.";
+   if(e.error==="not-allowed"){
+    wantsResume=false;
+    status.textContent="Microphone permission was not granted. You can still use the keyboard microphone.";
+   }else if(document.hidden){
+    status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
+   }else{
+    status.textContent="Dictation paused. Tap Dictate to continue.";
+   }
   };
 
   recognition.onend=()=>{
    listening=false;
    btn.textContent="🎙️ Dictate";
    btn.classList.remove("recording");
+   if(document.hidden && wantsResume){
+    status.classList.remove("hidden");
+    status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
+   }
   };
 
   try{recognition.start()}catch{}
+ }
+
+ btn.addEventListener("click",()=>{
+  if(listening&&recognition){
+   wantsResume=false;
+   recognition.stop();
+   return;
+  }
+  wantsResume=true;
+  startRecognition();
+ });
+
+ document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden && wantsResume && !listening){
+   setTimeout(()=>{
+    if(wantsResume && !listening){
+     status.classList.remove("hidden");
+     status.textContent="Resuming dictation…";
+     startRecognition();
+    }
+   },250);
+  }
  });
 }
 
-function renderV4Outfit(o){
+function renderV4Outfit(o,index){
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
  const pieceHtml=pieces.map(g=>`<div class="v4-piece">
   <img src="${g.image_path}" alt="">
@@ -366,6 +399,7 @@ function renderV4Outfit(o){
  </div>`).join("");
 
  const gap=o.missing_piece?`<div class="v4-missing"><b>Suggested addition:</b> ${esc(o.missing_piece)}<br><small>${esc(o.missing_piece_reason||"")}</small></div>`:"";
+ const payload=encodeURIComponent(JSON.stringify(o));
 
  return `<div class="card v4-outfit">
   <div class="row between"><div><span class="rank-pill">#${o.rank}</span><h3>${esc(o.label)}</h3></div><div class="v4-score"><b>${o.score}</b><span>/100</span></div></div>
@@ -378,116 +412,55 @@ function renderV4Outfit(o){
    <small><b>Formality:</b> ${esc(o.formality_fit)}</small>
    <small><b>Stylist note:</b> ${esc(o.style_note)}</small>
   </div>
+  <div class="v4-actions">
+   <button class="primary" type="button" onclick="v4Visualise('${payload}',${index},true)">View on me</button>
+   <button class="ghost" type="button" onclick="v4Visualise('${payload}',${index},false)">See on model</button>
+   ${o.missing_piece?`<button class="ghost" type="button" onclick="v4FindPiece('${payload}',${index})">Find this piece</button>`:""}
+  </div>
+  <div id="v4Visual-${index}" class="model-visual hidden"></div>
+  <div id="v4Products-${index}" class="product-results"></div>
  </div>`;
 }
 
-function populateAnchor(){$("anchor").innerHTML='<option value="">Let the stylist choose</option>'+garments.map(g=>`<option value="${g.id}">${esc((g.brand?g.brand+" ":"")+g.garment_type+" — "+(g.colour||""))}</option>`).join("")}
-$("makeOutfits").addEventListener("click",async()=>{
- $("results").innerHTML='<div class="card">Stylist is thinking…</div>';
- try{
-  const x=await api("/api/outfits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occasion:$("occasion").value,temperature_c:Number($("temperature").value),weather:$("weather").value,location:$("location").value,anchor_id:$("anchor").value?Number($("anchor").value):null,dress_code:$("dress_code").value,smartness:$("smartness").value,season:$("outfit_season").value,wardrobe_mode:$("wardrobe_mode").value,context_notes:$("context_notes").value})});
-  $("results").innerHTML=`<div class="notice">${esc(x.summary)}</div>`+x.outfits.map((o,i)=>renderOutfit(o,i)).join("");
- }catch(err){$("results").innerHTML=`<div class="card">${esc(err.message)}</div>`}
-});
-function renderOutfit(o,i){
- const pieces=o.garment_ids.map(id=>garments.find(g=>g.id===id)).filter(Boolean).map(g=>`<div class="outfitPiece"><img src="${g.image_path}"><div><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small></div></div>`).join("");
- const gap=o.missing_piece?`<div class="notice"><b>Potential wardrobe gap:</b> ${esc(o.missing_piece)} · shopping priority: ${esc(o.shopping_priority)}</div>`:"";
- const outfitPayload=encodeURIComponent(JSON.stringify(o));
- return `<div class="card outfit-card">
-   <div class="row between"><h3 style="margin:0">${esc(o.label)}</h3><span class="pill">Wardrobe first</span></div>
-   ${pieces}
-   <p><b>Why it works:</b> ${esc(o.reason)}</p>
-   <small>${esc(o.weather_note)} · ${esc(o.occasion_note)}</small>
-   ${gap}
-   <div class="visual-actions">
-     <button class="primary" type="button" onclick="seeOnModel('${outfitPayload}',${i},false)">See on model</button>
-     <button class="ghost" type="button" onclick="seeOnModel('${outfitPayload}',${i},true)">View on me</button>
-   </div>
-   <div id="modelVisual-${i}" class="model-visual hidden"></div>
-   <div class="feedback">${["Love it","Like it","Not for me","Too smart","Too casual"].map(r=>`<button onclick='rate(${JSON.stringify(JSON.stringify(o))},${JSON.stringify(r)})'>${r}</button>`).join("")}</div>
- </div>`;
-}
-
-async function seeOnModel(encoded,index,useMyLikeness=false){
+async function v4Visualise(encoded,index,useMyLikeness){
  const o=JSON.parse(decodeURIComponent(encoded));
- const box=$(`modelVisual-${index}`);
+ const box=$(`v4Visual-${index}`);
  box.classList.remove("hidden");
- box.innerHTML=`<div class="visual-loading">${useMyLikeness?"Creating your personalised outfit visualisation…":"Creating your outfit visualisation…"} this can take a little while.</div>`;
-
+ box.innerHTML=`<div class="visual-loading">${useMyLikeness?"Creating your personalised look…":"Creating outfit visual…"} this can take a little while.</div>`;
  try{
-   const payload={
-     garment_ids:o.garment_ids||[],
-     label:o.label||"Outfit",
-     reason:o.reason||"",
-     occasion:$("occasion").value,
-     temperature_c:Number($("temperature").value||0),
-     use_my_likeness:useMyLikeness
-   };
-   const x=await api("/api/outfit-visualisation",{
-     method:"POST",
-     headers:{"Content-Type":"application/json"},
-     body:JSON.stringify(payload)
-   });
-   box.innerHTML=`<img src="${x.image_path}" alt="AI model wearing a visualisation of the suggested outfit">
-     <div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
- }catch(err){
-   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
- }
-}
-
-async function rate(s,r){await api("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({outfit:JSON.parse(s),rating:r})});alert("Feedback saved. The stylist will use repeated feedback patterns in future recommendations.");}
-function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-
-$("analyseGaps").addEventListener("click",async()=>{
- const box=$("gapResults");
- box.innerHTML='<div class="card">Analysing your wardrobe and looking for the highest-value gaps…</div>';
- try{
-  const x=await api("/api/wardrobe-gaps",{
+  const x=await api("/api/outfit-visualisation",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
    body:JSON.stringify({
-    goal:$("shopGoal").value,
-    budget:$("shopBudget").value,
-    occasion:$("shopOccasion").value,
-    season:$("shopSeason").value,
-    max_recommendations:4
+    garment_ids:o.owned_garment_ids||[],
+    label:o.label||"Outfit",
+    reason:o.why_it_works||"",
+    occasion:o.occasion_fit||"",
+    temperature_c:null,
+    use_my_likeness:useMyLikeness,
+    requested_extra_piece:o.missing_piece||""
    })
   });
-  box.innerHTML=`<div class="notice"><b>Wardrobe analysis:</b> ${esc(x.summary)}</div>`+
-   (x.recommendations||[]).map((r,i)=>renderGapRecommendation(r,i)).join("");
+  box.innerHTML=`<img src="${x.image_path}" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
  }catch(err){
-  box.innerHTML=`<div class="card">${esc(err.message)}</div>`;
+  box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
  }
-});
-
-function garmentMini(id){
- const g=garments.find(x=>x.id===id);
- if(!g)return "";
- return `<div class="mini-garment"><img src="${g.image_path}" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`;
 }
 
-
-function synergyLabel(score){
- if(score>=75)return "Excellent";
- if(score>=55)return "Good";
- if(score>=35)return "Moderate";
- return "Low";
-}
-
-async function sourceProducts(serialised,index){
- const r=JSON.parse(serialised);
- const box=$(`productResults-${index}`);
+async function v4FindPiece(encoded,index){
+ const o=JSON.parse(decodeURIComponent(encoded));
+ const box=$(`v4Products-${index}`);
  box.innerHTML='<div class="product-loading">Searching current UK retailers…</div>';
  try{
   const x=await api("/api/source-products",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
    body:JSON.stringify({
-    search_phrase:r.search_phrase||"",
-    shopping_spec:r.shopping_spec||"",
-    budget:$("shopBudget").value||"",
-    category:r.category||"",
-    size_fit_guidance:r.size_fit_guidance||""
+    search_phrase:o.missing_piece||"",
+    shopping_spec:[o.missing_piece,o.missing_piece_reason,o.style_note].filter(Boolean).join(". "),
+    budget:"",
+    category:"",
+    size_fit_guidance:"Use my saved profile and fit history where relevant."
    })
   });
   if(!(x.products||[]).length){
@@ -500,58 +473,6 @@ async function sourceProducts(serialised,index){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
  }
 }
-
-function safeProductUrl(url){
- try{
-  const u=new URL(url);
-  return (u.protocol==="https:"||u.protocol==="http:")?u.href:"#";
- }catch{return "#";}
-}
-
-function renderLiveProduct(p){
- const url=safeProductUrl(p.url||"");
- const image=p.image_url?`<img class="live-product-img" src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`:"";
- return `<div class="live-product-card">
-   ${image}
-   <div class="live-product-body">
-    <div class="row between"><div><small>${esc(p.brand||p.retailer)}</small><h4>${esc(p.name)}</h4></div><b>${esc(p.price||"Price check")}</b></div>
-    <p>${esc(p.why_it_matches)}</p>
-    <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
-    <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
-    <div class="row between product-footer"><span class="confidence">${esc(p.confidence)} confidence</span><a class="primary product-link" href="${url}" target="_blank" rel="noopener">View at ${esc(p.retailer||"retailer")}</a></div>
-   </div>
-  </div>`;
-}
-
-function renderGapRecommendation(r,i){
- const owned=[...(r.owned_garment_ids||[])].slice(0,6).map(garmentMini).join("");
- const outfitIdeas=(r.outfit_ideas||[]).map(o=>{
-   const imgs=(o.owned_garment_ids||[]).map(garmentMini).join("");
-   return `<div class="shop-outfit"><div class="mini-row">${imgs}</div><small>${esc(o.description)}</small></div>`;
- }).join("");
-
- return `<div class="card gap-card">
-   <div class="row between">
-    <div><span class="priority ${esc(r.priority)}">${esc(r.priority)} priority</span><h3>${esc(r.title)}</h3></div>
-    <div class="synergy"><b>${synergyLabel(Number(r.wardrobe_synergy_score||0))}</b><span>${Number(r.wardrobe_synergy_score||0)}/100</span></div>
-   </div>
-   <div class="spec-grid">
-    <div><small>COLOUR</small><b>${esc(r.ideal_colour)}</b></div>
-    <div><small>MATERIAL</small><b>${esc(r.ideal_material)}</b></div>
-    <div><small>FIT</small><b>${esc(r.ideal_fit)}</b></div>
-    <div><small>FORMALITY</small><b>${esc(r.formality)}</b></div>
-   </div>
-   <p><b>Why it adds value:</b> ${esc(r.why_this_adds_value)}</p>
-   <p><b>Fit guidance:</b> ${esc(r.size_fit_guidance)}</p>
-   ${owned?`<div><small>WORKS WITH ITEMS YOU OWN</small><div class="mini-row">${owned}</div></div>`:""}
-   ${outfitIdeas?`<div class="shopping-outfits"><small>OUTFIT IDEAS</small>${outfitIdeas}</div>`:""}
-   <div class="shopping-spec"><small>SHOPPING SPECIFICATION</small><p>${esc(r.shopping_spec)}</p></div>
-   <div class="future-search"><b>Suggested retailer search:</b> ${esc(r.search_phrase)}</div>
-   <button class="primary full source-products-btn" type="button" onclick='sourceProducts(${JSON.stringify(JSON.stringify(r))},${i})'>Find products to buy</button>
-   <div id="productResults-${i}" class="product-results"></div>
-  </div>`;
-}
-
 
 const runStylistV4Btn=$("runStylistV4");
 if(runStylistV4Btn){
@@ -575,7 +496,7 @@ if(runStylistV4Btn){
     })
    });
    box.innerHTML=`<div class="notice"><b>Stylist view:</b> ${esc(x.summary)}</div>`+
-    (x.outfits||[]).map(renderV4Outfit).join("");
+    (x.outfits||[]).map((o,i)=>renderV4Outfit(o,i)).join("");
   }catch(err){
    box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
   }finally{

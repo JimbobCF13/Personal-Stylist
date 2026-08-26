@@ -258,3 +258,16 @@ identified missing piece only when useful.
 
 Dictation uses browser speech recognition where supported. If it is unavailable, the button
 focuses the text box and prompts the user to use the native iPhone/Mac keyboard microphone.
+
+
+## V4.1 Stylist actions + dictation resilience
+Each V4 recommendation now supports:
+- View on me
+- See on model
+- Find this piece when a missing/recommended item is suggested
+
+Visualisation includes the recommended extra piece in the image prompt so the complete proposed outfit can be shown.
+
+Product sourcing reuses the live-shopping endpoint to search current UK retailer options.
+
+Browser speech recognition commonly stops when a tab/window loses focus. V4.1 preserves captured text, tells the user dictation paused, and automatically attempts to resume when the Personal Stylist window regains focus.

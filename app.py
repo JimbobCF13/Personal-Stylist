@@ -883,6 +883,7 @@ class OutfitVisualisationRequest(BaseModel):
     occasion: Optional[str] = ""
     temperature_c: Optional[float] = None
     use_my_likeness: Optional[bool] = False
+    requested_extra_piece: Optional[str] = ""
 
 @app.post("/api/outfit-visualisation")
 def outfit_visualisation(req: OutfitVisualisationRequest):
@@ -946,6 +947,9 @@ wearing the outfit represented by the supplied garment reference images.
 
 OUTFIT:
 {chr(10).join(descriptions)}
+
+Recommended extra piece not yet owned:
+{req.requested_extra_piece or 'none'}
 
 Context:
 - Outfit label: {req.label or 'Outfit'}

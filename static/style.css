@@ -155,3 +155,6 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 .v4-missing{padding:11px 12px;border-radius:14px;background:#f4f4f1;margin:11px 0}
 .v4-notes{display:grid;gap:5px;margin-top:10px}
 .v4-notes small{line-height:1.4}
+
+.v4-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.v4-actions button{min-height:42px}
