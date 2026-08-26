@@ -337,3 +337,9 @@ The emoji tile dashboard has been replaced with a quieter editorial menswear lay
 - one prominent Ask My Stylist action;
 - cleaner Wardrobe / Shopping / Packing / Profile navigation;
 - no generic emoji-card visual language.
+
+
+## V4.4.1 smooth brand research
+Fixes visual flashing during Brand Intelligence research.
+
+The app now keeps the garment detail page stable and updates only the Brand Intelligence panel while background research is running.

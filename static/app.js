@@ -142,22 +142,47 @@ async function loadGarmentDetail(id){
     </div>
     ${hist}
    </div>
-   ${renderEnrichmentPanel(g)}`;
+   <div id="brandIntelligencePanel">${renderEnrichmentPanel(g)}</div>`;
 
   $("detailEdit").onclick=()=>editGarment(g.id);
 
   if(g.enrichment_status==="researching"){
-   enrichmentPollTimer=setTimeout(()=>loadGarmentDetail(id),2200);
+   enrichmentPollTimer=setTimeout(()=>pollGarmentEnrichment(id),2200);
   }
  }catch(err){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
  }
 }
 
+
+async function pollGarmentEnrichment(id){
+ clearTimeout(enrichmentPollTimer);
+ if(detailGarmentId!==id)return;
+ try{
+  const g=await api(`/api/garments/${id}/detail`);
+  if(detailGarmentId!==id)return;
+  const panel=$("brandIntelligencePanel");
+  if(panel)panel.innerHTML=renderEnrichmentPanel(g);
+  if(g.enrichment_status==="researching"){
+   enrichmentPollTimer=setTimeout(()=>pollGarmentEnrichment(id),2200);
+  }
+ }catch(err){
+  const panel=$("brandIntelligencePanel");
+  if(panel)panel.innerHTML=`<div class="detail-research"><small>BRAND INTELLIGENCE</small><p>${esc(err.message)}</p></div>`;
+ }
+}
+
 async function researchGarment(id){
  try{
   await api(`/api/garments/${id}/enrich`,{method:"POST"});
-  await loadGarmentDetail(id);
+  const panel=$("brandIntelligencePanel");
+  if(panel){
+   panel.innerHTML=`<div class="detail-research">
+    <div class="research-head"><div><small>BRAND INTELLIGENCE</small><h4>Researching garment…</h4></div><span class="spinner"></span></div>
+    <p>I’m checking brand/line fit information, sizing, fabric and construction in the background.</p>
+   </div>`;
+  }
+  enrichmentPollTimer=setTimeout(()=>pollGarmentEnrichment(id),1200);
  }catch(err){alert(err.message)}
 }
 
