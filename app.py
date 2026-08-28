@@ -102,7 +102,21 @@ def init_db():
     for sql in [
         "ALTER TABLE garments ADD COLUMN enrichment_json TEXT",
         "ALTER TABLE garments ADD COLUMN enrichment_status TEXT DEFAULT ''",
-        "ALTER TABLE garments ADD COLUMN enrichment_updated_at TEXT"
+        "ALTER TABLE garments ADD COLUMN enrichment_updated_at TEXT",
+        "ALTER TABLE garments ADD COLUMN purchase_status TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN purchase_retailer TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN purchase_price TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN purchase_url TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN purchase_date TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN fit_review_status TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN fit_rating INTEGER",
+        "ALTER TABLE garments ADD COLUMN fit_chest TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN fit_waist TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN fit_length TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN fit_sleeve TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN fit_shoulders TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN fit_notes TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN fit_reviewed_at TEXT"
     ]:
         try:
             con.execute(sql)
@@ -1514,6 +1528,22 @@ def source_products(req: ProductSourceRequest):
     if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
         raise HTTPException(400, "OpenAI is not connected.")
 
+    fit_con=db()
+    fit_rows=[dict(r) for r in fit_con.execute("""
+      SELECT brand,labelled_size,fit_rating,fit_chest,fit_waist,fit_length,fit_sleeve,fit_shoulders,fit_notes
+      FROM garments
+      WHERE fit_review_status='confirmed' AND brand<>''
+      ORDER BY fit_reviewed_at DESC LIMIT 30
+    """).fetchall()]
+    fit_con.close()
+    fit_learning="\n".join([
+      f"- {r.get('brand') or ''} size {r.get('labelled_size') or ''}: {r.get('fit_rating') or 'n/a'}/5; "
+      f"chest {r.get('fit_chest') or '—'}, waist {r.get('fit_waist') or '—'}, "
+      f"length {r.get('fit_length') or '—'}, sleeve {r.get('fit_sleeve') or '—'}, "
+      f"shoulders {r.get('fit_shoulders') or '—'}. {r.get('fit_notes') or ''}"
+      for r in fit_rows
+    ])
+
     prompt = f"""
 Search the live web for men's clothing products currently offered by reputable retailers that match this specification.
 
@@ -1522,6 +1552,9 @@ CATEGORY: {req.category or 'not specified'}
 SHOPPING SPECIFICATION: {req.shopping_spec or 'not specified'}
 BUDGET: {req.budget or 'not specified'}
 SIZE/FIT GUIDANCE: {req.size_fit_guidance or 'not specified'}
+
+CONFIRMED REAL-WORLD FIT HISTORY:
+{fit_learning or 'No confirmed fit reviews yet.'}
 
 The user is in the United Kingdom. Prefer UK retailer/product pages and GBP prices.
 Find up to 6 genuinely relevant products across useful price points where possible.
@@ -1769,6 +1802,63 @@ def add_shopping_shortlist(req: ShortlistProductRequest):
 def delete_shopping_shortlist(sid:int):
     con=db(); con.execute("DELETE FROM shopping_shortlist WHERE id=?",(sid,)); con.commit(); con.close()
     return {"ok":True}
+
+
+class FitReviewRequest(BaseModel):
+    labelled_size: Optional[str] = ""
+    fit_rating: Optional[int] = None
+    fit_chest: Optional[str] = ""
+    fit_waist: Optional[str] = ""
+    fit_length: Optional[str] = ""
+    fit_sleeve: Optional[str] = ""
+    fit_shoulders: Optional[str] = ""
+    fit_notes: Optional[str] = ""
+
+@app.post("/api/garments/{gid}/fit-review")
+def save_fit_review(gid: int, req: FitReviewRequest):
+    con=db()
+    row=con.execute("SELECT * FROM garments WHERE id=?",(gid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404,"Garment not found.")
+    rating=req.fit_rating
+    if rating is not None:
+        rating=max(1,min(5,int(rating)))
+    reviewed=datetime.now(timezone.utc).isoformat()
+    feedback=(
+        f"Fit review: {rating or 'unrated'}/5. "
+        f"Chest {req.fit_chest or '—'}; waist {req.fit_waist or '—'}; "
+        f"length {req.fit_length or '—'}; sleeve {req.fit_sleeve or '—'}; "
+        f"shoulders {req.fit_shoulders or '—'}. {req.fit_notes or ''}"
+    ).strip()
+    con.execute("""
+      UPDATE garments SET
+        labelled_size=CASE WHEN ?<>'' THEN ? ELSE labelled_size END,
+        fit_review_status='confirmed', fit_rating=?,
+        fit_chest=?,fit_waist=?,fit_length=?,fit_sleeve=?,fit_shoulders=?,
+        fit_notes=?,fit_reviewed_at=?,fit_feedback=?
+      WHERE id=?
+    """,(req.labelled_size or "",req.labelled_size or "",rating,
+         req.fit_chest or "",req.fit_waist or "",req.fit_length or "",
+         req.fit_sleeve or "",req.fit_shoulders or "",req.fit_notes or "",
+         reviewed,feedback,gid))
+    con.commit()
+    updated=dict(con.execute("SELECT * FROM garments WHERE id=?",(gid,)).fetchone())
+    con.close()
+    return updated
+
+@app.get("/api/fit-learning")
+def get_fit_learning():
+    con=db()
+    rows=[dict(r) for r in con.execute("""
+      SELECT brand,labelled_size,fit_rating,fit_chest,fit_waist,fit_length,
+             fit_sleeve,fit_shoulders,fit_notes,fit_reviewed_at
+      FROM garments
+      WHERE fit_review_status='confirmed' AND brand<>''
+      ORDER BY fit_reviewed_at DESC LIMIT 100
+    """).fetchall()]
+    con.close()
+    return rows
 
 class ProductTryOnRequest(BaseModel):
     garment_ids: list[int]

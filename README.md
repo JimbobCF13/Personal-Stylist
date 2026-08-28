@@ -359,3 +359,11 @@ Live retailer results from a Stylist recommendation now include **Try on me**. W
 - If search does not provide an image, the app makes a best-effort lookup of the retailer page's Open Graph/Twitter image.
 - Product results can be saved to a persistent My Shortlist view.
 - Shortlisted products can be compared by retailer, price, colour, material, fit, sizing guidance and recommendation confidence.
+
+
+## V4.7 Purchase & Fit Learning
+- Retailer results no longer leave large empty image boxes when a thumbnail cannot be obtained. They show a small intentional **Product image unavailable** note instead.
+- Shortlisted products can be marked **I bought this** and transferred into the wardrobe with retailer/product data preserved.
+- Purchased items are marked **Awaiting fit review**.
+- Structured real-world fit review captures size, overall 1–5 fit, chest, waist, length, sleeve, shoulders and notes.
+- Confirmed fit history is fed back into future live product searches so recommendations can use the user's actual brand/size experience rather than generic sizing alone.

@@ -1,3 +1,4 @@
+let currentGarmentDetail=null;
 
 const $=id=>document.getElementById(id);
 let garments=[], uploadedPath="", aiConfidence=0;
@@ -65,6 +66,71 @@ function enrichmentSources(sources){
  }).join("")}</div>`;
 }
 
+
+function renderFitReviewPanel(g){
+ const status=g.fit_review_status||"";
+ if(!status && g.purchase_status!=="bought")return "";
+ if(status==="confirmed"){
+  return `<div class="detail-research fit-confirmed">
+   <div class="research-head"><div><small>FIT LEARNING</small><h4>Fit confirmed</h4></div><span class="fit-status-pill">Learned</span></div>
+   <p><b>${esc(g.brand||"This garment")} ${esc(g.labelled_size||"")}</b>${g.fit_rating?` · ${esc(g.fit_rating)}/5`:""}</p>
+   <div class="fit-summary-grid">
+    <span>Chest <b>${esc(g.fit_chest||"—")}</b></span><span>Waist <b>${esc(g.fit_waist||"—")}</b></span>
+    <span>Length <b>${esc(g.fit_length||"—")}</b></span><span>Sleeve <b>${esc(g.fit_sleeve||"—")}</b></span>
+    <span>Shoulders <b>${esc(g.fit_shoulders||"—")}</b></span>
+   </div>
+   ${g.fit_notes?`<p>${esc(g.fit_notes)}</p>`:""}
+   <button class="ghost" onclick="openFitReview(${g.id})">Update fit review</button>
+  </div>`;
+ }
+ return `<div class="detail-research fit-awaiting">
+  <div class="research-head"><div><small>FIT LEARNING</small><h4>How does it actually fit?</h4></div><span class="fit-status-pill awaiting">Awaiting review</span></div>
+  <p>This purchase is saved in your wardrobe. Once it arrives, review the real fit and I’ll use that experience in future shopping recommendations.</p>
+  <button class="primary" onclick="openFitReview(${g.id})">Review the fit</button>
+ </div>`;
+}
+
+function fitOptions(value){
+ const opts=["Much too tight","Slightly tight","Good","Slightly loose","Much too loose"];
+ return opts.map(x=>`<option ${value===x?"selected":""}>${x}</option>`).join("");
+}
+
+function openFitReview(id){
+ const g=currentGarmentDetail||{};
+ const panel=$("fitReviewPanel");
+ if(!panel)return;
+ panel.innerHTML=`<div class="detail-research fit-form">
+  <small>FIT REVIEW</small><h4>Teach the stylist how this actually fits</h4>
+  <div class="fit-form-grid">
+   <label>Labelled size<input id="fit-size" value="${esc(g.labelled_size||"")}"></label>
+   <label>Overall fit<select id="fit-rating"><option value="">Choose</option>${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(g.fit_rating)===n?"selected":""}>${n}/5</option>`).join("")}</select></label>
+   <label>Chest<select id="fit-chest">${fitOptions(g.fit_chest)}</select></label>
+   <label>Waist<select id="fit-waist">${fitOptions(g.fit_waist)}</select></label>
+   <label>Body / leg length<select id="fit-length">${fitOptions(g.fit_length)}</select></label>
+   <label>Sleeve<select id="fit-sleeve">${fitOptions(g.fit_sleeve)}</select></label>
+   <label>Shoulders<select id="fit-shoulders">${fitOptions(g.fit_shoulders)}</select></label>
+  </div>
+  <label>Anything else<textarea id="fit-notes" rows="3" placeholder="e.g. good through the body but sleeves slightly long">${esc(g.fit_notes||"")}</textarea></label>
+  <div class="row"><button class="primary" onclick="saveFitReview(${id})">Save fit review</button><button class="ghost" onclick="loadGarmentDetail(${id})">Cancel</button></div>
+ </div>`;
+}
+
+async function saveFitReview(id){
+ try{
+  await api(`/api/garments/${id}/fit-review`,{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    labelled_size:$("fit-size").value.trim(),
+    fit_rating:$("fit-rating").value?Number($("fit-rating").value):null,
+    fit_chest:$("fit-chest").value,fit_waist:$("fit-waist").value,
+    fit_length:$("fit-length").value,fit_sleeve:$("fit-sleeve").value,
+    fit_shoulders:$("fit-shoulders").value,fit_notes:$("fit-notes").value.trim()
+   })
+  });
+  await loadGarmentDetail(id);
+ }catch(err){alert(err.message)}
+}
+
 function renderEnrichmentPanel(g){
  const status=g.enrichment_status||"";
  const e=g.enrichment;
@@ -111,6 +177,7 @@ async function loadGarmentDetail(id){
 
  try{
   const g=await api(`/api/garments/${id}/detail`);
+  currentGarmentDetail=g;
   detailGarmentId=id;
   const title=esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"));
   const hist=(g.outfit_history||[]).length
@@ -142,6 +209,7 @@ async function loadGarmentDetail(id){
     </div>
     ${hist}
    </div>
+   <div id="fitReviewPanel">${renderFitReviewPanel(g)}</div>
    <div id="brandIntelligencePanel">${renderEnrichmentPanel(g)}</div>`;
 
   $("detailEdit").onclick=()=>editGarment(g.id);
@@ -743,8 +811,8 @@ async function v4FindPiece(encoded,index){
    const payload=encodeURIComponent(JSON.stringify(p));
    const thumbId=`productThumb-${index}-${pi}`;
    const image=p.image_url
-    ? `<img id="${thumbId}" class="live-product-img live-product-thumb" src="${esc(p.image_url)}" alt="" onerror="resolveProductThumbnail('${payload}','${thumbId}')">`
-    : `<div class="product-thumb-placeholder" id="${thumbId}" data-placeholder="1"><span>Image</span></div>`;
+    ? `<img id="${thumbId}" class="live-product-img live-product-thumb" src="${esc(p.image_url)}" alt="" onerror="productThumbUnavailable('${thumbId}')">`
+    : `<div class="product-image-unavailable" id="${thumbId}"><span>Product image unavailable</span></div>`;
 
    setTimeout(()=>resolveProductThumbnail('${payload}','${thumbId}'),0);
 
@@ -823,15 +891,26 @@ async function resolveProductThumbnail(encoded,elementId){
  if(el.tagName==="IMG" && el.complete && el.naturalWidth>0)return;
  try{
   const x=await api("/api/product-thumbnail",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:p.url||"",image_url:p.image_url||""})});
-  if(!x.image_url)return;
-  if(el.tagName==="IMG"){el.onerror=()=>{el.style.display="none"};el.src=x.image_url;}
+  if(!x.image_url){productThumbUnavailable(elementId);return;}
+  if(el.tagName==="IMG"){el.onerror=()=>productThumbUnavailable(elementId);el.src=x.image_url;}
   else{
    const img=document.createElement("img");
-   img.className="live-product-img live-product-thumb";img.alt="";img.src=x.image_url;img.onerror=()=>{img.style.display="none"};
+   img.id=elementId;img.className="live-product-img live-product-thumb";img.alt="";img.src=x.image_url;
+   img.onerror=()=>productThumbUnavailable(elementId);
    el.replaceWith(img);
   }
- }catch{}
+ }catch{productThumbUnavailable(elementId)}
 }
+
+function productThumbUnavailable(elementId){
+ const el=$(elementId);
+ if(!el || el.classList.contains("product-image-unavailable"))return;
+ const note=document.createElement("div");
+ note.id=elementId;note.className="product-image-unavailable";
+ note.innerHTML="<span>Product image unavailable</span>";
+ el.replaceWith(note);
+}
+
 
 async function saveToShortlist(encoded,contextIndex,button){
  const p=JSON.parse(decodeURIComponent(encoded));
@@ -857,8 +936,8 @@ async function loadShortlist(){
 
 function renderShortlistItem(p){
  const url=safeProductUrl(p.url||"");
- const image=p.image_url?`<img src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`:`<div class="shortlist-no-image">No image available</div>`;
- return `<article class="shortlist-card"><div class="shortlist-image">${image}</div><div class="shortlist-body">
+ const image=p.image_url?`<div class="shortlist-image"><img src="${esc(p.image_url)}" alt="" onerror="this.parentElement.innerHTML='<div class=\'shortlist-no-image compact\'>Product image unavailable</div>';this.parentElement.classList.add('compact')"></div>`:`<div class="shortlist-no-image compact">Product image unavailable</div>`;
+ return `<article class="shortlist-card">${image}<div class="shortlist-body">
   <small>${esc(p.brand||p.retailer||"")}</small><h3>${esc(p.name||"Product")}</h3><strong>${esc(p.price||"Price check")}</strong>
   <p>${esc(p.why_it_matches||"")}</p>
   <dl class="compare-specs">
@@ -866,9 +945,27 @@ function renderShortlistItem(p){
    <div><dt>Material</dt><dd>${esc(p.material||"—")}</dd></div><div><dt>Fit</dt><dd>${esc(p.fit||"—")}</dd></div>
    <div><dt>Size guidance</dt><dd>${esc(p.size_note||"—")}</dd></div><div><dt>Confidence</dt><dd>${esc(p.confidence||"—")}</dd></div>
   </dl>
-  <div class="shortlist-actions"><a class="ghost product-link" href="${url}" target="_blank" rel="noopener">View retailer</a>
+  <div class="shortlist-actions"><button class="primary" onclick="addShortlistToWardrobe(${p.id})">I bought this</button>
+   <a class="ghost product-link" href="${url}" target="_blank" rel="noopener">View retailer</a>
    <button class="text-button danger-text" onclick="removeShortlist(${p.id})">Remove</button></div>
  </div></article>`;
+}
+
+
+async function addShortlistToWardrobe(id){
+ const type=prompt("What should I call this in your wardrobe? (e.g. Unstructured blazer, Oxford shirt, suede loafer)","");
+ if(type===null)return;
+ const size=prompt("What labelled size did you buy?","");
+ if(size===null)return;
+ try{
+  const x=await api(`/api/shopping-shortlist/${id}/add-to-wardrobe`,{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({category:"Other",garment_type:type||"Purchased item",labelled_size:size||""})
+  });
+  alert("Added to your wardrobe. I’ve marked it as awaiting a real-world fit review.");
+  go("wardrobe");
+  await loadGarments();
+ }catch(err){alert(err.message)}
 }
 
 async function removeShortlist(id){

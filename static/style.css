@@ -286,3 +286,24 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 .shortlist-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
 .danger-text{color:#8b4a4a}
 @media(max-width:650px){.shortlist-grid{grid-template-columns:1fr}.shortlist-image{height:210px}}
+
+/* V4.7 polished unavailable images */
+.product-image-unavailable{
+ margin:10px 0 0 12px;padding:7px 10px;border-radius:9px;background:#f4f4f1;
+ color:#8a8a84;font-size:9px;letter-spacing:.03em;display:inline-flex;width:auto
+}
+.shortlist-no-image.compact{
+ height:auto;min-height:0;margin:12px 16px 0;padding:8px 10px;border-radius:9px;
+ background:#f4f4f1;color:#8a8a84;font-size:9px;display:inline-flex;width:auto
+}
+.shortlist-image.compact{height:auto}
+
+/* V4.7 fit learning */
+.fit-status-pill{padding:5px 8px;border-radius:999px;background:#edf3ed;color:#405841;font-size:9px;font-weight:800;text-transform:uppercase}
+.fit-status-pill.awaiting{background:#f3f0e8;color:#6c6047}
+.fit-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:10px 0}
+.fit-summary-grid span{font-size:10px;padding:7px 8px;background:#f6f6f3;border-radius:8px}
+.fit-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.fit-form label{display:block;font-size:10px;color:#666}
+.fit-form input,.fit-form select,.fit-form textarea{width:100%;margin-top:5px}
+@media(max-width:560px){.fit-form-grid{grid-template-columns:1fr}}
