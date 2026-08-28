@@ -22,7 +22,7 @@ async function api(url,opts={}){
  if(!r.ok) throw new Error(data.detail||"Something went wrong");
  return data;
 }
-function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="garmentdetail"&&detailGarmentId)loadGarmentDetail(detailGarmentId);if(id==="outfits")populateAnchor();if(id==="stylistv4")populateV4Anchor();if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}}
+function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="shortlist")loadShortlist();if(id==="garmentdetail"&&detailGarmentId)loadGarmentDetail(detailGarmentId);if(id==="outfits")populateAnchor();if(id==="stylistv4")populateV4Anchor();if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b)go(b.dataset.go)});
 async function init(){
  try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
@@ -740,10 +740,13 @@ async function v4FindPiece(encoded,index){
   // a separate product-card renderer being present in the browser scope.
   const productCards=x.products.map((p,pi)=>{
    const url=safeProductUrl(p.url||"");
-   const image=p.image_url
-    ? `<img class="live-product-img" src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`
-    : "";
    const payload=encodeURIComponent(JSON.stringify(p));
+   const thumbId=`productThumb-${index}-${pi}`;
+   const image=p.image_url
+    ? `<img id="${thumbId}" class="live-product-img live-product-thumb" src="${esc(p.image_url)}" alt="" onerror="resolveProductThumbnail('${payload}','${thumbId}')">`
+    : `<div class="product-thumb-placeholder" id="${thumbId}" data-placeholder="1"><span>Image</span></div>`;
+
+   setTimeout(()=>resolveProductThumbnail('${payload}','${thumbId}'),0);
 
    return `<div class="live-product-card selectable-product">${image}<div class="live-product-body">
     <div class="row between">
@@ -757,6 +760,7 @@ async function v4FindPiece(encoded,index){
      <span class="confidence">${esc(p.confidence||"")} confidence</span>
      <div class="product-actions">
       <button class="primary try-product-btn" type="button" onclick="tryProductOnMe('${payload}',${index},${pi})">Try on me</button>
+      <button class="ghost" type="button" onclick="saveToShortlist('${payload}',${index},this)">Save</button>
       <a class="ghost product-link" href="${url}" target="_blank" rel="noopener">View retailer</a>
      </div>
     </div>
@@ -809,6 +813,66 @@ function renderLiveProductWithTryOn(p,contextIndex,productIndex){
   </div></div>
   <div id="productTryOn-${contextIndex}-${productIndex}" class="product-tryon-result"></div>
  </div></div>`;
+}
+
+
+async function resolveProductThumbnail(encoded,elementId){
+ const p=JSON.parse(decodeURIComponent(encoded));
+ const el=$(elementId);
+ if(!el)return;
+ if(el.tagName==="IMG" && el.complete && el.naturalWidth>0)return;
+ try{
+  const x=await api("/api/product-thumbnail",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:p.url||"",image_url:p.image_url||""})});
+  if(!x.image_url)return;
+  if(el.tagName==="IMG"){el.onerror=()=>{el.style.display="none"};el.src=x.image_url;}
+  else{
+   const img=document.createElement("img");
+   img.className="live-product-img live-product-thumb";img.alt="";img.src=x.image_url;img.onerror=()=>{img.style.display="none"};
+   el.replaceWith(img);
+  }
+ }catch{}
+}
+
+async function saveToShortlist(encoded,contextIndex,button){
+ const p=JSON.parse(decodeURIComponent(encoded));
+ const context=sourcedProductContexts.get(contextIndex)||{};
+ if(button){button.disabled=true;button.textContent="Saving…";}
+ try{
+  await api("/api/shopping-shortlist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product:p,context})});
+  if(button)button.textContent="Saved ✓";
+ }catch(err){if(button){button.disabled=false;button.textContent="Save";}alert(err.message);}
+}
+
+async function loadShortlist(){
+ const box=$("shortlistResults");
+ if(!box)return;
+ box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span> Loading shortlist…</div>';
+ try{
+  const items=await api("/api/shopping-shortlist");
+  if(!items.length){box.innerHTML='<div class="notice">Nothing saved yet. Use <b>Find this piece</b> and press <b>Save</b> beside anything you want to compare.</div>';return;}
+  box.innerHTML=`<div class="shortlist-compare-note"><b>${items.length} saved ${items.length===1?"piece":"pieces"}</b><span>Compare fit, material and price before deciding.</span></div>
+  <div class="shortlist-grid">${items.map(renderShortlistItem).join("")}</div>`;
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+}
+
+function renderShortlistItem(p){
+ const url=safeProductUrl(p.url||"");
+ const image=p.image_url?`<img src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`:`<div class="shortlist-no-image">No image available</div>`;
+ return `<article class="shortlist-card"><div class="shortlist-image">${image}</div><div class="shortlist-body">
+  <small>${esc(p.brand||p.retailer||"")}</small><h3>${esc(p.name||"Product")}</h3><strong>${esc(p.price||"Price check")}</strong>
+  <p>${esc(p.why_it_matches||"")}</p>
+  <dl class="compare-specs">
+   <div><dt>Retailer</dt><dd>${esc(p.retailer||"—")}</dd></div><div><dt>Colour</dt><dd>${esc(p.colour||"—")}</dd></div>
+   <div><dt>Material</dt><dd>${esc(p.material||"—")}</dd></div><div><dt>Fit</dt><dd>${esc(p.fit||"—")}</dd></div>
+   <div><dt>Size guidance</dt><dd>${esc(p.size_note||"—")}</dd></div><div><dt>Confidence</dt><dd>${esc(p.confidence||"—")}</dd></div>
+  </dl>
+  <div class="shortlist-actions"><a class="ghost product-link" href="${url}" target="_blank" rel="noopener">View retailer</a>
+   <button class="text-button danger-text" onclick="removeShortlist(${p.id})">Remove</button></div>
+ </div></article>`;
+}
+
+async function removeShortlist(id){
+ try{await api(`/api/shopping-shortlist/${id}`,{method:"DELETE"});loadShortlist();}catch(err){alert(err.message)}
 }
 
 async function tryProductOnMe(encoded,contextIndex,productIndex){

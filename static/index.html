@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
-<link rel="stylesheet" href="/static/style.css?v=4.5.1">
+<link rel="stylesheet" href="/static/style.css?v=4.6">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V4.5.1</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V4.6</span></header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
@@ -43,6 +43,10 @@
     <button class="home-card" data-go="profile">
      <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c1-5 4-7 7-7s6 2 7 7M4 4h3M17 4h3"/></svg></span>
      <span><small>FIT & PREFERENCES</small><b>My Profile</b><em>Measurements, brands and style learning</em></span>
+    </button>
+    <button class="home-card" data-go="shortlist">
+     <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h12v16l-6-4-6 4V4Z"/></svg></span>
+     <span><small>SHOPPING</small><b>My Shortlist</b><em>Compare saved pieces before you buy</em></span>
     </button>
    </div>
 
@@ -205,6 +209,13 @@
  </div>
 </section>
 
+<section id="shortlist" class="screen">
+ <div class="section shortlist-section">
+  <div class="section-head"><div><small>SHOPPING</small><h2>My Shortlist</h2><p>Save promising pieces, compare them, try them on, then add the winner to your wardrobe.</p></div></div>
+  <div id="shortlistResults"></div>
+ </div>
+</section>
+
 <section id="profile" class="screen">
  <div class="section"><h3>My Profile & Fit</h3>
   <div class="card form">
@@ -234,5 +245,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=4.5.1"></script>
+<script src="/static/app.js?v=4.6"></script>
 </body></html>

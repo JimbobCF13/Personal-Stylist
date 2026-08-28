@@ -53,6 +53,16 @@ def db():
 
 def init_db():
     con = db()
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS shopping_shortlist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_key TEXT UNIQUE,
+      name TEXT, brand TEXT, retailer TEXT, price TEXT, url TEXT, image_url TEXT,
+      colour TEXT, material TEXT, fit TEXT, size_note TEXT, confidence TEXT,
+      why_it_matches TEXT, context_json TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
     con.executescript("""
     CREATE TABLE IF NOT EXISTS profile (
       id INTEGER PRIMARY KEY CHECK(id=1),
@@ -1665,6 +1675,100 @@ def stylist_v4(req: StylistV4Request):
     result["outfits"] = result.get("outfits", [])[:max_options]
     return result
 
+
+
+class ShortlistProductRequest(BaseModel):
+    product: dict
+    context: Optional[dict] = None
+
+def _safe_web_url(url: str) -> bool:
+    try:
+        from urllib.parse import urlparse
+        p=urlparse(url or "")
+        return p.scheme in ("http","https") and bool(p.netloc)
+    except Exception:
+        return False
+
+def _extract_product_image(page_url: str) -> str:
+    if not _safe_web_url(page_url):
+        return ""
+    try:
+        import urllib.request, re as _re, html as _html
+        from urllib.parse import urljoin
+        req=urllib.request.Request(page_url,headers={
+            "User-Agent":"Mozilla/5.0",
+            "Accept":"text/html,application/xhtml+xml"
+        })
+        with urllib.request.urlopen(req,timeout=8) as r:
+            if "text/html" not in (r.headers.get("Content-Type") or "").lower():
+                return ""
+            raw=r.read(900000).decode("utf-8","ignore")
+        patterns=[
+            r'<meta[^>]+property=["\']og:image(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image(?::secure_url)?["\']',
+            r'<meta[^>]+name=["\']twitter:image(?::src)?["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image(?::src)?["\']'
+        ]
+        for pat in patterns:
+            m=_re.search(pat,raw,_re.I)
+            if m:
+                u=urljoin(page_url,_html.unescape(m.group(1).strip()))
+                if _safe_web_url(u): return u
+    except Exception:
+        pass
+    return ""
+
+@app.post("/api/product-thumbnail")
+def product_thumbnail(payload: dict):
+    supplied=str(payload.get("image_url") or "")
+    if _safe_web_url(supplied):
+        return {"image_url":supplied,"source":"search"}
+    found=_extract_product_image(str(payload.get("url") or ""))
+    return {"image_url":found,"source":"page" if found else "none"}
+
+@app.get("/api/shopping-shortlist")
+def get_shopping_shortlist():
+    con=db()
+    rows=[dict(r) for r in con.execute("SELECT * FROM shopping_shortlist ORDER BY id DESC").fetchall()]
+    con.close()
+    for r in rows:
+        try:r["context"]=json.loads(r.get("context_json") or "{}")
+        except Exception:r["context"]={}
+    return rows
+
+@app.post("/api/shopping-shortlist")
+def add_shopping_shortlist(req: ShortlistProductRequest):
+    p=req.product or {}
+    url=str(p.get("url") or "").strip()
+    name=str(p.get("name") or "Product").strip()
+    brand=str(p.get("brand") or "").strip()
+    retailer=str(p.get("retailer") or "").strip()
+    key=(url or f"{brand}|{retailer}|{name}").lower()
+    image_url=str(p.get("image_url") or "").strip()
+    if not image_url and url:image_url=_extract_product_image(url)
+    con=db()
+    con.execute("""
+      INSERT INTO shopping_shortlist
+      (product_key,name,brand,retailer,price,url,image_url,colour,material,fit,size_note,confidence,why_it_matches,context_json)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(product_key) DO UPDATE SET
+       name=excluded.name,brand=excluded.brand,retailer=excluded.retailer,price=excluded.price,
+       url=excluded.url,image_url=CASE WHEN excluded.image_url<>'' THEN excluded.image_url ELSE shopping_shortlist.image_url END,
+       colour=excluded.colour,material=excluded.material,fit=excluded.fit,size_note=excluded.size_note,
+       confidence=excluded.confidence,why_it_matches=excluded.why_it_matches,context_json=excluded.context_json
+    """,(key,name,brand,retailer,str(p.get("price") or ""),url,image_url,str(p.get("colour") or ""),
+         str(p.get("material") or ""),str(p.get("fit") or ""),str(p.get("size_note") or ""),
+         str(p.get("confidence") or ""),str(p.get("why_it_matches") or ""),
+         json.dumps(req.context or {},ensure_ascii=False)))
+    con.commit()
+    row=dict(con.execute("SELECT * FROM shopping_shortlist WHERE product_key=?",(key,)).fetchone())
+    con.close()
+    return row
+
+@app.delete("/api/shopping-shortlist/{sid}")
+def delete_shopping_shortlist(sid:int):
+    con=db(); con.execute("DELETE FROM shopping_shortlist WHERE id=?",(sid,)); con.commit(); con.close()
+    return {"ok":True}
 
 class ProductTryOnRequest(BaseModel):
     garment_ids: list[int]

@@ -352,3 +352,10 @@ Live retailer results from a Stylist recommendation now include **Try on me**. W
 - Removes the retailer-result rendering dependency that could produce a `renderLiveProduct` browser error after a successful live search.
 - Product cards are now rendered directly by the Find This Piece flow.
 - Makes the active search much more visible with a larger loading panel, animated spinner, explicit live-search explanation and a completion state.
+
+
+## V4.6 Shopping Shortlist + Compare
+- Product result cards now try to show a compact thumbnail.
+- If search does not provide an image, the app makes a best-effort lookup of the retailer page's Open Graph/Twitter image.
+- Product results can be saved to a persistent My Shortlist view.
+- Shortlisted products can be compared by retailer, price, colour, material, fit, sizing guidance and recommendation confidence.
