@@ -706,7 +706,16 @@ async function v4Visualise(encoded,index,useMyLikeness){
 async function v4FindPiece(encoded,index){
  const o=JSON.parse(decodeURIComponent(encoded));
  const box=$(`v4Products-${index}`);
- box.innerHTML='<div class="product-loading">Searching current UK retailers…</div>';
+
+ box.innerHTML=`<div class="retailer-search-state">
+   <span class="retailer-search-spinner"></span>
+   <div>
+    <b>Searching UK retailers…</b>
+    <p>I’m checking current products, prices and fit information for <strong>${esc(o.missing_piece||"this piece")}</strong>.</p>
+    <small>Please wait — a live retailer search can take a little while.</small>
+   </div>
+  </div>`;
+
  try{
   const x=await api("/api/source-products",{
    method:"POST",
@@ -719,15 +728,49 @@ async function v4FindPiece(encoded,index){
     size_fit_guidance:"Use my saved profile and fit history where relevant."
    })
   });
+
   if(!(x.products||[]).length){
    box.innerHTML=`<div class="notice">I couldn't find a sufficiently reliable current match. ${esc(x.search_note||"")}</div>`;
    return;
   }
+
   sourcedProductContexts.set(index,o);
-  box.innerHTML=`<div class="live-search-note">${esc(x.search_note||"")}</div>`+
-   x.products.map((p,pi)=>renderLiveProductWithTryOn(p,index,pi)).join("");
+
+  // Render locally here so the retailer result path has no dependency on
+  // a separate product-card renderer being present in the browser scope.
+  const productCards=x.products.map((p,pi)=>{
+   const url=safeProductUrl(p.url||"");
+   const image=p.image_url
+    ? `<img class="live-product-img" src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`
+    : "";
+   const payload=encodeURIComponent(JSON.stringify(p));
+
+   return `<div class="live-product-card selectable-product">${image}<div class="live-product-body">
+    <div class="row between">
+     <div><small>${esc(p.brand||p.retailer||"")}</small><h4>${esc(p.name||"Product")}</h4></div>
+     <b>${esc(p.price||"Price check")}</b>
+    </div>
+    <p>${esc(p.why_it_matches||"")}</p>
+    <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
+    <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
+    <div class="row between product-footer">
+     <span class="confidence">${esc(p.confidence||"")} confidence</span>
+     <div class="product-actions">
+      <button class="primary try-product-btn" type="button" onclick="tryProductOnMe('${payload}',${index},${pi})">Try on me</button>
+      <a class="ghost product-link" href="${url}" target="_blank" rel="noopener">View retailer</a>
+     </div>
+    </div>
+    <div id="productTryOn-${index}-${pi}" class="product-tryon-result"></div>
+   </div></div>`;
+  }).join("");
+
+  box.innerHTML=`<div class="retailer-search-complete">
+    <span>Retailer search complete</span>
+    <small>${esc(x.search_note||"Current matches found for your recommendation.")}</small>
+   </div>${productCards}`;
+
  }catch(err){
-  box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+  box.innerHTML=`<div class="notice"><b>Retailer search couldn't finish.</b><br>${esc(err.message)}</div>`;
  }
 }
 

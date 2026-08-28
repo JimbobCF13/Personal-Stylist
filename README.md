@@ -346,3 +346,9 @@ The app now keeps the garment detail page stable and updates only the Brand Inte
 
 ## V4.5 Try actual products on me
 Live retailer results from a Stylist recommendation now include **Try on me**. Where the retailer exposes a usable product image, the app uses it alongside the user's real wardrobe and saved likeness to generate a personalised preview of that specific product. If an image is unavailable, it falls back to reliable product metadata. The result remains an AI styling visualisation rather than an exact fit guarantee.
+
+
+## V4.5.1 retailer search reliability
+- Removes the retailer-result rendering dependency that could produce a `renderLiveProduct` browser error after a successful live search.
+- Product cards are now rendered directly by the Find This Piece flow.
+- Makes the active search much more visible with a larger loading panel, animated spinner, explicit live-search explanation and a completion state.

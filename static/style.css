@@ -237,3 +237,29 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 .tryon-loading small{display:block;color:var(--muted);margin-top:2px}
 .product-tryon-visual{margin-top:10px}
 .selectable-product{transition:border-color .15s ease}
+
+/* V4.5.1 clearer live retailer search */
+.retailer-search-state{
+ display:flex;align-items:flex-start;gap:14px;margin:12px 0;
+ padding:17px;border:1px solid #d9d9d4;border-radius:16px;background:#f8f8f5;
+}
+.retailer-search-state b{display:block;font-size:14px;margin-bottom:5px}
+.retailer-search-state p{margin:0 0 5px;font-size:12px;line-height:1.45;color:#444}
+.retailer-search-state small{display:block;color:#7c7c77;font-size:10px;line-height:1.4}
+.retailer-search-spinner{
+ width:22px;height:22px;flex:0 0 22px;border-radius:50%;
+ border:2px solid #d2d2cd;border-top-color:#111;
+ animation:retailerSpin .8s linear infinite;margin-top:1px
+}
+@keyframes retailerSpin{to{transform:rotate(360deg)}}
+.retailer-search-complete{
+ display:flex;justify-content:space-between;align-items:center;gap:12px;
+ margin:12px 0;padding:10px 12px;border-radius:12px;background:#f1f3ef;
+ font-size:10px;color:#555
+}
+.retailer-search-complete span{font-weight:750;color:#26372b}
+.retailer-search-complete small{text-align:right;max-width:70%;line-height:1.35}
+@media(max-width:520px){
+ .retailer-search-complete{display:block}
+ .retailer-search-complete small{display:block;max-width:none;text-align:left;margin-top:3px}
+}
