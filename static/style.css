@@ -229,3 +229,11 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .detail-columns{grid-template-columns:1fr}
  .research-grid{grid-template-columns:1fr}
 }
+
+.product-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.try-product-btn{padding:9px 12px;font-size:11px}
+.product-tryon-result{margin-top:10px}
+.tryon-loading{display:flex;align-items:center;gap:10px;padding:14px;border-radius:13px;background:#f5f5f3;font-size:12px}
+.tryon-loading small{display:block;color:var(--muted);margin-top:2px}
+.product-tryon-visual{margin-top:10px}
+.selectable-product{transition:border-color .15s ease}

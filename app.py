@@ -1665,6 +1665,141 @@ def stylist_v4(req: StylistV4Request):
     result["outfits"] = result.get("outfits", [])[:max_options]
     return result
 
+
+class ProductTryOnRequest(BaseModel):
+    garment_ids: list[int]
+    product_name: str
+    product_brand: Optional[str] = ""
+    product_retailer: Optional[str] = ""
+    product_image_url: Optional[str] = ""
+    product_description: Optional[str] = ""
+    product_colour: Optional[str] = ""
+    product_material: Optional[str] = ""
+    product_fit: Optional[str] = ""
+    outfit_label: Optional[str] = "Outfit"
+    outfit_reason: Optional[str] = ""
+    use_my_likeness: Optional[bool] = True
+
+@app.post("/api/product-tryon")
+def product_tryon(req: ProductTryOnRequest):
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(400, "OpenAI image generation is not connected.")
+
+    ids=[int(x) for x in req.garment_ids if isinstance(x,int) or str(x).isdigit()]
+    if not ids:
+        raise HTTPException(400, "This outfit does not contain any saved wardrobe garments.")
+
+    con=db()
+    ph=",".join("?" for _ in ids)
+    rows=[dict(r) for r in con.execute(f"SELECT * FROM garments WHERE id IN ({ph})",ids).fetchall()]
+    model_photos=[dict(r) for r in con.execute("SELECT * FROM model_photos ORDER BY id ASC LIMIT 4").fetchall()]
+    con.close()
+
+    by_id={g["id"]:g for g in rows}
+    garments=[by_id[i] for i in ids if i in by_id]
+    if not garments:
+        raise HTTPException(404,"The wardrobe pieces could not be found.")
+
+    garment_files=[]; descriptions=[]
+    for n,g in enumerate(garments,start=1):
+        descriptions.append(
+            f"{n}. {g.get('brand') or ''} {g.get('garment_type') or g.get('category') or 'garment'}; "
+            f"colour {g.get('colour') or 'unknown'}; material {g.get('material') or 'unknown'}; "
+            f"fit {g.get('fit_cut') or 'unknown'}."
+        )
+        rel=str(g.get("image_path") or "").lstrip("/")
+        p=DATA_DIR/rel if rel.startswith(("uploads/","cleaned/","generated/","model-photos/")) else ROOT/rel
+        if p.exists(): garment_files.append(p)
+
+    likeness_files=[]
+    if req.use_my_likeness:
+        for mp in model_photos:
+            p=MODEL_PHOTOS/Path(mp.get("image_path") or "").name
+            if p.exists(): likeness_files.append(p)
+        if not likeness_files:
+            raise HTTPException(400,"Add at least one photo in My Model before using Try on me.")
+
+    product_file=None
+    if req.product_image_url:
+        try:
+            import urllib.request
+            from urllib.parse import urlparse
+            parsed=urlparse(req.product_image_url)
+            if parsed.scheme in ("http","https"):
+                request=urllib.request.Request(req.product_image_url,headers={"User-Agent":"Mozilla/5.0"})
+                with urllib.request.urlopen(request,timeout=12) as r:
+                    data=r.read(12*1024*1024)
+                if data:
+                    tmp=GENERATED/f"product_ref_{uuid.uuid4().hex}.img"
+                    tmp.write_bytes(data)
+                    product_file=normalise_image_for_ai(tmp)
+                    try:
+                        if tmp.exists() and tmp!=product_file: tmp.unlink()
+                    except Exception: pass
+        except Exception:
+            product_file=None
+
+    prompt=f"""
+Create a photorealistic full-body menswear visualisation.
+
+SPECIFIC RETAILER PRODUCT TO ADD:
+Name: {req.product_name}
+Brand: {req.product_brand or 'not specified'}
+Retailer: {req.product_retailer or 'not specified'}
+Colour: {req.product_colour or 'not specified'}
+Material: {req.product_material or 'not specified'}
+Fit: {req.product_fit or 'not specified'}
+Description: {req.product_description or 'not specified'}
+
+OWNED WARDROBE:
+{chr(10).join(descriptions)}
+
+Outfit: {req.outfit_label or 'Outfit'}
+Reason: {req.outfit_reason or ''}
+
+If a retailer product image is supplied, reproduce that product as closely as reasonably possible:
+colour, silhouette, lapels/collar, buttons, length, texture, pattern and visible construction.
+Use the supplied wardrobe images for owned pieces. Show the complete outfit head-to-toe.
+If personal reference photos are supplied, preserve the user's visible identity, face, hair,
+skin tone and overall proportions as closely as reasonably possible.
+Do not invent visible logos. This is an AI styling visualisation, not a guarantee of exact fit.
+"""
+
+    client=OpenAI()
+    image_model=os.getenv("OPENAI_IMAGE_MODEL","gpt-image-2")
+    refs=[]
+    if req.use_my_likeness: refs.extend(likeness_files[:3])
+    if product_file and product_file.exists(): refs.append(product_file)
+    refs.extend(garment_files[:5])
+    opened=[]
+    try:
+        if refs:
+            opened=[open(p,"rb") for p in refs[:8]]
+            result=client.images.edit(model=image_model,image=opened,prompt=prompt,size="1024x1536",quality="medium")
+        else:
+            result=client.images.generate(model=image_model,prompt=prompt,size="1024x1536",quality="medium")
+    except Exception as exc:
+        raise HTTPException(502,f"Product try-on failed: {str(exc)[:350]}") from exc
+    finally:
+        for f in opened:
+            try:f.close()
+            except Exception:pass
+
+    if not result or not getattr(result,"data",None):
+        raise HTTPException(502,"The image model did not return an image.")
+    b64=getattr(result.data[0],"b64_json",None)
+    if not b64:
+        raise HTTPException(502,"The image model returned an unsupported image response.")
+
+    filename=f"product_tryon_{uuid.uuid4().hex}.png"
+    out=GENERATED/filename
+    out.write_bytes(base64.b64decode(b64))
+    return {
+        "ok":True,
+        "image_path":f"/generated/{filename}",
+        "notice":"AI try-on using the selected retailer product and your wardrobe. Useful for judging the overall look, not exact fit."
+    }
+
 class Feedback(BaseModel):
     outfit: dict
     rating: str

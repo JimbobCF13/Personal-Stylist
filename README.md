@@ -343,3 +343,6 @@ The emoji tile dashboard has been replaced with a quieter editorial menswear lay
 Fixes visual flashing during Brand Intelligence research.
 
 The app now keeps the garment detail page stable and updates only the Brand Intelligence panel while background research is running.
+
+## V4.5 Try actual products on me
+Live retailer results from a Stylist recommendation now include **Try on me**. Where the retailer exposes a usable product image, the app uses it alongside the user's real wardrobe and saved likeness to generate a personalised preview of that specific product. If an image is unavailable, it falls back to reliable product metadata. The result remains an AI styling visualisation rather than an exact fit guarantee.

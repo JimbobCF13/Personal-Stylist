@@ -628,6 +628,7 @@ function setupV4Dictation(){
 }
 
 const v4VisualCache=new Map();
+const sourcedProductContexts=new Map();
 
 function renderV4Outfit(o,index){
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
@@ -722,11 +723,69 @@ async function v4FindPiece(encoded,index){
    box.innerHTML=`<div class="notice">I couldn't find a sufficiently reliable current match. ${esc(x.search_note||"")}</div>`;
    return;
   }
+  sourcedProductContexts.set(index,o);
   box.innerHTML=`<div class="live-search-note">${esc(x.search_note||"")}</div>`+
-   x.products.map(renderLiveProduct).join("");
+   x.products.map((p,pi)=>renderLiveProductWithTryOn(p,index,pi)).join("");
  }catch(err){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
  }
+}
+
+
+function safeProductUrl(url){
+ try{
+  const u=new URL(url);
+  return (u.protocol==="https:"||u.protocol==="http:")?u.href:"#";
+ }catch{return "#";}
+}
+
+function renderLiveProduct(p){
+ const url=safeProductUrl(p.url||"");
+ const image=p.image_url?`<img class="live-product-img" src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`:"";
+ return `<div class="live-product-card">${image}<div class="live-product-body">
+  <div class="row between"><div><small>${esc(p.brand||p.retailer||"")}</small><h4>${esc(p.name||"Product")}</h4></div><b>${esc(p.price||"Price check")}</b></div>
+  <p>${esc(p.why_it_matches||"")}</p>
+  <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
+  <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
+  <div class="product-footer"><a class="ghost product-link" href="${url}" target="_blank" rel="noopener">View retailer</a></div>
+ </div></div>`;
+}
+
+function renderLiveProductWithTryOn(p,contextIndex,productIndex){
+ const url=safeProductUrl(p.url||"");
+ const image=p.image_url?`<img class="live-product-img" src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`:"";
+ const payload=encodeURIComponent(JSON.stringify(p));
+ return `<div class="live-product-card selectable-product">${image}<div class="live-product-body">
+  <div class="row between"><div><small>${esc(p.brand||p.retailer||"")}</small><h4>${esc(p.name||"Product")}</h4></div><b>${esc(p.price||"Price check")}</b></div>
+  <p>${esc(p.why_it_matches||"")}</p>
+  <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
+  <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
+  <div class="row between product-footer"><span class="confidence">${esc(p.confidence||"")} confidence</span><div class="product-actions">
+   <button class="primary try-product-btn" type="button" onclick="tryProductOnMe('${payload}',${contextIndex},${productIndex})">Try on me</button>
+   <a class="ghost product-link" href="${url}" target="_blank" rel="noopener">View retailer</a>
+  </div></div>
+  <div id="productTryOn-${contextIndex}-${productIndex}" class="product-tryon-result"></div>
+ </div></div>`;
+}
+
+async function tryProductOnMe(encoded,contextIndex,productIndex){
+ const p=JSON.parse(decodeURIComponent(encoded));
+ const context=sourcedProductContexts.get(contextIndex);
+ const box=$(`productTryOn-${contextIndex}-${productIndex}`);
+ if(!context){
+  box.innerHTML='<div class="notice">Run this Stylist recommendation again so I have the outfit context.</div>'; return;
+ }
+ box.innerHTML='<div class="tryon-loading"><span class="spinner"></span><div><b>Creating your look with this product…</b><small>This can take a little while.</small></div></div>';
+ try{
+  const x=await api("/api/product-tryon",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+   garment_ids:context.owned_garment_ids||[],
+   product_name:p.name||"",product_brand:p.brand||"",product_retailer:p.retailer||"",
+   product_image_url:p.image_url||"",product_description:p.why_it_matches||"",
+   product_colour:p.colour||"",product_material:p.material||"",product_fit:p.fit||"",
+   outfit_label:context.label||"Outfit",outfit_reason:context.why_it_works||"",use_my_likeness:true
+  })});
+  box.innerHTML=`<div class="model-visual product-tryon-visual"><img src="${x.image_path}" alt="AI try-on of selected product"><div class="visual-caption">${esc(x.notice)}</div></div>`;
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
 }
 
 const runStylistV4Btn=$("runStylistV4");
