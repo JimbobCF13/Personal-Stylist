@@ -1,5 +1,5 @@
 
-import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error
+import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
@@ -63,10 +63,10 @@ def canonical_wardrobe_category(category: str = "", garment_type: str = "") -> s
         ("Footwear", ["footwear","shoe","shoes","sneaker","sneakers","trainer","trainers","loafer","loafers","boot","boots","derby","derbies","brogue","brogues","oxford shoe","monk strap","espadrille","slipper"]),
         ("Shorts", ["shorts","swim short","swim shorts"]),
         ("Trousers", ["trouser","trousers","chino","chinos","jean","jeans","jogger","joggers","cargo trouser","cargo pants","pants"]),
-        ("Shirts", ["shirt","shirts","oxford shirt","dress shirt","casual shirt","linen shirt"]),
-        ("Polos & T-Shirts", ["polo","polo shirt","t-shirt","t shirt","tee","tees","tshirt","top","tops"]),
-        ("Knitwear", ["knitwear","jumper","jumpers","sweater","sweaters","cardigan","cardigans","quarter zip","half zip","roll neck","turtleneck","knit"]),
         ("Jackets & Outerwear", ["outerwear","jacket","jackets","coat","coats","blazer","blazers","gilet","gilets","overshirt","overshirts","parka","raincoat","mac"]),
+        ("Knitwear", ["knitwear","jumper","jumpers","sweater","sweaters","cardigan","cardigans","quarter zip","half zip","roll neck","turtleneck","knit"]),
+        ("Polos & T-Shirts", ["polo","polo shirt","t-shirt","t shirt","tee","tees","tshirt","top","tops"]),
+        ("Shirts", ["shirt","shirts","oxford shirt","dress shirt","casual shirt","linen shirt"]),
         ("Accessories", ["accessory","accessories","tie","ties","belt","belts","hat","hats","cap","caps","beanie","scarf","scarves","glove","gloves","bag","bags","watch","watches"]),
     ]
     for canonical, words in rules:
