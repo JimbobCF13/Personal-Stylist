@@ -448,3 +448,11 @@ V4.9 only adds a new independent favourites table. Existing `garments` rows, gar
 - Moves Find this piece results above the large outfit image so its loading state is immediately visible.
 - Find this piece now visibly changes to Searching, scrolls the search panel into view and re-enables when finished.
 - This patch does not modify the wardrobe database or garment image storage.
+
+
+## V4.9.2 Wardrobe Gap Product Search Hotfix
+- Fixes **Find current products** on dynamically generated Wardrobe Gap recommendations.
+- Removes recommendation JSON from inline `onclick` attributes. Apostrophes and punctuation in AI-generated recommendation text could break the inline JavaScript while leaving the button looking normal.
+- Recommendations are now held in an in-memory map and the results area uses one delegated click listener, so dynamically-created buttons are wired reliably.
+- The existing Searching UK retailers loading state remains unchanged.
+- No backend, database, wardrobe row or garment-image changes are included in this patch.

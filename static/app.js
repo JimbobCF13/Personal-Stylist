@@ -1025,6 +1025,7 @@ function persistVisualCache(){
 }
 
 const sourcedProductContexts=new Map();
+const gapRecommendationContexts=new Map();
 
 
 function v4VisualCacheKey(o,useMyLikeness){
@@ -1415,7 +1416,7 @@ async function tryProductOnMe(encoded,contextIndex,productIndex){
 
 
 function renderGapRecommendation(rec,index){
- const payload=encodeURIComponent(JSON.stringify(rec));
+ gapRecommendationContexts.set(index,rec);
  const linked=(rec.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
  const wardrobeStrip=linked.length?`<div class="gap-wardrobe-strip">${linked.slice(0,6).map(g=>`
   <div class="gap-owned-piece">${g.image_path?`<img src="${g.image_path}" alt="">`:""}<span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`).join("")}</div>`:"";
@@ -1434,7 +1435,7 @@ function renderGapRecommendation(rec,index){
   ${wardrobeStrip}
   ${(rec.outfit_ideas||[]).length?`<div class="gap-outfit-ideas"><small>HOW IT WORKS WITH YOUR WARDROBE</small>${rec.outfit_ideas.slice(0,3).map(x=>`<p>${esc(x.description||"")}</p>`).join("")}</div>`:""}
   ${rec.size_fit_guidance?`<div class="notice"><b>Fit guidance:</b> ${esc(rec.size_fit_guidance)}</div>`:""}
-  <div class="gap-actions"><button class="primary" type="button" onclick="searchGapProducts('${payload}',${index},this)">Find current products</button></div>
+  <div class="gap-actions"><button class="primary gap-product-search-btn" type="button" data-gap-search="${index}">Find current products</button></div>
   <div id="gapProducts-${index}" class="product-results"></div>
  </article>`;
 }
@@ -1472,6 +1473,7 @@ async function analyseWardrobeGaps(){
   let x={};try{x=await r.json()}catch{}
   if(!r.ok)throw new Error(x.detail||`Wardrobe analysis failed (${r.status}).`);
   const recs=x.recommendations||[];
+  gapRecommendationContexts.clear();
   box.innerHTML=`<div class="notice gap-summary"><b>Wardrobe analysis</b><p>${esc(x.summary||"")}</p></div>`+
    (recs.length?recs.map(renderGapRecommendation).join(""):'<div class="notice">The analysis completed but did not return a useful recommendation. Try making the request more specific.</div>');
  }catch(err){
@@ -1485,8 +1487,7 @@ async function analyseWardrobeGaps(){
  }
 }
 
-async function searchGapProducts(encoded,index,button){
- const rec=JSON.parse(decodeURIComponent(encoded));
+async function searchGapProducts(rec,index,button){
  const box=$(`gapProducts-${index}`);
  if(!box)return;
  const original=button?.textContent||"Find current products";
@@ -1524,6 +1525,19 @@ async function searchGapProducts(encoded,index,button){
 
 const analyseGapsBtn=$("analyseGaps");
 if(analyseGapsBtn)analyseGapsBtn.addEventListener("click",analyseWardrobeGaps);
+
+$("gapResults")?.addEventListener("click",e=>{
+ const button=e.target.closest("[data-gap-search]");
+ if(!button)return;
+ const index=Number(button.dataset.gapSearch);
+ const rec=gapRecommendationContexts.get(index);
+ if(!rec){
+  const box=$(`gapProducts-${index}`);
+  if(box)box.innerHTML='<div class="notice">This recommendation is no longer available. Please run Analyse my wardrobe again.</div>';
+  return;
+ }
+ searchGapProducts(rec,index,button);
+});
 
 const runStylistV4Btn=$("runStylistV4");
 if(runStylistV4Btn){
