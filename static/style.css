@@ -309,3 +309,13 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 @media(max-width:560px){.fit-form-grid{grid-template-columns:1fr}}
 
 #garments{display:block}.wardrobe-group{margin:20px 0 34px}.wardrobe-group-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:0 2px 9px;border-bottom:1px solid var(--line);margin-bottom:13px}.wardrobe-group-head h4{margin:0;font-size:17px}.wardrobe-group-head span{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.08em}.wardrobe-group-grid{display:grid}.garment-no-photo{width:100%;height:100%;min-height:180px;border:0;background:#f3f3f0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#777}.add-divider{display:flex;align-items:center;gap:10px;margin:13px 0;color:#aaa;font-size:9px;text-transform:uppercase}.add-divider:before,.add-divider:after{content:"";height:1px;background:var(--line);flex:1}.url-import-card{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fafaf8}.url-import-card.dragging{border-color:#111;background:#f3f3ef}.url-import-card b{display:block;font-size:13px;margin:4px 0}.url-import-card p{font-size:10px;color:#777}.url-import-row{display:flex;gap:8px}.url-import-row input{flex:1}.url-import-status{display:block;min-height:14px;margin-top:7px;color:#6f6f69;font-size:9px}@media(max-width:600px){.url-import-row{display:block}.url-import-row button{width:100%;margin-top:7px}}
+
+/* V4.8.4 add/replace photo on existing garments */
+.edit-photo-panel{margin-bottom:14px}
+.edit-photo-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+.compact-upload{flex:1;min-width:180px}
+.edit-no-photo{min-height:180px;border:1px dashed var(--line);border-radius:14px;background:#f6f6f3;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;color:#666}
+.edit-no-photo b{font-size:13px}.edit-no-photo small{font-size:10px;color:#888}
+.edit-photo-status{display:block;min-height:15px;margin-top:7px;color:#6f6f69;font-size:9px}
+.detail-no-photo{height:100%;min-height:220px;background:#f5f5f2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#777;border-radius:14px}
+.detail-no-photo b{font-size:12px}.detail-no-photo small{font-size:9px;color:#999}

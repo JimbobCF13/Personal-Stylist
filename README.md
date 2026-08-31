@@ -387,3 +387,14 @@ When a retailer blocks Render/cloud-server page access with HTTP 403 or similar 
 - URL imports track a successful imported product independently of whether an image was available.
 - Live-web fallback now searches more deliberately for material and explicit fit information.
 - Season and formality may be filled as conservative stylist classifications based on the identified garment and evidenced materials/design. Material remains blank when it cannot be substantiated.
+
+
+## V4.8.4 Add or replace photos after saving
+Existing wardrobe garments can now receive a photo at any time, including URL-imported records that were originally saved without one.
+
+From Edit Garment the user can:
+- Take Photo;
+- Choose Photo / Screenshot from the device;
+- replace an existing garment photo.
+
+The new photo is normalised and converted into the usual catalogue display image, while all existing garment metadata, retailer research, fit information and notes remain unchanged.

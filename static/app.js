@@ -176,7 +176,7 @@ async function loadGarmentDetail(id){
    : `<div class="detail-history"><small>OUTFIT HISTORY</small><p>This garment has not appeared in rated outfits yet.</p></div>`;
 
   box.innerHTML=`<div class="garment-detail-hero">
-    <div class="detail-image-wrap"><img src="${g.image_path}" alt="${title}"></div>
+    <div class="detail-image-wrap">${g.image_path?`<img src="${g.image_path}" alt="${title}">`:`<div class="detail-no-photo"><b>No photo yet</b><small>Use Add photo / edit garment to attach one.</small></div>`}</div>
     <div class="detail-summary">
      <small>${esc(g.category||"WARDROBE ITEM")}</small>
      <h2>${title}</h2>
@@ -203,6 +203,7 @@ async function loadGarmentDetail(id){
    <div id="fitReviewPanel">${renderFitReviewPanel(g)}</div>
    <div id="brandIntelligencePanel">${renderEnrichmentPanel(g)}</div>`;
 
+  $("detailEdit").textContent=g.image_path?"Edit garment":"Add photo / edit garment";
   $("detailEdit").onclick=()=>editGarment(g.id);
 
   if(g.enrichment_status==="researching"){
@@ -294,7 +295,16 @@ function editGarment(id){
  const g=garments.find(x=>x.id===id);
  if(!g)return;
  editingGarmentId=id;
- $("editPreview").src=g.image_path;
+ if(g.image_path){
+  $("editPreview").src=g.image_path;
+  $("editPreview").classList.remove("hidden");
+  $("editNoPhoto").classList.add("hidden");
+ }else{
+  $("editPreview").removeAttribute("src");
+  $("editPreview").classList.add("hidden");
+  $("editNoPhoto").classList.remove("hidden");
+ }
+ $("editPhotoStatus").textContent="";
 
  const map={
   category:"e_category",
@@ -314,6 +324,39 @@ function editGarment(id){
  Object.entries(map).forEach(([k,id])=>{$(id).value=g[k]||""});
  go("edit");
 }
+
+
+async function replaceGarmentPhoto(file){
+ if(!file || !editingGarmentId)return;
+ const status=$("editPhotoStatus");
+ const camera=$("editCameraPhoto"),library=$("editLibraryPhoto");
+ status.textContent="Uploading and preparing photo…";
+ camera.disabled=true;library.disabled=true;
+ try{
+  const fd=new FormData();
+  fd.append("file",file);
+  const x=await api(`/api/garments/${editingGarmentId}/photo`,{method:"POST",body:fd});
+  $("editPreview").src=x.image_path;
+  $("editPreview").classList.remove("hidden");
+  $("editNoPhoto").classList.add("hidden");
+  status.textContent="Photo added. Your garment details have been kept.";
+  await loadGarments();
+  const fresh=garments.find(g=>g.id===editingGarmentId);
+  if(fresh){
+   fresh.image_path=x.image_path;
+   fresh.original_image_path=x.original_image_path;
+  }
+ }catch(err){
+  status.textContent=`Could not add photo: ${err.message}`;
+  alert(`I couldn't add that photo: ${err.message}`);
+ }finally{
+  camera.disabled=false;library.disabled=false;
+  camera.value="";library.value="";
+ }
+}
+
+$("editCameraPhoto").addEventListener("change",e=>replaceGarmentPhoto(e.target.files?.[0]));
+$("editLibraryPhoto").addEventListener("change",e=>replaceGarmentPhoto(e.target.files?.[0]));
 
 $("saveEdit").addEventListener("click",async()=>{
  if(!editingGarmentId)return;

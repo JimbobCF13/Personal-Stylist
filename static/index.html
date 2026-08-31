@@ -95,7 +95,15 @@
  <div class="section">
   <div class="row between"><h3>Edit Garment</h3><button class="ghost" data-go="wardrobe">Cancel</button></div>
   <div class="card form">
-   <img id="editPreview" class="preview" alt="Garment photo">
+   <div class="edit-photo-panel">
+    <img id="editPreview" class="preview" alt="Garment photo">
+    <div id="editNoPhoto" class="edit-no-photo hidden"><b>No photo yet</b><small>Add a photo or screenshot of this garment.</small></div>
+    <div class="edit-photo-actions">
+     <label class="upload compact-upload"><input id="editCameraPhoto" type="file" accept="image/*" capture="environment"><span>Take Photo</span></label>
+     <label class="upload compact-upload"><input id="editLibraryPhoto" type="file" accept="image/*"><span>Choose Photo / Screenshot</span></label>
+    </div>
+    <small id="editPhotoStatus" class="edit-photo-status"></small>
+   </div>
    <div class="two"><label>CATEGORY<input id="e_category"></label><label>GARMENT TYPE<input id="e_garment_type"></label></div>
    <div class="two"><label>BRAND<input id="e_brand"></label><label>MODEL / LINE<input id="e_model_line"></label></div>
    <div class="three"><label>SIZE<input id="e_labelled_size"></label><label>COLOUR<input id="e_colour"></label><label>MATERIAL<input id="e_material"></label></div>

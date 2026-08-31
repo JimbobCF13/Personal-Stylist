@@ -949,6 +949,55 @@ async def analyse_garment(file: UploadFile = File(...)):
       "ai_enabled": result is not None
     }
 
+
+@app.post("/api/garments/{gid}/photo")
+async def replace_garment_photo(gid: int, file: UploadFile = File(...)):
+    con=db()
+    row=con.execute("SELECT id,image_path,original_image_path FROM garments WHERE id=?",(gid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404,"Garment not found.")
+
+    suffix=Path(file.filename or "photo").suffix.lower() or ".upload"
+    raw=UPLOADS/f"{uuid.uuid4().hex}{suffix}"
+    data=await file.read()
+    if not data:
+        con.close()
+        raise HTTPException(400,"The uploaded photo was empty.")
+    if len(data)>20*1024*1024:
+        con.close()
+        raise HTTPException(400,"That photo is too large. Please choose an image under 20 MB.")
+    raw.write_bytes(data)
+
+    try:
+        normal=normalise_image_for_ai(raw)
+        catalogue=create_catalogue_image(normal)
+        display=(f"/cleaned/{catalogue.name}" if catalogue.parent==CLEANED else f"/uploads/{normal.name}")
+        original=f"/uploads/{normal.name}"
+    except Exception:
+        con.close()
+        raise
+
+    old_display=row["image_path"] or ""
+    old_original=row["original_image_path"] or ""
+    con.execute("UPDATE garments SET image_path=?,original_image_path=? WHERE id=?",(display,original,gid))
+    con.commit()
+    con.close()
+
+    # Best-effort cleanup of the previous files once the DB update succeeds.
+    for rel in {old_display,old_original}:
+        if not rel or rel in {display,original}:
+            continue
+        try:
+            rel_path=str(rel).lstrip("/")
+            if rel_path.startswith(("cleaned/","uploads/")):
+                p=DATA_DIR/rel_path
+                if p.exists():p.unlink()
+        except Exception:
+            pass
+
+    return {"ok":True,"id":gid,"image_path":display,"original_image_path":original}
+
 @app.post("/api/garments")
 async def add_garment(
     image_path: str = Form(""),
