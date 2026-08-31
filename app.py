@@ -1562,8 +1562,10 @@ def _fetch_product_page_meta(url: str) -> dict:
         if image:image=urljoin(url,image)
         text=_re.sub(r"(?is)<script.*?</script>|<style.*?</style>"," ",raw); text=_re.sub(r"(?s)<[^>]+>"," ",text); text=_html.unescape(_re.sub(r"\s+"," ",text)).strip()[:18000]
         return {"title":title,"description":description,"image_url":image,"page_text":text}
-    except HTTPException:raise
-    except Exception as exc:raise HTTPException(502,f"I couldn't read that retailer page: {str(exc)[:220]}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        return {"title":"","description":"","image_url":"","page_text":"","direct_fetch_error":str(exc)[:220]}
 
 def _download_import_image(image_url: str) -> tuple[str,str]:
     if not image_url or not _public_http_url(image_url):return "",""
@@ -1583,17 +1585,85 @@ def _download_import_image(image_url: str) -> tuple[str,str]:
 
 @app.post("/api/import-product-url")
 def import_product_url(req: ProductUrlImportRequest):
-    url=(req.url or "").strip(); meta=_fetch_product_page_meta(url)
-    prompt=f"""Extract the menswear product details from this retailer page. The user owns or has bought the item.\nURL: {url}\nPAGE TITLE: {meta.get('title') or ''}\nPAGE DESCRIPTION: {meta.get('description') or ''}\nPAGE TEXT EXCERPT:\n{meta.get('page_text') or ''}\nUse only supported facts. Never guess size, model, fabric, colour or fit. labelled_size should normally be empty. Keep notes factual and concise."""
+    url=(req.url or "").strip()
+    if not _public_http_url(url):
+        raise HTTPException(400,"Please use a normal public retailer product URL.")
+
+    meta=_fetch_product_page_meta(url)
+    direct_blocked=bool(meta.get("direct_fetch_error"))
     analysis=None
+    import_method="direct_page"
+
     if os.getenv("OPENAI_API_KEY") and OpenAI is not None:
-        try:
-            response=OpenAI().responses.create(model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},input=prompt,text={"format":{"type":"json_schema","name":"product_url_import","schema":PRODUCT_URL_IMPORT_SCHEMA,"strict":True}}); analysis=json.loads(response.output_text)
-        except Exception:analysis=None
-    if not analysis:analysis={"category":"Other","garment_type":meta.get("title") or "Imported product","brand":"","model_line":"","labelled_size":"","colour":"","material":"","pattern":"","fit_cut":"","season":"","formality":"","notes":meta.get("description") or "Imported from retailer page.","confidence":0}
+        client=OpenAI()
+
+        if not direct_blocked and (meta.get("title") or meta.get("page_text")):
+            prompt=f"""Extract the menswear product details from this retailer page. The user owns or has bought the item.
+URL: {url}
+PAGE TITLE: {meta.get('title') or ''}
+PAGE DESCRIPTION: {meta.get('description') or ''}
+PAGE TEXT EXCERPT:
+{meta.get('page_text') or ''}
+
+Use only supported facts. Never guess size, model, fabric, colour or fit.
+labelled_size should normally be empty because the page cannot establish which size the user owns.
+Keep notes factual and concise."""
+            try:
+                response=client.responses.create(
+                    model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+                    reasoning={"effort":"low"},
+                    input=prompt,
+                    text={"format":{"type":"json_schema","name":"product_url_import","schema":PRODUCT_URL_IMPORT_SCHEMA,"strict":True}}
+                )
+                analysis=json.loads(response.output_text)
+            except Exception:
+                analysis=None
+
+        if analysis is None:
+            import_method="web_search_fallback"
+            search_prompt=f"""Identify the exact menswear product represented by this retailer URL and extract supported facts from the live web.
+
+EXACT PRODUCT URL:
+{url}
+
+The retailer may block direct server access. Use live web search, prioritising the official brand/retailer result and reliable indexed snippets.
+
+Rules:
+- Return only facts that can be substantiated.
+- Never invent colour, material, fit, model/line, season or formality.
+- labelled_size must be empty because the URL does not establish which size the user owns.
+- category and garment_type should describe the exact item.
+- notes should be short and factual.
+- If exact identification is uncertain, leave uncertain fields empty and use low confidence.
+"""
+            try:
+                response=client.responses.create(
+                    model=os.getenv("OPENAI_SHOPPING_MODEL",os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
+                    reasoning={"effort":"medium"},
+                    tools=[{"type":"web_search"}],
+                    tool_choice="auto",
+                    include=["web_search_call.action.sources"],
+                    input=search_prompt,
+                    text={"format":{"type":"json_schema","name":"product_url_import","schema":PRODUCT_URL_IMPORT_SCHEMA,"strict":True}}
+                )
+                analysis=json.loads(response.output_text)
+            except Exception as exc:
+                raise HTTPException(502,f"I couldn't identify that product from the live web either: {str(exc)[:220]}")
+
+    if analysis is None:
+        from urllib.parse import urlparse
+        slug=urlparse(url).path.rstrip("/").split("/")[-1].replace("-"," ").strip()
+        analysis={"category":"Other","garment_type":slug.title() or "Imported product","brand":"","model_line":"","labelled_size":"","colour":"","material":"","pattern":"","fit_cut":"","season":"","formality":"","notes":"Imported from retailer product URL.","confidence":0}
+        import_method="url_only"
+
     analysis["category"]=canonical_wardrobe_category(analysis.get("category") or "",analysis.get("garment_type") or "")
     display,original=_download_import_image(meta.get("image_url") or "")
-    return {"ok":True,"source_url":url,"image_path":display,"original_image_path":original,"image_available":bool(display),"analysis":analysis,"page_title":meta.get("title") or ""}
+    return {
+        "ok":True,"source_url":url,"image_path":display,"original_image_path":original,
+        "image_available":bool(display),"analysis":analysis,"page_title":meta.get("title") or "",
+        "import_method":import_method,"direct_page_blocked":direct_blocked
+    }
+
 
 class ProductSourceRequest(BaseModel):
     search_phrase: str
