@@ -373,3 +373,14 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 @media(max-width:560px){
  .stylist-session-note{display:block}.stylist-session-note span{display:block;margin-top:3px}
 }
+
+/* V4.9.1 shopping actions */
+.shopping-working{display:flex;align-items:flex-start;gap:14px;margin:14px 0;padding:17px;border:1px solid var(--line);border-radius:16px;background:#f8f8f5}
+.shopping-working b{display:block;font-size:13px;margin-bottom:4px}.shopping-working p{font-size:10px;line-height:1.45;color:#555;margin:0 0 5px}.shopping-working small{font-size:9px;color:#888}
+.gap-summary{margin:14px 0}.gap-summary p{margin:4px 0 0}.gap-recommendation{margin:14px 0}
+.gap-score{text-align:right;white-space:nowrap}.gap-score b{font-size:22px}.gap-score small{display:block;font-size:8px;color:#888}
+.gap-specs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.gap-specs span{padding:5px 8px;background:#f5f5f2;border-radius:999px;font-size:9px}
+.gap-wardrobe-strip{display:flex;gap:7px;overflow-x:auto;padding:8px 0}.gap-owned-piece{flex:0 0 85px}.gap-owned-piece img{width:85px;height:100px;object-fit:contain;background:#f4f4f1;border-radius:8px}.gap-owned-piece span{display:block;font-size:8px;line-height:1.25;margin-top:3px}
+.gap-outfit-ideas{margin:9px 0}.gap-outfit-ideas>small{font-size:8px;letter-spacing:.08em;color:#888;font-weight:800}.gap-outfit-ideas p{font-size:10px;line-height:1.4;margin:5px 0;padding-left:9px;border-left:2px solid #e3e3df}
+.gap-actions{margin-top:12px}.v4-product-results:not(:empty){margin:10px 0 14px;padding-top:4px}
+.find-piece-btn:disabled,#analyseGaps:disabled{cursor:wait;opacity:.7}

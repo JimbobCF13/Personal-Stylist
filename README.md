@@ -438,3 +438,13 @@ This is a front-end/navigation-only release. It does not alter, migrate, delete 
 
 ### Wardrobe preservation
 V4.9 only adds a new independent favourites table. Existing `garments` rows, garment images and wardrobe category data are not migrated, rewritten or deleted.
+
+
+## V4.9.1 Shopping Actions Hotfix
+- Restores the missing click handler behind Analyse my wardrobe.
+- Shows an immediate, prominent wardrobe-analysis loading state and a recoverable 75-second timeout.
+- Renders wardrobe-gap recommendations with synergy, specification, relevant owned pieces and outfit ideas.
+- Adds live product search from each gap recommendation.
+- Moves Find this piece results above the large outfit image so its loading state is immediately visible.
+- Find this piece now visibly changes to Searching, scrolls the search panel into view and re-enables when finished.
+- This patch does not modify the wardrobe database or garment image storage.

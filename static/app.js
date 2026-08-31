@@ -1143,10 +1143,10 @@ function renderV4Outfit(o,index){
   <div class="v4-actions">
    <button class="primary favourite-look-btn" type="button" onclick="saveFavouriteOutfit('${payload}',${index},this)">☆ Favourite</button>
    <button class="ghost" type="button" onclick="v4Visualise('${payload}',${index},false)">See on model</button>
-   ${o.missing_piece?`<button class="ghost" type="button" onclick="v4FindPiece('${payload}',${index})">Find this piece</button>`:""}
+   ${o.missing_piece?`<button class="ghost find-piece-btn" type="button" onclick="v4FindPiece('${payload}',${index},this)">Find this piece</button>`:""}
   </div>
+  <div id="v4Products-${index}" class="product-results v4-product-results"></div>
   <div id="v4Visual-${index}" class="model-visual"><div class="visual-loading">Creating your look…</div></div>
-  <div id="v4Products-${index}" class="product-results"></div>
  </div>`;
 }
 
@@ -1187,9 +1187,11 @@ async function v4Visualise(encoded,index,useMyLikeness){
  }
 }
 
-async function v4FindPiece(encoded,index){
+async function v4FindPiece(encoded,index,button){
  const o=JSON.parse(decodeURIComponent(encoded));
  const box=$(`v4Products-${index}`);
+ const original=button?.textContent||"Find this piece";
+ if(button){button.disabled=true;button.innerHTML='<span class="inline-spinner" aria-hidden="true"></span> Searching…';}
 
  box.innerHTML=`<div class="retailer-search-state">
    <span class="retailer-search-spinner"></span>
@@ -1199,6 +1201,7 @@ async function v4FindPiece(encoded,index){
     <small>Please wait — a live retailer search can take a little while.</small>
    </div>
   </div>`;
+ requestAnimationFrame(()=>box.scrollIntoView({behavior:"smooth",block:"center"}));
 
  try{
   const x=await api("/api/source-products",{
@@ -1259,6 +1262,8 @@ async function v4FindPiece(encoded,index){
 
  }catch(err){
   box.innerHTML=`<div class="notice"><b>Retailer search couldn't finish.</b><br>${esc(err.message)}</div>`;
+ }finally{
+  if(button){button.disabled=false;button.textContent=original;}
  }
 }
 
@@ -1407,6 +1412,118 @@ async function tryProductOnMe(encoded,contextIndex,productIndex){
   box.innerHTML=`<div class="model-visual product-tryon-visual"><img src="${x.image_path}" alt="AI try-on of selected product"><div class="visual-caption">${esc(x.notice)}</div></div>`;
  }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
 }
+
+
+function renderGapRecommendation(rec,index){
+ const payload=encodeURIComponent(JSON.stringify(rec));
+ const linked=(rec.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
+ const wardrobeStrip=linked.length?`<div class="gap-wardrobe-strip">${linked.slice(0,6).map(g=>`
+  <div class="gap-owned-piece">${g.image_path?`<img src="${g.image_path}" alt="">`:""}<span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`).join("")}</div>`:"";
+ const specs=[
+  rec.ideal_colour&&`Colour: ${rec.ideal_colour}`,
+  rec.ideal_material&&`Material: ${rec.ideal_material}`,
+  rec.ideal_fit&&`Fit: ${rec.ideal_fit}`,
+  rec.formality&&`Formality: ${rec.formality}`
+ ].filter(Boolean);
+
+ return `<article class="card gap-recommendation">
+  <div class="row between gap-title-row"><div><span class="rank-pill">#${index+1}</span><h3>${esc(rec.title||"Recommended addition")}</h3></div>
+   <div class="gap-score"><b>${esc(rec.wardrobe_synergy_score??"")}</b><small>/100 synergy</small></div></div>
+  <p>${esc(rec.why_this_adds_value||"")}</p>
+  ${specs.length?`<div class="gap-specs">${specs.map(s=>`<span>${esc(s)}</span>`).join("")}</div>`:""}
+  ${wardrobeStrip}
+  ${(rec.outfit_ideas||[]).length?`<div class="gap-outfit-ideas"><small>HOW IT WORKS WITH YOUR WARDROBE</small>${rec.outfit_ideas.slice(0,3).map(x=>`<p>${esc(x.description||"")}</p>`).join("")}</div>`:""}
+  ${rec.size_fit_guidance?`<div class="notice"><b>Fit guidance:</b> ${esc(rec.size_fit_guidance)}</div>`:""}
+  <div class="gap-actions"><button class="primary" type="button" onclick="searchGapProducts('${payload}',${index},this)">Find current products</button></div>
+  <div id="gapProducts-${index}" class="product-results"></div>
+ </article>`;
+}
+
+async function analyseWardrobeGaps(){
+ const btn=$("analyseGaps"),box=$("gapResults");
+ if(!btn||!box)return;
+ const goal=$("shopGoal").value.trim();
+ const original=btn.textContent;
+ const controller=new AbortController();
+ let timeoutId=null;
+
+ btn.disabled=true;
+ btn.innerHTML='<span class="inline-spinner" aria-hidden="true"></span> Analysing your wardrobe…';
+ box.innerHTML=`<div class="shopping-working"><span class="retailer-search-spinner"></span><div>
+  <b>Analysing your wardrobe…</b>
+  <p>I’m comparing what you own with what you’re looking for, your fit information and how useful a new piece would be across your wardrobe.</p>
+  <small>This can take a little while.</small></div></div>`;
+ requestAnimationFrame(()=>box.scrollIntoView({behavior:"smooth",block:"center"}));
+
+ try{
+  timeoutId=setTimeout(()=>controller.abort(),75000);
+  const r=await fetch("/api/wardrobe-gaps",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    goal:goal||"Identify the most useful addition to my wardrobe",
+    budget:$("shopBudget").value||"",
+    season:$("shopSeason").value||"",
+    occasion:$("shopOccasion").value.trim(),
+    max_recommendations:4
+   }),
+   signal:controller.signal
+  });
+  let x={};try{x=await r.json()}catch{}
+  if(!r.ok)throw new Error(x.detail||`Wardrobe analysis failed (${r.status}).`);
+  const recs=x.recommendations||[];
+  box.innerHTML=`<div class="notice gap-summary"><b>Wardrobe analysis</b><p>${esc(x.summary||"")}</p></div>`+
+   (recs.length?recs.map(renderGapRecommendation).join(""):'<div class="notice">The analysis completed but did not return a useful recommendation. Try making the request more specific.</div>');
+ }catch(err){
+  box.innerHTML=err.name==="AbortError"
+   ? '<div class="notice"><b>The analysis took too long.</b><br>I stopped it after 75 seconds rather than leaving the page spinning. Please try again.</div>'
+   : `<div class="notice"><b>I couldn't analyse the wardrobe.</b><br>${esc(err.message||"Something went wrong.")}</div>`;
+ }finally{
+  if(timeoutId)clearTimeout(timeoutId);
+  btn.disabled=false;
+  btn.textContent=original;
+ }
+}
+
+async function searchGapProducts(encoded,index,button){
+ const rec=JSON.parse(decodeURIComponent(encoded));
+ const box=$(`gapProducts-${index}`);
+ if(!box)return;
+ const original=button?.textContent||"Find current products";
+ if(button){button.disabled=true;button.textContent="Searching retailers…";}
+ box.innerHTML=`<div class="retailer-search-state"><span class="retailer-search-spinner"></span><div>
+  <b>Searching UK retailers…</b>
+  <p>I’m looking for current products matching <strong>${esc(rec.title||rec.search_phrase||"this recommendation")}</strong>.</p>
+  <small>Please wait — this is a live retailer search.</small></div></div>`;
+ requestAnimationFrame(()=>box.scrollIntoView({behavior:"smooth",block:"center"}));
+
+ try{
+  const x=await api("/api/source-products",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    search_phrase:rec.search_phrase||rec.title||"",
+    shopping_spec:rec.shopping_spec||[rec.title,rec.ideal_colour,rec.ideal_material,rec.ideal_fit,rec.formality].filter(Boolean).join(". "),
+    budget:$("shopBudget").value||"",
+    category:rec.category||"",
+    size_fit_guidance:rec.size_fit_guidance||"Use my saved profile and fit history where relevant."
+   })
+  });
+  const products=x.products||[];
+  if(!products.length){
+   box.innerHTML=`<div class="notice">I couldn't find a sufficiently reliable current match. ${esc(x.search_note||"")}</div>`;
+   return;
+  }
+  box.innerHTML=`<div class="retailer-search-complete"><span>Retailer search complete</span><small>${esc(x.search_note||"Current matches found.")}</small></div>`+
+   products.map(p=>renderLiveProduct(p)).join("");
+ }catch(err){
+  box.innerHTML=`<div class="notice"><b>Retailer search couldn't finish.</b><br>${esc(err.message)}</div>`;
+ }finally{
+  if(button){button.disabled=false;button.textContent=original;}
+ }
+}
+
+const analyseGapsBtn=$("analyseGaps");
+if(analyseGapsBtn)analyseGapsBtn.addEventListener("click",analyseWardrobeGaps);
 
 const runStylistV4Btn=$("runStylistV4");
 if(runStylistV4Btn){
