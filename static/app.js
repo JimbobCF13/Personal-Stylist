@@ -5,7 +5,7 @@ let garments=[], uploadedPath="", aiConfidence=0, importedProductSourceUrl="";
 let editingGarmentId=null;
 let detailGarmentId=null;
 let enrichmentPollTimer=null;
-let photoQueue=[], currentPhotoIndex=-1, batchMode=false;
+let photoQueue=[], currentPhotoIndex=-1, batchMode=false, analysisInProgress=false, garmentAnalysisController=null, previewObjectUrl="";
 const cleanupInProgress=new Set();
 
 
@@ -24,7 +24,13 @@ async function api(url,opts={}){
  return data;
 }
 function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="shortlist")loadShortlist();if(id==="garmentdetail"&&detailGarmentId)loadGarmentDetail(detailGarmentId);if(id==="outfits")populateAnchor();if(id==="stylistv4")populateV4Anchor();if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}}
-document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b)go(b.dataset.go)});
+document.addEventListener("click",e=>{
+ const b=e.target.closest("[data-go]");
+ if(!b)return;
+ const activeAdd=$("add")?.classList.contains("active");
+ if(activeAdd && b.dataset.go!=="add" && b.id!=="cancelAdd")resetAddFlow();
+ go(b.dataset.go);
+});
 async function init(){
  try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
  await loadGarments(); await loadProfile();
@@ -404,34 +410,100 @@ function clearGarmentFields(){
  importedProductSourceUrl="";
 }
 
+
+function releasePreviewObjectUrl(){
+ if(previewObjectUrl){
+  try{URL.revokeObjectURL(previewObjectUrl)}catch{}
+  previewObjectUrl="";
+ }
+}
+
+function resetAddFlow(){
+ if(garmentAnalysisController){
+  try{garmentAnalysisController.abort()}catch{}
+  garmentAnalysisController=null;
+ }
+ analysisInProgress=false;
+ releasePreviewObjectUrl();
+ photoQueue=[];
+ currentPhotoIndex=-1;
+ batchMode=false;
+ clearGarmentFields();
+
+ $("cameraPhoto").value="";
+ $("libraryPhoto").value="";
+ if($("productUrl"))$("productUrl").value="";
+ if($("urlImportStatus"))$("urlImportStatus").textContent="";
+ $("preview").removeAttribute("src");
+ $("preview").classList.add("hidden");
+ $("analysisMsg").textContent="";
+ $("analysisMsg").classList.add("hidden");
+ $("batchStatus").textContent="";
+ $("batchStatus").classList.add("hidden");
+ $("skipGarment").classList.add("hidden");
+ $("skipGarment").disabled=false;
+ $("saveGarment").disabled=false;
+ $("saveGarment").textContent="Save to wardrobe";
+}
+
 function updateBatchUI(){
  const status=$("batchStatus");
  const skip=$("skipGarment");
+ const save=$("saveGarment");
+
  if(batchMode && photoQueue.length){
    status.classList.remove("hidden");
-   status.innerHTML=`<b>Batch upload:</b> item ${currentPhotoIndex+1} of ${photoQueue.length}. Check the AI details, then Save & Next.`;
-   $("saveGarment").textContent=currentPhotoIndex < photoQueue.length-1 ? "Save & Next" : "Save final item";
+   status.innerHTML=`<b>Batch upload:</b> item ${currentPhotoIndex+1} of ${photoQueue.length}. ${analysisInProgress?"Analysing this photo — please wait…":"Check the AI details, then Save & Next."}`;
    skip.classList.remove("hidden");
+   skip.disabled=analysisInProgress;
+   save.disabled=analysisInProgress;
+   save.textContent=analysisInProgress
+     ? "Analysing…"
+     : (currentPhotoIndex < photoQueue.length-1 ? "Save & Next" : "Save final item");
  }else{
    status.classList.add("hidden");
-   $("saveGarment").textContent="Save to wardrobe";
    skip.classList.add("hidden");
+   skip.disabled=false;
+   if(!analysisInProgress){
+     save.disabled=false;
+     save.textContent="Save to wardrobe";
+   }
  }
 }
 
 async function handleGarmentPhoto(file){
- if(!file)return;
+ if(!file || analysisInProgress)return false;
+
  clearGarmentFields();
- $("preview").src=URL.createObjectURL(file);
+ releasePreviewObjectUrl();
+ previewObjectUrl=URL.createObjectURL(file);
+ $("preview").src=previewObjectUrl;
  $("preview").classList.remove("hidden");
+
  const fd=new FormData();
  fd.append("file",file);
+
+ analysisInProgress=true;
+ garmentAnalysisController=new AbortController();
  $("analysisMsg").classList.remove("hidden");
- $("analysisMsg").textContent="Analysing garment…";
+ $("analysisMsg").textContent="Analysing garment… Please wait before moving to the next photo.";
  updateBatchUI();
+
+ let timeoutId;
  try{
-  const x=await api("/api/analyse-garment",{method:"POST",body:fd});
-  uploadedPath=x.image_path;
+  timeoutId=setTimeout(()=>garmentAnalysisController?.abort(),75000);
+  const x=await api("/api/analyse-garment",{
+   method:"POST",
+   body:fd,
+   signal:garmentAnalysisController.signal
+  });
+
+  uploadedPath=x.image_path||"";
+
+  // Once the server copy exists, stop holding the local blob preview.
+  releasePreviewObjectUrl();
+  if(uploadedPath)$("preview").src=uploadedPath;
+
   if(x.analysis){
    Object.entries(x.analysis).forEach(([k,v])=>{if($(k)&&k!=="confidence")$(k).value=v||""});
    aiConfidence=x.analysis.confidence||0;
@@ -439,25 +511,44 @@ async function handleGarmentPhoto(file){
   }else{
    $("analysisMsg").textContent="Photo saved. AI is not connected yet, so enter the garment details manually.";
   }
+  return true;
  }catch(err){
-  $("analysisMsg").textContent=err.message;
+  const aborted=err?.name==="AbortError";
+  $("analysisMsg").textContent=aborted
+    ?"This photo took too long to analyse. Nothing else has started; retry this photo or skip it."
+    : `This photo could not be analysed: ${err.message}`;
+  return false;
+ }finally{
+  if(timeoutId)clearTimeout(timeoutId);
+  garmentAnalysisController=null;
+  analysisInProgress=false;
+  updateBatchUI();
  }
 }
 
 async function startBatch(files){
+ if(analysisInProgress)return;
+ resetAddFlow();
  photoQueue=Array.from(files||[]);
  if(!photoQueue.length)return;
+
+ // Batch files stay queued, but only one is ever sent to Render at a time.
  batchMode=photoQueue.length>1;
  currentPhotoIndex=0;
+ updateBatchUI();
  await handleGarmentPhoto(photoQueue[currentPhotoIndex]);
 }
 
 async function advanceBatch(){
+ if(analysisInProgress)return false;
+
  if(batchMode && currentPhotoIndex < photoQueue.length-1){
    currentPhotoIndex++;
    await handleGarmentPhoto(photoQueue[currentPhotoIndex]);
    return true;
  }
+
+ releasePreviewObjectUrl();
  photoQueue=[];
  currentPhotoIndex=-1;
  batchMode=false;
@@ -465,16 +556,24 @@ async function advanceBatch(){
  return false;
 }
 
-async function importProductUrl(){const url=($("productUrl").value||"").trim(),status=$("urlImportStatus");if(!url)return alert("Paste a retailer product link first.");clearGarmentFields();photoQueue=[];currentPhotoIndex=-1;batchMode=false;status.textContent="Reading retailer page and preparing the garment…";$("importProductUrl").disabled=true;$("analysisMsg").classList.remove("hidden");$("analysisMsg").textContent="Importing product information…";try{const x=await api("/api/import-product-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});uploadedPath=x.image_path||"";importedProductSourceUrl=x.source_url||url;if(x.image_path){$("preview").src=x.image_path;$("preview").classList.remove("hidden");}else{$("preview").classList.add("hidden");}const a=x.analysis||{};Object.entries(a).forEach(([k,v])=>{if($(k)&&k!=="confidence")$(k).value=v||""});aiConfidence=Number(a.confidence||0);$("notes").value=[$("notes").value,`Product page: ${x.source_url}`].filter(Boolean).join("\n");if(x.direct_page_blocked){status.textContent=x.image_available?"The retailer blocked direct access, so I found the product through live web search instead. Check the imported details below.":"The retailer blocked direct access, so I found the product through live web search instead. Product details were imported, but no usable retailer image was available.";}else{status.textContent=x.image_available?"Imported. Check the details below before saving.":"Imported. No usable retailer image was exposed; save it now and add your own photo later if you want."}$("analysisMsg").textContent=x.import_method==="web_search_fallback"?"Product identified through live web search. I’ve also classified fit, season and formality where the available product facts support it. Please check the details before saving.":"Product page analysed. Please check the details before saving.";}catch(err){status.textContent=err.message;$("analysisMsg").textContent=err.message}finally{$("importProductUrl").disabled=false}}
+async function importProductUrl(){const url=($("productUrl").value||"").trim(),status=$("urlImportStatus");if(!url)return alert("Paste a retailer product link first.");resetAddFlow();$("productUrl").value=url;status.textContent="Reading retailer page and preparing the garment…";$("importProductUrl").disabled=true;$("analysisMsg").classList.remove("hidden");$("analysisMsg").textContent="Importing product information…";try{const x=await api("/api/import-product-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});uploadedPath=x.image_path||"";importedProductSourceUrl=x.source_url||url;if(x.image_path){$("preview").src=x.image_path;$("preview").classList.remove("hidden");}else{$("preview").classList.add("hidden");}const a=x.analysis||{};Object.entries(a).forEach(([k,v])=>{if($(k)&&k!=="confidence")$(k).value=v||""});aiConfidence=Number(a.confidence||0);$("notes").value=[$("notes").value,`Product page: ${x.source_url}`].filter(Boolean).join("\n");if(x.direct_page_blocked){status.textContent=x.image_available?"The retailer blocked direct access, so I found the product through live web search instead. Check the imported details below.":"The retailer blocked direct access, so I found the product through live web search instead. Product details were imported, but no usable retailer image was available.";}else{status.textContent=x.image_available?"Imported. Check the details below before saving.":"Imported. No usable retailer image was exposed; save it now and add your own photo later if you want."}$("analysisMsg").textContent=x.import_method==="web_search_fallback"?"Product identified through live web search. I’ve also classified fit, season and formality where the available product facts support it. Please check the details before saving.":"Product page analysed. Please check the details before saving.";}catch(err){status.textContent=err.message;$("analysisMsg").textContent=err.message}finally{$("importProductUrl").disabled=false}}
 $("importProductUrl").addEventListener("click",importProductUrl);$("productUrl").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();importProductUrl()}});const urlDropZone=$("urlDropZone");urlDropZone.addEventListener("dragover",e=>{e.preventDefault();urlDropZone.classList.add("dragging")});urlDropZone.addEventListener("dragleave",()=>urlDropZone.classList.remove("dragging"));urlDropZone.addEventListener("drop",e=>{e.preventDefault();urlDropZone.classList.remove("dragging");const raw=e.dataTransfer.getData("text/uri-list")||e.dataTransfer.getData("text/plain")||"";const url=raw.split(/\r?\n/).find(x=>/^https?:\/\//i.test(x.trim()))||raw.trim();if(url){$("productUrl").value=url;importProductUrl()}});
+
+$("cancelAdd").addEventListener("click",()=>{
+ resetAddFlow();
+});
+
 $("cameraPhoto").addEventListener("change",async e=>{
- photoQueue=[]; currentPhotoIndex=-1; batchMode=false;
- await handleGarmentPhoto(e.target.files[0]);
+ const file=e.target.files?.[0];
+ if(!file)return;
+ resetAddFlow();
+ await handleGarmentPhoto(file);
 });
 $("libraryPhoto").addEventListener("change",async e=>{await startBatch(e.target.files);});
-$("skipGarment").addEventListener("click",async()=>{if(batchMode)await advanceBatch();});
+$("skipGarment").addEventListener("click",async()=>{if(batchMode && !analysisInProgress)await advanceBatch();});
 
 $("saveGarment").addEventListener("click",async()=>{
+ if(analysisInProgress)return;
  const saveBtn=$("saveGarment");
  const hasImport=Boolean(importedProductSourceUrl || ($("productUrl")?.value||"").trim());
  if(!uploadedPath && !hasImport)return alert("Add a photo or import a product page first.");

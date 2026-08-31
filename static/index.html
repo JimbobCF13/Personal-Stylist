@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
-<link rel="stylesheet" href="/static/style.css?v=4.8">
+<link rel="stylesheet" href="/static/style.css?v=4.8.5">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V4.8</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V4.8.5</span></header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
@@ -64,7 +64,7 @@
 
 <section id="add" class="screen">
  <div class="section">
-  <div class="row between"><h3>Add to Wardrobe</h3><button class="ghost" data-go="wardrobe">Cancel</button></div>
+  <div class="row between"><h3>Add to Wardrobe</h3><button id="cancelAdd" class="ghost" data-go="wardrobe">Cancel</button></div>
   <div class="card form">
    <div class="photo-actions"><label class="upload"><input id="cameraPhoto" type="file" accept="image/*" capture="environment"><span>📷 Take Photo</span></label><label class="upload"><input id="libraryPhoto" type="file" accept="image/*" multiple><span>🖼️ Choose Multiple Photos</span></label></div><div class="add-divider"><span>or</span></div><div id="urlDropZone" class="url-import-card"><div><small>ADD FROM A PRODUCT PAGE</small><b>Paste or drag in a retailer link</b><p>I’ll pull in the real product information and image where available.</p></div><div class="url-import-row"><input id="productUrl" type="url" placeholder="https://brand.com/product/…"><button id="importProductUrl" class="secondary" type="button">Import</button></div><small id="urlImportStatus" class="url-import-status"></small></div>
    <img id="preview" class="preview hidden">
@@ -253,5 +253,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=4.8"></script>
+<script src="/static/app.js?v=4.8.5"></script>
 </body></html>

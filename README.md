@@ -398,3 +398,14 @@ From Edit Garment the user can:
 - replace an existing garment photo.
 
 The new photo is normalised and converted into the usual catalogue display image, while all existing garment metadata, retailer research, fit information and notes remain unchanged.
+
+
+## V4.8.5 Batch Upload Memory & Reset Fix
+- Prevents overlapping garment-analysis requests. Save/Skip are disabled while the current photo is being analysed.
+- Adds a 75-second client timeout with a clear recoverable message.
+- Cancel now fully resets the batch queue, current index, form fields, file inputs, preview and analysis state.
+- Navigating away from Add to Wardrobe also clears an unfinished batch.
+- Browser blob preview URLs are revoked as soon as they are no longer needed.
+- Large phone JPEGs request lower-resolution decoding via Pillow `draft()` before further processing.
+- Normalised AI/catalogue source images are capped at 1600px on the longest side and JPEG quality 88 to reduce Render peak memory.
+- Individual uploads are capped at 15 MB.

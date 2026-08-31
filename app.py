@@ -645,37 +645,51 @@ def delete_garment(gid: int):
     return {"ok": True}
 
 def normalise_image_for_ai(source_path: Path) -> Path:
-    """Convert uploaded images (including iPhone HEIC/HEIF) to JPEG for AI input."""
+    """Convert uploads to a bounded JPEG while keeping peak memory modest."""
     try:
-        with Image.open(source_path) as im:
-            im = ImageOps.exif_transpose(im)
-
-            # Flatten transparency before JPEG conversion.
-            if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
-                rgba = im.convert("RGBA")
-                background = Image.new("RGB", rgba.size, "white")
-                background.paste(rgba, mask=rgba.getchannel("A"))
-                im = background
-            else:
-                im = im.convert("RGB")
-
-            # Preserve garment detail without sending unnecessarily huge images.
-            max_side = 2048
-            if max(im.size) > max_side:
-                scale = max_side / max(im.size)
-                im = im.resize((round(im.width * scale), round(im.height * scale)))
-
-            out_path = source_path.with_suffix(".jpg")
-            im.save(out_path, format="JPEG", quality=92, optimize=True)
-
-        if out_path != source_path and source_path.exists():
+        with Image.open(source_path) as opened:
+            # JPEG draft asks Pillow/libjpeg to decode near the target resolution
+            # instead of first expanding a 12/24/48MP phone image at full size.
             try:
-                source_path.unlink()
+                if (opened.format or "").upper() in ("JPEG","JPG"):
+                    opened.draft("RGB", (1600, 1600))
             except Exception:
                 pass
+
+            im = ImageOps.exif_transpose(opened)
+
+            # Bound dimensions before creating further RGB/transparency copies.
+            max_side = 1600
+            if max(im.size) > max_side:
+                im.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+
+            if im.mode in ("RGBA","LA") or (im.mode=="P" and "transparency" in im.info):
+                rgba=im.convert("RGBA")
+                background=Image.new("RGB",rgba.size,"white")
+                background.paste(rgba,mask=rgba.getchannel("A"))
+                try:
+                    rgba.close()
+                except Exception:
+                    pass
+                im=background
+            elif im.mode!="RGB":
+                im=im.convert("RGB")
+
+            out_path=source_path.with_suffix(".jpg")
+            im.save(out_path,format="JPEG",quality=88,optimize=False)
+
+            try:
+                if im is not opened:
+                    im.close()
+            except Exception:
+                pass
+
+        if out_path != source_path and source_path.exists():
+            try: source_path.unlink()
+            except Exception: pass
         return out_path
 
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+    except (UnidentifiedImageError,OSError,ValueError) as exc:
         raise HTTPException(
             status_code=400,
             detail="I couldn't read that photo. Please try taking it again or choose another image."
@@ -911,8 +925,8 @@ async def analyse_garment(file: UploadFile = File(...)):
     data = await file.read()
     if not data:
         raise HTTPException(400, "The uploaded photo was empty.")
-    if len(data) > 20 * 1024 * 1024:
-        raise HTTPException(400, "That photo is too large. Please choose an image under 20 MB.")
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(400, "That photo is too large. Please choose an image under 15 MB.")
 
     raw_path.write_bytes(data)
 
@@ -966,7 +980,7 @@ async def replace_garment_photo(gid: int, file: UploadFile = File(...)):
         raise HTTPException(400,"The uploaded photo was empty.")
     if len(data)>20*1024*1024:
         con.close()
-        raise HTTPException(400,"That photo is too large. Please choose an image under 20 MB.")
+        raise HTTPException(400,"That photo is too large. Please choose an image under 15 MB.")
     raw.write_bytes(data)
 
     try:
@@ -1242,8 +1256,8 @@ async def add_model_photo(file: UploadFile = File(...), label: str = Form("")):
     data = await file.read()
     if not data:
         raise HTTPException(400, "The uploaded photo was empty.")
-    if len(data) > 20 * 1024 * 1024:
-        raise HTTPException(400, "That photo is too large. Please choose an image under 20 MB.")
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(400, "That photo is too large. Please choose an image under 15 MB.")
     raw_path.write_bytes(data)
     image_path = normalise_image_for_ai(raw_path)
     if image_path.parent != MODEL_PHOTOS:
