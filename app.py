@@ -951,7 +951,7 @@ async def analyse_garment(file: UploadFile = File(...)):
 
 @app.post("/api/garments")
 async def add_garment(
-    image_path: str = Form(...),
+    image_path: str = Form(""),
     original_image_path: str = Form(""),
     category: str = Form(""),
     garment_type: str = Form(""),
@@ -1605,9 +1605,13 @@ PAGE DESCRIPTION: {meta.get('description') or ''}
 PAGE TEXT EXCERPT:
 {meta.get('page_text') or ''}
 
-Use only supported facts. Never guess size, model, fabric, colour or fit.
-labelled_size should normally be empty because the page cannot establish which size the user owns.
-Keep notes factual and concise."""
+Use the retailer page as the factual source.
+- Never guess brand, model, fabric composition, colour or pattern.
+- labelled_size should normally be empty because the page cannot establish which size the user owns.
+- For fit_cut, prefer an explicit retailer fit description; otherwise provide a conservative stylist classification only when the page's cut/silhouette description supports it.
+- season may be classified from the known garment type and evidenced material.
+- formality may be classified from the garment's known type and design.
+- Keep notes factual and concise."""
             try:
                 response=client.responses.create(
                     model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
@@ -1629,12 +1633,16 @@ EXACT PRODUCT URL:
 The retailer may block direct server access. Use live web search, prioritising the official brand/retailer result and reliable indexed snippets.
 
 Rules:
-- Return only facts that can be substantiated.
-- Never invent colour, material, fit, model/line, season or formality.
+- Search specifically for the exact product name/slug, official brand result, retailer snippets and reputable stockists/reviews where useful.
+- Brand, model/line, colour, material and pattern must be supported by web evidence. Never invent those fields.
 - labelled_size must be empty because the URL does not establish which size the user owns.
+- fit_cut: use the retailer/brand's stated fit when available. If not stated but the cut is reasonably classifiable from reliable product descriptions, provide a concise stylist classification.
+- season: classify practical seasonality from the known garment type and evidenced material (for example "Spring/Summer" or "Year-round"). This is a stylist classification, not a retailer claim.
+- formality: classify the garment's normal menswear formality from its known type/design (for example "Casual", "Smart casual", "Business casual", "Formal"). This is a stylist classification.
+- If material cannot be established from a reliable web result, leave material empty rather than guessing.
 - category and garment_type should describe the exact item.
-- notes should be short and factual.
-- If exact identification is uncertain, leave uncertain fields empty and use low confidence.
+- notes should be short and factual; if season/formality/fit_cut are stylist classifications, do not describe them as retailer-provided facts.
+- If exact product identification is uncertain, leave uncertain factual fields empty and use low confidence.
 """
             try:
                 response=client.responses.create(

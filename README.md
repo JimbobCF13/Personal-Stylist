@@ -379,3 +379,11 @@ Live retailer results from a Stylist recommendation now include **Try on me**. W
 
 ## V4.8.2 Retailer-block fallback
 When a retailer blocks Render/cloud-server page access with HTTP 403 or similar anti-bot behaviour, product-page import now automatically falls back to OpenAI live web search using the exact supplied product URL. Supported product facts are imported even when the page cannot be fetched directly. Missing retailer images no longer cause the import itself to fail.
+
+
+## V4.8.3 URL-import save fix + richer product classification
+- Fixes Save to wardrobe for imported products that have no downloadable retailer image. `image_path` is now optional for lightweight wardrobe records.
+- Save now has a visible Saving state and explicit error reporting instead of failing silently.
+- URL imports track a successful imported product independently of whether an image was available.
+- Live-web fallback now searches more deliberately for material and explicit fit information.
+- Season and formality may be filled as conservative stylist classifications based on the identified garment and evidenced materials/design. Material remains blank when it cannot be substantiated.
