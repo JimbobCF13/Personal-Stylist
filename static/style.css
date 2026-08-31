@@ -323,3 +323,29 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 /* V4.8.5 batch safety */
 #skipGarment:disabled,#saveGarment:disabled{cursor:wait;opacity:.55}
 .batch-status b{font-weight:800}
+
+/* V4.8.7 wardrobe category navigation */
+.wardrobe-toolbar{margin:12px 0 4px}
+.wardrobe-toolbar>input{width:100%;margin-bottom:11px}
+.wardrobe-category-nav{
+ display:flex;gap:7px;overflow-x:auto;padding:1px 1px 7px;
+ scrollbar-width:none;-webkit-overflow-scrolling:touch
+}
+.wardrobe-category-nav::-webkit-scrollbar{display:none}
+.wardrobe-category-btn{
+ flex:0 0 auto;display:flex;align-items:center;gap:7px;
+ min-height:40px;padding:8px 11px;border:1px solid var(--line);border-radius:999px;
+ background:#fff;color:#555;font:inherit;cursor:pointer;white-space:nowrap
+}
+.wardrobe-category-btn span{font-size:10px;font-weight:750}
+.wardrobe-category-btn small{
+ display:grid;place-items:center;min-width:19px;height:19px;padding:0 5px;
+ border-radius:999px;background:#f1f1ee;color:#777;font-size:8px;font-weight:800
+}
+.wardrobe-category-btn.active{background:#111;color:#fff;border-color:#111}
+.wardrobe-category-btn.active small{background:rgba(255,255,255,.16);color:#fff}
+.wardrobe-category-btn:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+@media(max-width:560px){
+ .wardrobe-category-nav{margin-right:-2px}
+ .wardrobe-category-btn{min-height:42px;padding:9px 11px}
+}

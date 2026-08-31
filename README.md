@@ -413,3 +413,14 @@ The new photo is normalised and converted into the usual catalogue display image
 
 ## V4.8.6 Multiple Photo Selection Hotfix
 Fixes a regression introduced by the V4.8.5 reset logic. The browser FileList is live and was being emptied when the Add flow reset the file input before copying the selected files. V4.8.6 snapshots the selected File objects first, then resets the previous batch state, then starts the new queue.
+
+
+## V4.8.7 Wardrobe Navigation Polish
+This is a front-end/navigation-only release. It does not alter, migrate, delete or recreate wardrobe database rows or stored garment images.
+
+- Replaces the wardrobe category dropdown with horizontally scrollable category buttons.
+- Each button shows the number of garments in that category.
+- **All** retains the grouped wardrobe view.
+- Selecting a category shows that category directly.
+- When a garment is opened or edited, the app remembers that garment/category.
+- Returning to Wardrobe scrolls back to the garment (or its section) instead of jumping to Jackets & Outerwear at the top.

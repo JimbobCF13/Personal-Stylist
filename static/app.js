@@ -23,7 +23,17 @@ async function api(url,opts={}){
  if(!r.ok) throw new Error(data.detail||"Something went wrong");
  return data;
 }
-function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));$(id).classList.add("active");scrollTo(0,0);if(id==="wardrobe")loadGarments();if(id==="shortlist")loadShortlist();if(id==="garmentdetail"&&detailGarmentId)loadGarmentDetail(detailGarmentId);if(id==="outfits")populateAnchor();if(id==="stylistv4")populateV4Anchor();if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}}
+function go(id){
+ document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
+ $(id).classList.add("active");
+ if(id!=="wardrobe" || !wardrobeRestorePending)scrollTo(0,0);
+ if(id==="wardrobe")loadGarments();
+ if(id==="shortlist")loadShortlist();
+ if(id==="garmentdetail"&&detailGarmentId)loadGarmentDetail(detailGarmentId);
+ if(id==="outfits")populateAnchor();
+ if(id==="stylistv4")populateV4Anchor();
+ if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}
+}
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-go]");
  if(!b)return;
@@ -36,15 +46,122 @@ async function init(){
  await loadGarments(); await loadProfile();
 }
 const WARDROBE_ORDER=["Jackets & Outerwear","Knitwear","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
-function normalisedCategory(c){const raw=String(c||"Other").trim().toLowerCase();return WARDROBE_ORDER.find(x=>x.toLowerCase()===raw)||"Other";}
-async function loadGarments(){garments=await api("/api/garments");garments.forEach(g=>g.category=normalisedCategory(g.category));$("count").textContent=`${garments.length} saved item${garments.length===1?"":"s"}`;const present=WARDROBE_ORDER.filter(cat=>garments.some(g=>g.category===cat));$("filter").innerHTML='<option value="">All categories</option>'+present.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");renderGarments();}
-function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=g.image_path?`<img class="garment-photo" src="${g.image_path}" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="this.classList.add('image-missing')">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
-function renderGarments(){const q=$("search").value.toLowerCase(),f=$("filter").value;const list=garments.filter(g=>(!f||g.category===f)&&(!q||JSON.stringify(g).toLowerCase().includes(q)));if(!list.length){$("garments").innerHTML='<div class="empty">No garments match this view.</div>';return;}const cats=f?[f]:WARDROBE_ORDER;$("garments").innerHTML=cats.map(cat=>{const items=list.filter(g=>g.category===cat);if(!items.length)return "";return `<section class="wardrobe-group"><div class="wardrobe-group-head"><h4>${esc(cat)}</h4><span>${items.length} item${items.length===1?"":"s"}</span></div><div class="garments wardrobe-group-grid">${items.map(garmentCard).join("")}</div></section>`;}).join("");}
-$("search").addEventListener("input",renderGarments);$("filter").addEventListener("change",renderGarments);
+let selectedWardrobeCategory="";
+let wardrobeReturnGarmentId=null;
+let wardrobeReturnCategory="";
+let wardrobeRestorePending=false;
+
+function normalisedCategory(c){
+ const raw=String(c||"Other").trim().toLowerCase();
+ return WARDROBE_ORDER.find(x=>x.toLowerCase()===raw)||"Other";
+}
+
+function wardrobeCategoryLabel(cat){
+ const labels={
+  "Jackets & Outerwear":"Outerwear",
+  "Polos & T-Shirts":"Polos & T-Shirts"
+ };
+ return labels[cat]||cat;
+}
+
+function renderWardrobeCategoryNav(){
+ const nav=$("categoryNav");
+ if(!nav)return;
+ const present=WARDROBE_ORDER.filter(cat=>garments.some(g=>g.category===cat));
+ const cats=["",...present];
+ nav.innerHTML=cats.map(cat=>{
+  const count=cat?garments.filter(g=>g.category===cat).length:garments.length;
+  const active=selectedWardrobeCategory===cat;
+  return `<button type="button" class="wardrobe-category-btn${active?" active":""}" data-wardrobe-category="${esc(cat)}" aria-pressed="${active}">
+   <span>${esc(cat?wardrobeCategoryLabel(cat):"All")}</span><small>${count}</small>
+  </button>`;
+ }).join("");
+}
+
+async function loadGarments(){
+ garments=await api("/api/garments");
+ garments.forEach(g=>g.category=normalisedCategory(g.category));
+ $("count").textContent=`${garments.length} saved item${garments.length===1?"":"s"}`;
+
+ // If a category disappeared after an edit, return safely to All.
+ if(selectedWardrobeCategory && !garments.some(g=>g.category===selectedWardrobeCategory)){
+  selectedWardrobeCategory="";
+ }
+ renderWardrobeCategoryNav();
+ renderGarments();
+
+ if(wardrobeRestorePending){
+  requestAnimationFrame(()=>requestAnimationFrame(()=>restoreWardrobePosition()));
+ }
+}
+
+function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=g.image_path?`<img class="garment-photo" src="${g.image_path}" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="this.classList.add('image-missing')">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}" data-garment-id="${g.id}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
+function categorySlug(cat){
+ return String(cat||"other").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+}
+
+function renderGarments(){
+ const q=$("search").value.toLowerCase();
+ const f=selectedWardrobeCategory;
+ const list=garments.filter(g=>(!f||g.category===f)&&(!q||JSON.stringify(g).toLowerCase().includes(q)));
+
+ if(!list.length){
+  $("garments").innerHTML='<div class="empty">No garments match this view.</div>';
+  return;
+ }
+
+ const cats=f?[f]:WARDROBE_ORDER;
+ $("garments").innerHTML=cats.map(cat=>{
+  const items=list.filter(g=>g.category===cat);
+  if(!items.length)return "";
+  return `<section id="wardrobe-group-${categorySlug(cat)}" class="wardrobe-group" data-category="${esc(cat)}">
+   <div class="wardrobe-group-head"><h4>${esc(cat)}</h4><span>${items.length} item${items.length===1?"":"s"}</span></div>
+   <div class="garments wardrobe-group-grid">${items.map(garmentCard).join("")}</div>
+  </section>`;
+ }).join("");
+}
+
+function rememberWardrobePosition(id){
+ const g=garments.find(x=>x.id===id);
+ wardrobeReturnGarmentId=id||null;
+ wardrobeReturnCategory=g?.category||selectedWardrobeCategory||"";
+ wardrobeRestorePending=true;
+}
+
+function restoreWardrobePosition(){
+ if(!wardrobeRestorePending)return;
+
+ let target=null;
+ if(wardrobeReturnGarmentId){
+  target=document.querySelector(`[data-garment-id="${wardrobeReturnGarmentId}"]`);
+ }
+
+ if(!target && wardrobeReturnCategory){
+  target=document.querySelector(`[data-category="${CSS.escape(wardrobeReturnCategory)}"]`);
+ }
+
+ if(target){
+  target.scrollIntoView({block:"center",behavior:"auto"});
+ }
+
+ wardrobeRestorePending=false;
+}
+
+$("search").addEventListener("input",renderGarments);
+$("categoryNav").addEventListener("click",e=>{
+ const btn=e.target.closest("[data-wardrobe-category]");
+ if(!btn)return;
+ selectedWardrobeCategory=btn.dataset.wardrobeCategory||"";
+ wardrobeRestorePending=false;
+ renderWardrobeCategoryNav();
+ renderGarments();
+ scrollTo(0,0);
+});
 
 
 
 function openGarment(id){
+ rememberWardrobePosition(id);
  detailGarmentId=id;
  clearTimeout(enrichmentPollTimer);
  go("garmentdetail");
@@ -300,6 +417,8 @@ async function restoreOriginal(id){
 function editGarment(id){
  const g=garments.find(x=>x.id===id);
  if(!g)return;
+ // Direct Edit from the wardrobe should return to this exact garment.
+ if($("wardrobe")?.classList.contains("active"))rememberWardrobePosition(id);
  editingGarmentId=id;
  if(g.image_path){
   $("editPreview").src=g.image_path;
@@ -388,6 +507,9 @@ $("saveEdit").addEventListener("click",async()=>{
  });
  const savedId=editingGarmentId;
  const brandForResearch=body.brand.trim();
+ wardrobeReturnGarmentId=savedId;
+ wardrobeReturnCategory=normalisedCategory(body.category);
+ wardrobeRestorePending=true;
  editingGarmentId=null;
  await loadGarments();
  detailGarmentId=savedId;
