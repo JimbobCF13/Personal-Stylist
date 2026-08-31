@@ -51,6 +51,39 @@ def db():
     con.row_factory = sqlite3.Row
     return con
 
+
+WARDROBE_CATEGORY_ORDER = [
+    "Jackets & Outerwear", "Knitwear", "Shirts", "Polos & T-Shirts",
+    "Trousers", "Shorts", "Footwear", "Accessories", "Other",
+]
+
+def canonical_wardrobe_category(category: str = "", garment_type: str = "") -> str:
+    raw = re.sub(r"\s+", " ", f"{category or ''} {garment_type or ''}".strip().lower())
+    rules = [
+        ("Footwear", ["footwear","shoe","shoes","sneaker","sneakers","trainer","trainers","loafer","loafers","boot","boots","derby","derbies","brogue","brogues","oxford shoe","monk strap","espadrille","slipper"]),
+        ("Shorts", ["shorts","swim short","swim shorts"]),
+        ("Trousers", ["trouser","trousers","chino","chinos","jean","jeans","jogger","joggers","cargo trouser","cargo pants","pants"]),
+        ("Shirts", ["shirt","shirts","oxford shirt","dress shirt","casual shirt","linen shirt"]),
+        ("Polos & T-Shirts", ["polo","polo shirt","t-shirt","t shirt","tee","tees","tshirt","top","tops"]),
+        ("Knitwear", ["knitwear","jumper","jumpers","sweater","sweaters","cardigan","cardigans","quarter zip","half zip","roll neck","turtleneck","knit"]),
+        ("Jackets & Outerwear", ["outerwear","jacket","jackets","coat","coats","blazer","blazers","gilet","gilets","overshirt","overshirts","parka","raincoat","mac"]),
+        ("Accessories", ["accessory","accessories","tie","ties","belt","belts","hat","hats","cap","caps","beanie","scarf","scarves","glove","gloves","bag","bags","watch","watches"]),
+    ]
+    for canonical, words in rules:
+        if any(w in raw for w in words): return canonical
+    for canonical in WARDROBE_CATEGORY_ORDER:
+        if (category or "").strip().casefold()==canonical.casefold(): return canonical
+    return "Other"
+
+def normalise_existing_wardrobe_categories():
+    con=db(); rows=con.execute("SELECT id, category, garment_type FROM garments").fetchall(); changed=0
+    for row in rows:
+        new_cat=canonical_wardrobe_category(row["category"] or "",row["garment_type"] or "")
+        if (row["category"] or "").strip()!=new_cat:
+            con.execute("UPDATE garments SET category=? WHERE id=?",(new_cat,row["id"])); changed+=1
+    if changed: con.commit()
+    con.close(); return changed
+
 def init_db():
     con = db()
     con.execute("""
@@ -126,6 +159,7 @@ def init_db():
     con.close()
 
 init_db()
+normalise_existing_wardrobe_categories()
 
 @app.get("/")
 def home():
@@ -938,7 +972,7 @@ async def add_garment(
     cur = con.execute("""INSERT INTO garments
       (image_path,original_image_path,category,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-      (image_path,original_image_path or image_path,category,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence))
+      (image_path,original_image_path or image_path,canonical_wardrobe_category(category, garment_type),garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence))
     con.commit(); gid=cur.lastrowid; con.close()
     return {"ok":True,"id":gid}
 
@@ -1483,6 +1517,83 @@ def wardrobe_gaps(req: WardrobeGapRequest):
     result["recommendations"] = result.get("recommendations", [])[:max_recs]
     return result
 
+
+
+PRODUCT_URL_IMPORT_SCHEMA = {
+  "type":"object","properties":{
+    "category":{"type":"string"},"garment_type":{"type":"string"},"brand":{"type":"string"},"model_line":{"type":"string"},"labelled_size":{"type":"string"},"colour":{"type":"string"},"material":{"type":"string"},"pattern":{"type":"string"},"fit_cut":{"type":"string"},"season":{"type":"string"},"formality":{"type":"string"},"notes":{"type":"string"},"confidence":{"type":"number","minimum":0,"maximum":1}},
+  "required":["category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","season","formality","notes","confidence"],"additionalProperties":False}
+
+class ProductUrlImportRequest(BaseModel): url: str
+
+def _public_http_url(url: str) -> bool:
+    try:
+        import socket, ipaddress
+        from urllib.parse import urlparse
+        p=urlparse(url)
+        if p.scheme not in ("http","https") or not p.hostname:return False
+        for info in socket.getaddrinfo(p.hostname,p.port or (443 if p.scheme=="https" else 80)):
+            ip=ipaddress.ip_address(info[4][0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:return False
+        return True
+    except Exception:return False
+
+def _fetch_product_page_meta(url: str) -> dict:
+    if not _public_http_url(url):raise HTTPException(400,"Please use a normal public retailer product URL.")
+    try:
+        import urllib.request, html as _html, re as _re
+        from urllib.parse import urljoin
+        req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0","Accept":"text/html,application/xhtml+xml"})
+        with urllib.request.urlopen(req,timeout=12) as r:
+            if "text/html" not in (r.headers.get("Content-Type") or "").lower():raise HTTPException(400,"That link does not appear to be a retailer product page.")
+            raw=r.read(1200000).decode("utf-8","ignore")
+        def mv(keys):
+            for key in keys:
+                for pat in [rf'<meta[^>]+(?:property|name)=["\\\']{_re.escape(key)}["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',rf'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+(?:property|name)=["\\\']{_re.escape(key)}["\\\']']:
+                    m=_re.search(pat,raw,_re.I)
+                    if m:return _html.unescape(m.group(1).strip())
+            return ""
+        title=mv(["og:title","twitter:title"])
+        if not title:
+            m=_re.search(r"<title[^>]*>(.*?)</title>",raw,_re.I|_re.S)
+            if m:title=_html.unescape(_re.sub(r"<[^>]+>"," ",m.group(1))).strip()
+        description=mv(["og:description","description","twitter:description"])
+        image=mv(["og:image:secure_url","og:image","twitter:image","twitter:image:src"])
+        if image:image=urljoin(url,image)
+        text=_re.sub(r"(?is)<script.*?</script>|<style.*?</style>"," ",raw); text=_re.sub(r"(?s)<[^>]+>"," ",text); text=_html.unescape(_re.sub(r"\s+"," ",text)).strip()[:18000]
+        return {"title":title,"description":description,"image_url":image,"page_text":text}
+    except HTTPException:raise
+    except Exception as exc:raise HTTPException(502,f"I couldn't read that retailer page: {str(exc)[:220]}")
+
+def _download_import_image(image_url: str) -> tuple[str,str]:
+    if not image_url or not _public_http_url(image_url):return "",""
+    try:
+        import urllib.request
+        req=urllib.request.Request(image_url,headers={"User-Agent":"Mozilla/5.0","Accept":"image/*"})
+        with urllib.request.urlopen(req,timeout=12) as r:
+            ctype=(r.headers.get("Content-Type") or "").lower()
+            if not ctype.startswith("image/"):return "",""
+            data=r.read(12*1024*1024)
+        if not data:return "",""
+        suffix=".png" if "png" in ctype else ".webp" if "webp" in ctype else ".jpg"
+        raw=UPLOADS/f"urlimport_{uuid.uuid4().hex}{suffix}"; raw.write_bytes(data); normal=normalise_image_for_ai(raw); catalogue=create_catalogue_image(normal)
+        display=f"/cleaned/{catalogue.name}" if catalogue.parent==CLEANED else f"/uploads/{normal.name}"
+        return display,f"/uploads/{normal.name}"
+    except Exception:return "",""
+
+@app.post("/api/import-product-url")
+def import_product_url(req: ProductUrlImportRequest):
+    url=(req.url or "").strip(); meta=_fetch_product_page_meta(url)
+    prompt=f"""Extract the menswear product details from this retailer page. The user owns or has bought the item.\nURL: {url}\nPAGE TITLE: {meta.get('title') or ''}\nPAGE DESCRIPTION: {meta.get('description') or ''}\nPAGE TEXT EXCERPT:\n{meta.get('page_text') or ''}\nUse only supported facts. Never guess size, model, fabric, colour or fit. labelled_size should normally be empty. Keep notes factual and concise."""
+    analysis=None
+    if os.getenv("OPENAI_API_KEY") and OpenAI is not None:
+        try:
+            response=OpenAI().responses.create(model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},input=prompt,text={"format":{"type":"json_schema","name":"product_url_import","schema":PRODUCT_URL_IMPORT_SCHEMA,"strict":True}}); analysis=json.loads(response.output_text)
+        except Exception:analysis=None
+    if not analysis:analysis={"category":"Other","garment_type":meta.get("title") or "Imported product","brand":"","model_line":"","labelled_size":"","colour":"","material":"","pattern":"","fit_cut":"","season":"","formality":"","notes":meta.get("description") or "Imported from retailer page.","confidence":0}
+    analysis["category"]=canonical_wardrobe_category(analysis.get("category") or "",analysis.get("garment_type") or "")
+    display,original=_download_import_image(meta.get("image_url") or "")
+    return {"ok":True,"source_url":url,"image_path":display,"original_image_path":original,"image_available":bool(display),"analysis":analysis,"page_title":meta.get("title") or ""}
 
 class ProductSourceRequest(BaseModel):
     search_phrase: str

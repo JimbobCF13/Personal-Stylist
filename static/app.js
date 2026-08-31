@@ -29,20 +29,11 @@ async function init(){
  try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
  await loadGarments(); await loadProfile();
 }
-async function loadGarments(){
- garments=await api("/api/garments");$("count").textContent=`${garments.length} saved item${garments.length===1?"":"s"}`;
- const cats=[...new Set(garments.map(g=>g.category).filter(Boolean))].sort();$("filter").innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join("");
- renderGarments();
-}
-function renderGarments(){
- const q=$("search").value.toLowerCase(),f=$("filter").value;
- const list=garments.filter(g=>(!f||g.category===f)&&(!q||JSON.stringify(g).toLowerCase().includes(q)));
- $("garments").innerHTML=list.length?list.map(g=>{
-  const cleaning=cleanupInProgress.has(g.id);
-  const label=esc((g.brand?g.brand+" ":"")+g.garment_type);
-  return `<div class="garment${cleaning?" is-cleaning":""}"><div class="garment-photo-wrap"><img class="garment-photo" src="${g.image_path}" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="this.classList.add('image-missing')">${cleaning?`<div class="cleanup-overlay" role="status" aria-live="polite"><span class="cleanup-spinner" aria-hidden="true"></span><b>Cleaning up photo…</b><small>Removing the background and preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})" ${cleaning?"disabled":""}>Build around</button><button class="ghost" onclick="editGarment(${g.id})" ${cleaning?"disabled":""}>Edit</button><button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})" ${cleaning?"disabled":""}>${cleaning?'<span class="inline-spinner" aria-hidden="true"></span> Cleaning…':'Clean up photo'}</button>${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})" ${cleaning?"disabled":""}>Original photo</button>`:""}<button class="danger" onclick="del(${g.id})" ${cleaning?"disabled":""}>Delete</button></div></div></div>`;
- }).join(""):'<div class="empty" style="grid-column:1/-1">No garments yet. Add your first real item.</div>';
-}
+const WARDROBE_ORDER=["Jackets & Outerwear","Knitwear","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
+function normalisedCategory(c){const raw=String(c||"Other").trim().toLowerCase();return WARDROBE_ORDER.find(x=>x.toLowerCase()===raw)||"Other";}
+async function loadGarments(){garments=await api("/api/garments");garments.forEach(g=>g.category=normalisedCategory(g.category));$("count").textContent=`${garments.length} saved item${garments.length===1?"":"s"}`;const present=WARDROBE_ORDER.filter(cat=>garments.some(g=>g.category===cat));$("filter").innerHTML='<option value="">All categories</option>'+present.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");renderGarments();}
+function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=g.image_path?`<img class="garment-photo" src="${g.image_path}" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="this.classList.add('image-missing')">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
+function renderGarments(){const q=$("search").value.toLowerCase(),f=$("filter").value;const list=garments.filter(g=>(!f||g.category===f)&&(!q||JSON.stringify(g).toLowerCase().includes(q)));if(!list.length){$("garments").innerHTML='<div class="empty">No garments match this view.</div>';return;}const cats=f?[f]:WARDROBE_ORDER;$("garments").innerHTML=cats.map(cat=>{const items=list.filter(g=>g.category===cat);if(!items.length)return "";return `<section class="wardrobe-group"><div class="wardrobe-group-head"><h4>${esc(cat)}</h4><span>${items.length} item${items.length===1?"":"s"}</span></div><div class="garments wardrobe-group-grid">${items.map(garmentCard).join("")}</div></section>`;}).join("");}
 $("search").addEventListener("input",renderGarments);$("filter").addEventListener("change",renderGarments);
 
 
@@ -430,6 +421,8 @@ async function advanceBatch(){
  return false;
 }
 
+async function importProductUrl(){const url=($("productUrl").value||"").trim(),status=$("urlImportStatus");if(!url)return alert("Paste a retailer product link first.");clearGarmentFields();photoQueue=[];currentPhotoIndex=-1;batchMode=false;status.textContent="Reading retailer page and preparing the garment…";$("importProductUrl").disabled=true;$("analysisMsg").classList.remove("hidden");$("analysisMsg").textContent="Importing product information…";try{const x=await api("/api/import-product-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});uploadedPath=x.image_path||"";if(x.image_path){$("preview").src=x.image_path;$("preview").classList.remove("hidden");}else{$("preview").classList.add("hidden");}const a=x.analysis||{};Object.entries(a).forEach(([k,v])=>{if($(k)&&k!=="confidence")$(k).value=v||""});aiConfidence=Number(a.confidence||0);$("notes").value=[$("notes").value,`Product page: ${x.source_url}`].filter(Boolean).join("\n");status.textContent=x.image_available?"Imported. Check the details below before saving.":"Imported. No usable retailer image was exposed; save it now and add your own photo later if you want.";$("analysisMsg").textContent="Product page analysed. Please check the details before saving.";}catch(err){status.textContent=err.message;$("analysisMsg").textContent=err.message}finally{$("importProductUrl").disabled=false}}
+$("importProductUrl").addEventListener("click",importProductUrl);$("productUrl").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();importProductUrl()}});const urlDropZone=$("urlDropZone");urlDropZone.addEventListener("dragover",e=>{e.preventDefault();urlDropZone.classList.add("dragging")});urlDropZone.addEventListener("dragleave",()=>urlDropZone.classList.remove("dragging"));urlDropZone.addEventListener("drop",e=>{e.preventDefault();urlDropZone.classList.remove("dragging");const raw=e.dataTransfer.getData("text/uri-list")||e.dataTransfer.getData("text/plain")||"";const url=raw.split(/\r?\n/).find(x=>/^https?:\/\//i.test(x.trim()))||raw.trim();if(url){$("productUrl").value=url;importProductUrl()}});
 $("cameraPhoto").addEventListener("change",async e=>{
  photoQueue=[]; currentPhotoIndex=-1; batchMode=false;
  await handleGarmentPhoto(e.target.files[0]);
@@ -438,7 +431,7 @@ $("libraryPhoto").addEventListener("change",async e=>{await startBatch(e.target.
 $("skipGarment").addEventListener("click",async()=>{if(batchMode)await advanceBatch();});
 
 $("saveGarment").addEventListener("click",async()=>{
- if(!uploadedPath)return alert("Add a photo first.");
+ if(!uploadedPath && !$("productUrl").value.trim())return alert("Add a photo or import a product page first.");
  const ids=["category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","fit_feedback","season","formality","notes"];
  const fd=new FormData();
  fd.append("image_path",uploadedPath);
@@ -454,6 +447,7 @@ $("saveGarment").addEventListener("click",async()=>{
    clearGarmentFields();
    $("cameraPhoto").value="";
    $("libraryPhoto").value="";
+   $("productUrl").value="";$("urlImportStatus").textContent="";
    $("preview").classList.add("hidden");
    $("analysisMsg").classList.add("hidden");
    go("wardrobe");

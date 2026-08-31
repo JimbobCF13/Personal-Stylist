@@ -367,3 +367,11 @@ Live retailer results from a Stylist recommendation now include **Try on me**. W
 - Purchased items are marked **Awaiting fit review**.
 - Structured real-world fit review captures size, overall 1–5 fit, chest, waist, length, sleeve, shoulders and notes.
 - Confirmed fit history is fed back into future live product searches so recommendations can use the user's actual brand/size experience rather than generic sizing alone.
+
+## V4.8 Wardrobe Organisation + Product Page Import
+- Repairs old category duplication without deleting garments or images.
+- Canonical order: Jackets & Outerwear, Knitwear, Shirts, Polos & T-Shirts, Trousers, Shorts, Footwear, Accessories, Other.
+- Wardrobe renders in category sections rather than newest-upload order.
+- Add Item accepts pasted or dragged retailer product URLs and imports real product facts and image when available.
+- If no image is exposed, the item can still be saved and displays No photo yet.
+- Next planned stage: Fast Wardrobe Setup from natural-language description, dictation, pasted lists or receipts/order history.
