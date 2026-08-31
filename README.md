@@ -409,3 +409,7 @@ The new photo is normalised and converted into the usual catalogue display image
 - Large phone JPEGs request lower-resolution decoding via Pillow `draft()` before further processing.
 - Normalised AI/catalogue source images are capped at 1600px on the longest side and JPEG quality 88 to reduce Render peak memory.
 - Individual uploads are capped at 15 MB.
+
+
+## V4.8.6 Multiple Photo Selection Hotfix
+Fixes a regression introduced by the V4.8.5 reset logic. The browser FileList is live and was being emptied when the Add flow reset the file input before copying the selected files. V4.8.6 snapshots the selected File objects first, then resets the previous batch state, then starts the new queue.

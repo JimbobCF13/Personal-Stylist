@@ -528,9 +528,14 @@ async function handleGarmentPhoto(file){
 
 async function startBatch(files){
  if(analysisInProgress)return;
+
+ // FileList is tied to the input element and is cleared when resetAddFlow()
+ // resets that input, so take a real snapshot first.
+ const selectedFiles=Array.from(files||[]);
+ if(!selectedFiles.length)return;
+
  resetAddFlow();
- photoQueue=Array.from(files||[]);
- if(!photoQueue.length)return;
+ photoQueue=selectedFiles;
 
  // Batch files stay queued, but only one is ever sent to Render at a time.
  batchMode=photoQueue.length>1;
@@ -569,7 +574,10 @@ $("cameraPhoto").addEventListener("change",async e=>{
  resetAddFlow();
  await handleGarmentPhoto(file);
 });
-$("libraryPhoto").addEventListener("change",async e=>{await startBatch(e.target.files);});
+$("libraryPhoto").addEventListener("change",async e=>{
+ const selected=Array.from(e.target.files||[]);
+ await startBatch(selected);
+});
 $("skipGarment").addEventListener("click",async()=>{if(batchMode && !analysisInProgress)await advanceBatch();});
 
 $("saveGarment").addEventListener("click",async()=>{
