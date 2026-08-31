@@ -349,3 +349,27 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .wardrobe-category-nav{margin-right:-2px}
  .wardrobe-category-btn{min-height:42px;padding:9px 11px}
 }
+
+/* V4.9 persistent stylist, weather and saved looks */
+.stylist-weather-fields{margin-top:8px}
+.stylist-weather-status{
+ margin:8px 0 10px;padding:10px 12px;border-radius:11px;background:#f5f5f2;
+ font-size:10px;line-height:1.4;color:#555
+}
+.stylist-weather-status small{display:block;margin-top:3px;color:#777}
+.stylist-session-note{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.stylist-session-note span{font-size:9px;color:#777}
+.favourite-look-btn{min-width:105px}
+.saved-looks-section{max-width:900px;margin:auto}
+.saved-look-card{margin:14px 0}
+.saved-look-card>small,.saved-look-card small{color:#777}
+.saved-look-visual{width:100%;max-height:560px;object-fit:contain;border-radius:14px;background:#f4f4f1;margin:10px 0}
+.saved-piece-strip{display:flex;gap:8px;overflow-x:auto;padding:8px 0}
+.saved-piece{flex:0 0 105px}
+.saved-piece img{width:105px;height:125px;object-fit:contain;background:#f5f5f2;border-radius:10px}
+.saved-piece span{display:block;font-size:8px;line-height:1.3;margin-top:4px}
+.saved-weather{margin:9px 0;padding:8px 10px;background:#f5f5f2;border-radius:9px;font-size:9px;line-height:1.4}
+.saved-request{display:block;margin-top:8px;line-height:1.4}
+@media(max-width:560px){
+ .stylist-session-note{display:block}.stylist-session-note span{display:block;margin-top:3px}
+}

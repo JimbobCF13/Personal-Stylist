@@ -121,6 +121,15 @@ def init_db():
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       outfit_json TEXT, rating TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS outfit_favourites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      label TEXT,
+      outfit_json TEXT NOT NULL,
+      request_text TEXT,
+      weather_context TEXT,
+      visual_path TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE IF NOT EXISTS model_photos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       image_path TEXT NOT NULL,
@@ -1841,6 +1850,111 @@ Rules:
     except Exception as exc:
         raise HTTPException(502, f"Live product search failed: {str(exc)[:350]}")
 
+
+
+class FavouriteOutfitRequest(BaseModel):
+    outfit: dict
+    request_text: Optional[str] = ""
+    weather_context: Optional[str] = ""
+    visual_path: Optional[str] = ""
+
+@app.get("/api/outfit-favourites")
+def get_outfit_favourites():
+    con=db()
+    rows=[dict(r) for r in con.execute(
+        "SELECT * FROM outfit_favourites ORDER BY id DESC"
+    ).fetchall()]
+    con.close()
+    for row in rows:
+        try: row["outfit"]=json.loads(row.get("outfit_json") or "{}")
+        except Exception: row["outfit"]={}
+    return rows
+
+@app.post("/api/outfit-favourites")
+def save_outfit_favourite(req: FavouriteOutfitRequest):
+    outfit=req.outfit or {}
+    label=str(outfit.get("label") or "Saved look")
+    con=db()
+    cur=con.execute("""
+      INSERT INTO outfit_favourites
+      (label,outfit_json,request_text,weather_context,visual_path)
+      VALUES (?,?,?,?,?)
+    """,(label,json.dumps(outfit,ensure_ascii=False),req.request_text or "",
+         req.weather_context or "",req.visual_path or ""))
+    fid=cur.lastrowid
+    con.commit()
+    row=dict(con.execute("SELECT * FROM outfit_favourites WHERE id=?",(fid,)).fetchone())
+    con.close()
+    return row
+
+@app.delete("/api/outfit-favourites/{fid}")
+def delete_outfit_favourite(fid:int):
+    con=db()
+    con.execute("DELETE FROM outfit_favourites WHERE id=?",(fid,))
+    con.commit()
+    con.close()
+    return {"ok":True}
+
+WEATHER_CONTEXT_SCHEMA={
+  "type":"object",
+  "properties":{
+    "location":{"type":"string"},
+    "date_or_period":{"type":"string"},
+    "summary":{"type":"string"},
+    "temperature_low_c":{"type":["number","null"]},
+    "temperature_high_c":{"type":["number","null"]},
+    "rain":{"type":"string"},
+    "wind":{"type":"string"},
+    "styling_context":{"type":"string"},
+    "confidence":{"type":"string","enum":["high","medium","low"]}
+  },
+  "required":["location","date_or_period","summary","temperature_low_c","temperature_high_c",
+              "rain","wind","styling_context","confidence"],
+  "additionalProperties":False
+}
+
+class WeatherContextRequest(BaseModel):
+    location: str
+    when: Optional[str] = "today"
+
+@app.post("/api/weather-context")
+def weather_context(req: WeatherContextRequest):
+    location=(req.location or "").strip()
+    when=(req.when or "today").strip()
+    if not location:
+        raise HTTPException(400,"Enter a location first.")
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(400,"Live weather lookup needs the OpenAI connection.")
+
+    prompt=f"""Find the most relevant current weather forecast available online for:
+LOCATION: {location}
+WHEN: {when}
+
+This weather will be used by a menswear stylist. Use current forecast information from reliable
+weather sources. If the requested date is outside reliable forecast range, say so and use low
+confidence rather than inventing conditions.
+
+Summarise temperatures in Celsius, precipitation/rain risk, wind and practical clothing implications.
+The styling_context should be concise and useful for choosing layers, fabrics, outerwear and footwear.
+"""
+    try:
+        response=OpenAI().responses.create(
+            model=os.getenv("OPENAI_SHOPPING_MODEL",os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
+            reasoning={"effort":"low"},
+            tools=[{"type":"web_search"}],
+            tool_choice="auto",
+            include=["web_search_call.action.sources"],
+            input=prompt,
+            text={"format":{
+                "type":"json_schema",
+                "name":"weather_context",
+                "schema":WEATHER_CONTEXT_SCHEMA,
+                "strict":True
+            }}
+        )
+        return json.loads(response.output_text)
+    except Exception as exc:
+        raise HTTPException(502,f"Weather lookup failed: {str(exc)[:260]}")
 
 class StylistV4Request(BaseModel):
     request_text: str

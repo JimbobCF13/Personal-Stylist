@@ -424,3 +424,17 @@ This is a front-end/navigation-only release. It does not alter, migrate, delete 
 - Selecting a category shows that category directly.
 - When a garment is opened or edited, the app remembers that garment/category.
 - Returning to Wardrobe scrolls back to the garment (or its section) instead of jumping to Jackets & Outerwear at the top.
+
+
+## V4.9 Saved Looks + Persistent Stylist + Live Weather
+- Current Ask My Stylist recommendations persist in browser storage across app navigation and page refreshes. They remain until the user deliberately generates a new set.
+- Generated outfit visual paths are cached in browser storage so revisiting the current suggestion can reuse an existing visual instead of automatically generating another copy.
+- Every recommended outfit has a Favourite button.
+- Favourites are stored in a separate SQLite `outfit_favourites` table and do not alter wardrobe garment rows or image records.
+- New Saved Looks screen displays saved outfit visuals, owned garments, styling rationale, original request and weather context.
+- Ask My Stylist now accepts Location and When.
+- When a location is supplied, the backend performs an OpenAI live web search for current forecast information and feeds temperature, rain, wind and practical clothing context into the styling request.
+- If weather lookup fails or a requested date is outside reliable forecast range, the app falls back to the user's written request rather than blocking outfit generation.
+
+### Wardrobe preservation
+V4.9 only adds a new independent favourites table. Existing `garments` rows, garment images and wardrobe category data are not migrated, rewritten or deleted.

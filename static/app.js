@@ -29,6 +29,8 @@ function go(id){
  if(id!=="wardrobe" || !wardrobeRestorePending)scrollTo(0,0);
  if(id==="wardrobe")loadGarments();
  if(id==="shortlist")loadShortlist();
+ if(id==="savedlooks")loadSavedLooks();
+ if(id==="stylistv4"&&latestStylistSession)requestAnimationFrame(renderLatestStylistSession);
  if(id==="garmentdetail"&&detailGarmentId)loadGarmentDetail(detailGarmentId);
  if(id==="outfits")populateAnchor();
  if(id==="stylistv4")populateV4Anchor();
@@ -42,8 +44,10 @@ document.addEventListener("click",e=>{
  go(b.dataset.go);
 });
 async function init(){
+ loadPersistentStylistState();
  try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
  await loadGarments(); await loadProfile();
+ if(latestStylistSession)renderLatestStylistSession();
 }
 const WARDROBE_ORDER=["Jackets & Outerwear","Knitwear","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
 let selectedWardrobeCategory="";
@@ -988,7 +992,130 @@ function setupV4Dictation(){
 }
 
 const v4VisualCache=new Map();
+let latestStylistSession=null;
+const STYLIST_SESSION_KEY="personalStylist.latestStylistSession.v1";
+const STYLIST_VISUAL_KEY="personalStylist.v4VisualCache.v1";
+
+function loadPersistentStylistState(){
+ try{
+  const raw=localStorage.getItem(STYLIST_SESSION_KEY);
+  if(raw)latestStylistSession=JSON.parse(raw);
+ }catch{}
+ try{
+  const raw=localStorage.getItem(STYLIST_VISUAL_KEY);
+  if(raw){
+   const saved=JSON.parse(raw);
+   Object.entries(saved||{}).forEach(([k,v])=>v4VisualCache.set(k,v));
+  }
+ }catch{}
+}
+
+function persistStylistSession(){
+ try{
+  if(latestStylistSession)localStorage.setItem(STYLIST_SESSION_KEY,JSON.stringify(latestStylistSession));
+ }catch{}
+}
+
+function persistVisualCache(){
+ try{
+  const obj={};
+  for(const [k,v] of v4VisualCache.entries())obj[k]=v;
+  localStorage.setItem(STYLIST_VISUAL_KEY,JSON.stringify(obj));
+ }catch{}
+}
+
 const sourcedProductContexts=new Map();
+
+
+function v4VisualCacheKey(o,useMyLikeness){
+ return JSON.stringify({
+  ids:o.owned_garment_ids||[],
+  label:o.label||"",
+  extra:o.missing_piece||"",
+  likeness:useMyLikeness
+ });
+}
+
+function currentVisualPathForOutfit(o){
+ const preferred=v4VisualCache.get(v4VisualCacheKey(o,true));
+ const generic=v4VisualCache.get(v4VisualCacheKey(o,false));
+ return preferred?.image_path||generic?.image_path||"";
+}
+
+function renderLatestStylistSession(){
+ if(!latestStylistSession)return;
+ const box=$("v4Results");
+ if(!box)return;
+ const x=latestStylistSession.result||{};
+ if(latestStylistSession.request_text)$("v4Request").value=latestStylistSession.request_text;
+ if($("v4Location"))$("v4Location").value=latestStylistSession.location||"";
+ if($("v4When"))$("v4When").value=latestStylistSession.when||"";
+ if(latestStylistSession.weather?.summary){
+  const w=latestStylistSession.weather;
+  $("v4WeatherStatus").classList.remove("hidden");
+  $("v4WeatherStatus").innerHTML=`<b>Forecast used:</b> ${esc(w.summary)}${w.styling_context?`<small>${esc(w.styling_context)}</small>`:""}`;
+ }
+ box.innerHTML=`<div class="notice stylist-session-note"><b>Current stylist suggestions</b><span>These stay here until you ask for a new set.</span></div>`+
+  `<div class="notice"><b>Stylist view:</b> ${esc(x.summary||"")}</div>`+
+  (x.outfits||[]).map((o,i)=>renderV4Outfit(o,i)).join("");
+}
+
+async function saveFavouriteOutfit(encoded,index,button){
+ const o=JSON.parse(decodeURIComponent(encoded));
+ const visual=currentVisualPathForOutfit(o);
+ const original=button?.textContent||"☆ Favourite";
+ if(button){button.disabled=true;button.textContent="Saving…";}
+ try{
+  await api("/api/outfit-favourites",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    outfit:o,
+    request_text:latestStylistSession?.request_text||"",
+    weather_context:latestStylistSession?.weather?.summary||"",
+    visual_path:visual
+   })
+  });
+  if(button)button.textContent="★ Saved";
+ }catch(err){
+  if(button){button.disabled=false;button.textContent=original;}
+  alert(err.message);
+ }
+}
+
+async function loadSavedLooks(){
+ const box=$("savedLooksResults");
+ if(!box)return;
+ box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Loading saved looks…</b></div></div>';
+ try{
+  const rows=await api("/api/outfit-favourites");
+  if(!rows.length){
+   box.innerHTML='<div class="notice">No saved looks yet. Favourite an outfit from Ask My Stylist and it will appear here.</div>';
+   return;
+  }
+  box.innerHTML=rows.map(renderSavedLook).join("");
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+}
+
+function renderSavedLook(row){
+ const o=row.outfit||{};
+ const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
+ const strip=pieces.map(g=>g.image_path?`<div class="saved-piece"><img src="${g.image_path}" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`:"").join("");
+ const visual=row.visual_path?`<img class="saved-look-visual" src="${row.visual_path}" alt="Saved outfit visualisation">`:"";
+ return `<article class="card saved-look-card">
+  <div class="row between"><div><small>SAVED LOOK</small><h3>${esc(row.label||o.label||"Outfit")}</h3></div><button class="text-button danger-text" onclick="deleteSavedLook(${row.id})">Remove</button></div>
+  ${visual}
+  <div class="saved-piece-strip">${strip}</div>
+  ${o.why_it_works?`<p>${esc(o.why_it_works)}</p>`:""}
+  ${row.weather_context?`<div class="saved-weather"><b>Weather context:</b> ${esc(row.weather_context)}</div>`:""}
+  ${row.request_text?`<small class="saved-request">Originally asked: ${esc(row.request_text)}</small>`:""}
+ </article>`;
+}
+
+async function deleteSavedLook(id){
+ if(!confirm("Remove this saved look?"))return;
+ await api(`/api/outfit-favourites/${id}`,{method:"DELETE"});
+ loadSavedLooks();
+}
 
 function renderV4Outfit(o,index){
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
@@ -1014,6 +1141,7 @@ function renderV4Outfit(o,index){
    <small><b>Stylist note:</b> ${esc(o.style_note)}</small>
   </div>
   <div class="v4-actions">
+   <button class="primary favourite-look-btn" type="button" onclick="saveFavouriteOutfit('${payload}',${index},this)">☆ Favourite</button>
    <button class="ghost" type="button" onclick="v4Visualise('${payload}',${index},false)">See on model</button>
    ${o.missing_piece?`<button class="ghost" type="button" onclick="v4FindPiece('${payload}',${index})">Find this piece</button>`:""}
   </div>
@@ -1025,12 +1153,7 @@ function renderV4Outfit(o,index){
 async function v4Visualise(encoded,index,useMyLikeness){
  const o=JSON.parse(decodeURIComponent(encoded));
  const box=$(`v4Visual-${index}`);
- const cacheKey=JSON.stringify({
-  ids:o.owned_garment_ids||[],
-  label:o.label||"",
-  extra:o.missing_piece||"",
-  likeness:useMyLikeness
- });
+ const cacheKey=v4VisualCacheKey(o,useMyLikeness);
 
  if(v4VisualCache.has(cacheKey)){
   const x=v4VisualCache.get(cacheKey);
@@ -1057,6 +1180,7 @@ async function v4Visualise(encoded,index,useMyLikeness){
    })
   });
   v4VisualCache.set(cacheKey,x);
+  persistVisualCache();
   box.innerHTML=`<img src="${x.image_path}" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
  }catch(err){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
@@ -1294,9 +1418,30 @@ if(runStylistV4Btn){
   const controller=new AbortController();
   let statusTimer=null;
   let timeoutTimer=null;
+  let weatherData=null;
+  const location=($("v4Location")?.value||"").trim();
+  const when=($("v4When")?.value||"today").trim()||"today";
+
+  runStylistV4Btn.disabled=true;
+
+  if(location){
+   const weatherBox=$("v4WeatherStatus");
+   weatherBox.classList.remove("hidden");
+   weatherBox.innerHTML='<span class="spinner"></span> Checking the live forecast before styling…';
+   try{
+    weatherData=await api("/api/weather-context",{
+     method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({location,when})
+    });
+    weatherBox.innerHTML=`<b>Forecast:</b> ${esc(weatherData.summary||"")}${weatherData.styling_context?`<small>${esc(weatherData.styling_context)}</small>`:""}`;
+   }catch(err){
+    weatherBox.innerHTML=`<b>Weather lookup unavailable.</b> <small>${esc(err.message)} I’ll style from your written request instead.</small>`;
+   }
+  }else{
+   $("v4WeatherStatus")?.classList.add("hidden");
+  }
 
   box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Styling from your wardrobe…</b><small id="v4WaitNote">This usually takes under a minute.</small></div></div>';
-  runStylistV4Btn.disabled=true;
 
   statusTimer=setTimeout(()=>{
    const note=$("v4WaitNote");
@@ -1312,7 +1457,9 @@ if(runStylistV4Btn){
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
-     request_text:text,
+     request_text:weatherData
+       ? `${text}\n\nLIVE WEATHER CONTEXT FOR ${location} (${when}): ${weatherData.summary}. ${weatherData.styling_context||""} Temperature range: ${weatherData.temperature_low_c??"?"}–${weatherData.temperature_high_c??"?"}°C. Rain: ${weatherData.rain||"unknown"}. Wind: ${weatherData.wind||"unknown"}.`
+       : text,
      anchor_garment_id:$("v4Anchor").value?Number($("v4Anchor").value):null,
      owned_only:$("v4Shopping").value==="owned",
      max_options:3
@@ -1329,7 +1476,18 @@ if(runStylistV4Btn){
    }
 
    const x=payload;
-   box.innerHTML=`<div class="notice"><b>Stylist view:</b> ${esc(x.summary||"")}</div>`+
+   latestStylistSession={
+    request_text:text,
+    location,
+    when,
+    weather:weatherData,
+    result:x,
+    saved_at:new Date().toISOString()
+   };
+   persistStylistSession();
+
+   box.innerHTML=`<div class="notice stylist-session-note"><b>Current stylist suggestions</b><span>These stay here until you ask for a new set.</span></div>`+
+    `<div class="notice"><b>Stylist view:</b> ${esc(x.summary||"")}</div>`+
     (x.outfits||[]).map((o,i)=>renderV4Outfit(o,i)).join("");
 
    if(!(x.outfits||[]).length){
