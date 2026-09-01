@@ -1547,12 +1547,56 @@ PRINCIPLES:
 @app.post("/api/wardrobe-gaps")
 def wardrobe_gaps(req: WardrobeGapRequest):
     con = db()
-    garments = [dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
-    profile = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
-    feedback = [dict(r) for r in con.execute(
-        "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 30"
+    garment_rows = [dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile_row = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    feedback_rows = [dict(r) for r in con.execute(
+        "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 12"
     ).fetchall()]
     con.close()
+
+    # Keep the analysis prompt lean as the wardrobe grows. We deliberately exclude
+    # image paths, research blobs, purchase metadata and other fields that do not
+    # help decide wardrobe gaps but substantially increase prompt size.
+    garments = [{
+        "id": g.get("id"),
+        "category": g.get("category") or "",
+        "garment_type": g.get("garment_type") or "",
+        "brand": g.get("brand") or "",
+        "model_line": g.get("model_line") or "",
+        "labelled_size": g.get("labelled_size") or "",
+        "colour": g.get("colour") or "",
+        "material": g.get("material") or "",
+        "pattern": g.get("pattern") or "",
+        "fit_cut": g.get("fit_cut") or "",
+        "fit_feedback": g.get("fit_feedback") or "",
+        "season": g.get("season") or "",
+        "formality": g.get("formality") or "",
+        "fit_rating": g.get("fit_rating"),
+        "fit_notes": g.get("fit_notes") or ""
+    } for g in garment_rows]
+
+    profile = {
+        k: profile_row.get(k)
+        for k in [
+            "height_cm","chest_cm","waist_cm","hips_cm","thigh_cm",
+            "inseam_cm","sleeve_cm","neck_cm","preferred_fit",
+            "style_notes","brand_notes"
+        ]
+        if k in profile_row
+    }
+
+    # Recent feedback is useful, but only pass compact summaries.
+    feedback = []
+    for row in feedback_rows:
+        item = {"rating": row.get("rating")}
+        try:
+            parsed = json.loads(row.get("outfit_json") or "{}")
+            item["garment_ids"] = parsed.get("garment_ids") or parsed.get("owned_garment_ids") or []
+            item["label"] = parsed.get("label") or ""
+        except Exception:
+            item["garment_ids"] = []
+            item["label"] = ""
+        feedback.append(item)
 
     if not garments:
         raise HTTPException(400, "Add some wardrobe items first so I can identify useful gaps.")
@@ -1575,7 +1619,7 @@ def wardrobe_gaps(req: WardrobeGapRequest):
     client = OpenAI()
     response = client.responses.create(
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
-      reasoning={"effort":"medium"},
+      reasoning={"effort":"low"},
       instructions=SHOPPING_STYLIST_INSTRUCTIONS,
       input=json.dumps(context, ensure_ascii=False),
       text={"format":{

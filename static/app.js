@@ -1456,8 +1456,13 @@ async function analyseWardrobeGaps(){
   <small>This can take a little while.</small></div></div>`;
  requestAnimationFrame(()=>box.scrollIntoView({behavior:"smooth",block:"center"}));
 
+ const slowNote=setTimeout(()=>{
+  const small=box.querySelector(".shopping-working small");
+  if(small)small.textContent="Still working — your wardrobe is quite large, so this analysis can occasionally take longer.";
+ },45000);
+
  try{
-  timeoutId=setTimeout(()=>controller.abort(),75000);
+  timeoutId=setTimeout(()=>controller.abort(),105000);
   const r=await fetch("/api/wardrobe-gaps",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
@@ -1478,9 +1483,10 @@ async function analyseWardrobeGaps(){
    (recs.length?recs.map(renderGapRecommendation).join(""):'<div class="notice">The analysis completed but did not return a useful recommendation. Try making the request more specific.</div>');
  }catch(err){
   box.innerHTML=err.name==="AbortError"
-   ? '<div class="notice"><b>The analysis took too long.</b><br>I stopped it after 75 seconds rather than leaving the page spinning. Please try again.</div>'
+   ? '<div class="notice"><b>The analysis took too long.</b><br>I stopped it after 105 seconds rather than leaving the page spinning. Please try again.</div>'
    : `<div class="notice"><b>I couldn't analyse the wardrobe.</b><br>${esc(err.message||"Something went wrong.")}</div>`;
  }finally{
+  clearTimeout(slowNote);
   if(timeoutId)clearTimeout(timeoutId);
   btn.disabled=false;
   btn.textContent=original;

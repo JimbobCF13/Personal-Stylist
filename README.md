@@ -456,3 +456,12 @@ V4.9 only adds a new independent favourites table. Existing `garments` rows, gar
 - Recommendations are now held in an in-memory map and the results area uses one delegated click listener, so dynamically-created buttons are wired reliably.
 - The existing Searching UK retailers loading state remains unchanged.
 - No backend, database, wardrobe row or garment-image changes are included in this patch.
+
+
+## V4.9.3 Large Wardrobe Analysis Performance
+- Wardrobe-gap analysis now sends a compact styling representation of each garment rather than the entire database row.
+- Excludes image paths, enrichment JSON, retailer metadata and other fields that do not help gap analysis.
+- Reduces recent outfit feedback from 30 full rows to 12 compact summaries.
+- Uses low reasoning effort for this structured wardrobe-comparison task to reduce latency.
+- Extends only the Wardrobe Gaps front-end timeout from 75 to 105 seconds and adds a clear "still working" message at 45 seconds.
+- No garment rows, uploaded images or wardrobe database records are modified or migrated by this change.
