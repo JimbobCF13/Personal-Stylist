@@ -2393,6 +2393,146 @@ def get_fit_learning():
     con.close()
     return rows
 
+
+LOOK_CRITIQUE_SCHEMA={
+ "type":"object",
+ "properties":{
+  "verdict":{"type":"string"},
+  "score":{"type":"integer","minimum":0,"maximum":100},
+  "what_works":{"type":"array","items":{"type":"string"},"maxItems":4},
+  "small_changes":{"type":"array","items":{
+   "type":"object",
+   "properties":{
+    "change":{"type":"string"},
+    "reason":{"type":"string"},
+    "replacement_garment_id":{"type":["integer","null"]}
+   },
+   "required":["change","reason","replacement_garment_id"],
+   "additionalProperties":False
+  },"maxItems":4},
+  "stylist_note":{"type":"string"}
+ },
+ "required":["verdict","score","what_works","small_changes","stylist_note"],
+ "additionalProperties":False
+}
+
+class LookCritiqueRequest(BaseModel):
+    garment_ids:list[int]
+    request_text:Optional[str]=""
+    mode:Optional[str]="analyse"
+
+@app.post("/api/look-critique")
+def look_critique(req:LookCritiqueRequest):
+    ids=[int(x) for x in req.garment_ids if isinstance(x,int) or str(x).isdigit()]
+    if not ids: raise HTTPException(400,"Select some wardrobe pieces first.")
+    con=db()
+    ph=",".join("?" for _ in ids)
+    selected=[dict(r) for r in con.execute(f"SELECT * FROM garments WHERE id IN ({ph})",ids).fetchall()]
+    wardrobe=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    con.close()
+    selected_by={g["id"]:g for g in selected}
+    selected=[selected_by[i] for i in ids if i in selected_by]
+
+    compact=lambda g:{k:g.get(k) for k in ["id","category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","fit_feedback","season","formality","fit_notes"]}
+    mode=(req.mode or "analyse").lower()
+    instruction={
+      "analyse":"Assess the user's chosen outfit. Keep it intact unless there is a genuine issue. Explain what works and offer only worthwhile small refinements.",
+      "improve":"Improve the user's chosen outfit with the fewest changes possible. Prefer swapping only one piece, or at most two, using garments the user already owns.",
+      "alternatives":"Keep the core character of the user's chosen outfit and suggest small alternative directions using their wardrobe; do not replace the entire look."
+    }.get(mode,"Assess the outfit and prefer small refinements.")
+
+    context={"mode":mode,"user_request":req.request_text or "No occasion supplied","selected_outfit":[compact(g) for g in selected],
+             "wardrobe":[compact(g) for g in wardrobe],"profile":profile}
+    response=OpenAI().responses.create(
+      model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},
+      instructions=f"""You are a restrained, practical men's personal stylist. {instruction}
+Never claim an item is owned unless its garment id is in the wardrobe data.
+replacement_garment_id must be a real wardrobe id or null. Avoid change for change's sake.""",
+      input=json.dumps(context,ensure_ascii=False),
+      text={"format":{"type":"json_schema","name":"look_critique","schema":LOOK_CRITIQUE_SCHEMA,"strict":True}}
+    )
+    return json.loads(response.output_text)
+
+PRODUCT_WARDROBE_SCHEMA={
+ "type":"object",
+ "properties":{
+  "summary":{"type":"string"},
+  "outfits":{"type":"array","minItems":1,"maxItems":4,"items":{
+   "type":"object","properties":{
+    "label":{"type":"string"},
+    "score":{"type":"integer","minimum":0,"maximum":100},
+    "owned_garment_ids":{"type":"array","items":{"type":"integer"}},
+    "why_it_works":{"type":"string"},
+    "style_note":{"type":"string"}
+   },
+   "required":["label","score","owned_garment_ids","why_it_works","style_note"],
+   "additionalProperties":False
+  }}
+ },
+ "required":["summary","outfits"],"additionalProperties":False
+}
+
+class ProductWardrobeLooksRequest(BaseModel):
+    url:str
+    occasion:Optional[str]=""
+    max_options:Optional[int]=3
+
+@app.post("/api/product-wardrobe-looks")
+def product_wardrobe_looks(req:ProductWardrobeLooksRequest):
+    url=(req.url or "").strip()
+    if not _public_http_url(url): raise HTTPException(400,"Please use a normal public retailer product URL.")
+    # Reuse the same resilient retailer-page extraction used by wardrobe URL import.
+    meta=_fetch_product_page_meta(url)
+    analysis=None
+    if os.getenv("OPENAI_API_KEY") and OpenAI is not None:
+        prompt=f"""Identify the menswear product represented by this retailer URL using the supplied page metadata.
+URL: {url}
+TITLE: {meta.get('title') or ''}
+DESCRIPTION: {meta.get('description') or ''}
+TEXT: {(meta.get('page_text') or '')[:8000]}
+Return supported product facts only. Never invent brand, model, colour, material or fit."""
+        try:
+            response=OpenAI().responses.create(
+              model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},input=prompt,
+              text={"format":{"type":"json_schema","name":"product_url_import","schema":PRODUCT_URL_IMPORT_SCHEMA,"strict":True}}
+            )
+            analysis=json.loads(response.output_text)
+        except Exception:
+            analysis=None
+    if analysis is None:
+        # Existing web-search fallback handles retailers that block direct page fetches.
+        search_prompt=f"""Identify the exact menswear product at this retailer URL using live web search: {url}.
+Return only facts supported by the retailer or reliable indexed product information. Never guess."""
+        response=OpenAI().responses.create(
+          model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},
+          tools=[{"type":"web_search"}],tool_choice="auto",input=search_prompt,
+          text={"format":{"type":"json_schema","name":"product_url_import","schema":PRODUCT_URL_IMPORT_SCHEMA,"strict":True}}
+        )
+        analysis=json.loads(response.output_text)
+
+    con=db()
+    wardrobe=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    con.close()
+    if not wardrobe: raise HTTPException(400,"Add some wardrobe items first.")
+
+    compact=lambda g:{k:g.get(k) for k in ["id","category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","fit_feedback","season","formality"]}
+    max_options=max(1,min(int(req.max_options or 3),4))
+    context={"product":analysis,"product_url":url,"occasion":req.occasion or "not specified",
+             "wardrobe":[compact(g) for g in wardrobe],"profile":profile,"max_options":max_options}
+    response=OpenAI().responses.create(
+      model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},
+      instructions="""Build outfits around the external product using only the user's real wardrobe for the remaining pieces.
+Return distinct, practical options. owned_garment_ids must contain only real ids from the supplied wardrobe.
+Do not include a wardrobe substitute for the external product itself. Prefer combinations that demonstrate whether buying the product would genuinely add value.""",
+      input=json.dumps(context,ensure_ascii=False),
+      text={"format":{"type":"json_schema","name":"product_wardrobe_looks","schema":PRODUCT_WARDROBE_SCHEMA,"strict":True}}
+    )
+    result=json.loads(response.output_text)
+    result["outfits"]=result.get("outfits",[])[:max_options]
+    return {"product":analysis,"product_url":url,"page_image_url":meta.get("image_url") or "","result":result}
+
 class ProductTryOnRequest(BaseModel):
     garment_ids: list[int]
     product_name: str

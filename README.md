@@ -476,3 +476,25 @@ V4.9 only adds a new independent favourites table. Existing `garments` rows, gar
 - **Save selected items** uses a single database transaction; nothing is written during the analysis/review stage.
 - Quick-added garments can have photos/screenshots added later through the existing Edit Garment photo flow.
 - No database migration is required and existing wardrobe rows/images are untouched.
+
+
+## V5.1 — Build My Own Look + Product-to-Wardrobe
+### Build My Own Look
+- Visually select any combination of saved wardrobe pieces with one-tap tick selection.
+- A sticky Your Look tray shows the current selection.
+- Show on me uses the existing high-quality personalised outfit visualisation.
+- Regenerate image retries only that visual without changing the selected outfit.
+- Analyse this look gives a restrained stylist critique.
+- Improve this look explicitly prefers the fewest useful changes rather than replacing the whole outfit.
+- Give me alternatives keeps the character of the user's chosen outfit and suggests small directions.
+
+### Style an Online Item
+- Paste a retailer product URL.
+- The app identifies the product using the existing retailer-page extraction/fallback approach.
+- It builds up to three outfits around that external product using only garments the user actually owns.
+- Each combination can be shown on the user using the existing product try-on pipeline and saved model photos.
+- Individual try-on images can be regenerated without losing the other product/wardrobe combinations.
+
+### Safety / persistence
+- No wardrobe database migration is introduced by V5.1.
+- Existing garment rows and uploaded wardrobe images are not rewritten or deleted.

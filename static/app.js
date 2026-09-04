@@ -9,6 +9,9 @@ let photoQueue=[], currentPhotoIndex=-1, batchMode=false, analysisInProgress=fal
 const cleanupInProgress=new Set();
 let quickWardrobeItems=[];
 let quickWardrobeRecognition=null;
+let buildLookSelected=new Set();
+let productLookContext=null;
+
 
 
 
@@ -39,6 +42,7 @@ function go(id){
  if(id==="stylistv4")populateV4Anchor();
  if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}
  if(id==="quickwardrobe")renderQuickWardrobeResults();
+ if(id==="buildlook")renderBuildLookPicker();
 }
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-go]");
@@ -160,6 +164,103 @@ function startQuickWardrobeDictation(){
  recognition.onerror=e=>{status.textContent=`Dictation stopped: ${e.error||"browser speech error"}.`;status.classList.remove("hidden");};
  recognition.onend=()=>{quickWardrobeRecognition=null;btn.textContent="Dictate";if(status.textContent==="Listening… describe your wardrobe naturally.")status.textContent="Dictation stopped. You can edit the text before analysing it.";};
  try{recognition.start()}catch{quickWardrobeRecognition=null;btn.textContent="Dictate";}
+}
+
+
+function buildLookGarmentTile(g){
+ const selected=buildLookSelected.has(g.id);
+ return `<button type="button" class="build-garment${selected?" selected":""}" data-build-garment="${g.id}" aria-pressed="${selected}">
+  <span class="build-check">${selected?"✓":""}</span>
+  ${g.image_path?`<img src="${g.image_path}" alt="">`:`<div class="build-no-photo">No photo</div>`}
+  <b>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</b>
+  <small>${esc([g.colour,g.labelled_size].filter(Boolean).join(" · "))}</small>
+ </button>`;
+}
+
+function renderBuildLookPicker(){
+ const box=$("buildLookPicker");if(!box)return;
+ box.innerHTML=WARDROBE_ORDER.map(cat=>{
+  const items=garments.filter(g=>g.category===cat);
+  if(!items.length)return "";
+  return `<section class="build-category"><div class="wardrobe-group-head"><h4>${esc(cat)}</h4><span>${items.length}</span></div>
+   <div class="build-picker-grid">${items.map(buildLookGarmentTile).join("")}</div></section>`;
+ }).join("");
+ renderBuildLookTray();
+}
+
+function renderBuildLookTray(){
+ const tray=$("buildLookTray");if(!tray)return;
+ const chosen=[...buildLookSelected].map(id=>garments.find(g=>g.id===id)).filter(Boolean);
+ if(!chosen.length){tray.innerHTML='<div class="notice">Select pieces above to start building your look.</div>';return;}
+ tray.innerHTML=`<div class="card"><div class="row between"><div><small class="eyebrow">YOUR LOOK</small><h3>${chosen.length} selected piece${chosen.length===1?"":"s"}</h3></div><button class="text-button" id="clearBuildLook">Clear</button></div>
+  <div class="build-selected-strip">${chosen.map(g=>`<div>${g.image_path?`<img src="${g.image_path}" alt="">`:""}<span>${esc(g.garment_type||g.category)}</span></div>`).join("")}</div>
+  <div class="build-look-actions"><button id="showBuiltLook" class="primary">Show on me</button><button class="ghost" data-look-critique="analyse">Analyse this look</button><button class="ghost" data-look-critique="improve">Improve this look</button><button class="ghost" data-look-critique="alternatives">Give me alternatives</button></div>
+ </div>`;
+}
+
+async function showBuiltLook(){
+ const box=$("buildLookVisual"),ids=[...buildLookSelected];
+ if(!ids.length)return;
+ box.innerHTML='<div class="shopping-working"><span class="retailer-search-spinner"></span><div><b>Creating your look…</b><p>Using the exact pieces you selected and your saved model photos.</p></div></div>';
+ try{
+  const x=await api("/api/outfit-visualisation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+   garment_ids:ids,label:"My own look",reason:$("buildLookContext").value.trim(),occasion:$("buildLookContext").value.trim(),use_my_likeness:true,requested_extra_piece:""
+  })});
+  box.innerHTML=`<div class="card built-look-result"><img src="${x.image_path}" alt="Your outfit visualisation"><div class="row"><button class="ghost" id="refreshBuiltLook">Regenerate image</button><button class="primary" data-look-critique="analyse">Ask the stylist</button></div><small>${esc(x.notice||"AI visualisation")}</small></div>`;
+ }catch(err){box.innerHTML=`<div class="notice"><b>I couldn't create the visual.</b><br>${esc(err.message)}</div>`}
+}
+
+async function critiqueBuiltLook(mode){
+ const box=$("buildLookCritique"),ids=[...buildLookSelected];if(!ids.length)return;
+ box.innerHTML='<div class="shopping-working"><span class="retailer-search-spinner"></span><div><b>Stylist is reviewing your look…</b><p>I’ll keep your choices intact unless a change genuinely improves it.</p></div></div>';
+ try{
+  const x=await api("/api/look-critique",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({garment_ids:ids,request_text:$("buildLookContext").value.trim(),mode})});
+  const changes=x.small_changes||[];
+  box.innerHTML=`<article class="card look-critique"><div class="row between"><div><small class="eyebrow">STYLIST VIEW</small><h3>${esc(x.verdict)}</h3></div><span class="score">${x.score}/100</span></div>
+   ${(x.what_works||[]).length?`<div class="critique-section"><b>What works</b>${x.what_works.map(t=>`<p>✓ ${esc(t)}</p>`).join("")}</div>`:""}
+   ${changes.length?`<div class="critique-section"><b>${mode==="improve"?"Small improvements":"Ideas to consider"}</b>${changes.map(c=>`<p>${esc(c.change)} <small>${esc(c.reason)}</small></p>`).join("")}</div>`:`<div class="notice">I wouldn't change anything just for the sake of it.</div>`}
+   <p>${esc(x.stylist_note||"")}</p></article>`;
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+}
+
+function productLookCard(o,index,product){
+ const payload=encodeURIComponent(JSON.stringify({o,product}));
+ const owned=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
+ return `<article class="card product-wardrobe-look"><div class="row between"><div><small>OPTION ${index+1}</small><h3>${esc(o.label)}</h3></div><span class="score">${o.score}/100</span></div>
+  <p>${esc(o.why_it_works)}</p><div class="build-selected-strip">${owned.map(g=>`<div>${g.image_path?`<img src="${g.image_path}" alt="">`:""}<span>${esc(g.garment_type||g.category)}</span></div>`).join("")}</div>
+  <p class="style-note">${esc(o.style_note||"")}</p>
+  <button class="primary" data-product-look-try="${payload}" data-product-look-index="${index}">Show this on me</button>
+  <div id="productLookVisual-${index}"></div></article>`;
+}
+
+async function buildProductWardrobeLooks(){
+ const url=$("productLookUrl").value.trim(),box=$("productLookResults"),btn=$("productLookBuild");
+ if(!url){box.innerHTML='<div class="notice">Paste a retailer product URL first.</div>';return;}
+ const original=btn.textContent;btn.disabled=true;btn.textContent="Building looks…";
+ box.innerHTML='<div class="shopping-working"><span class="retailer-search-spinner"></span><div><b>Reading the product and your wardrobe…</b><p>I’m finding combinations that show whether this item genuinely works with what you own.</p></div></div>';
+ try{
+  const x=await api("/api/product-wardrobe-looks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,occasion:$("productLookOccasion").value.trim(),max_options:3})});
+  productLookContext=x;
+  const p=x.product||{},r=x.result||{};
+  box.innerHTML=`<div class="card product-found"><small class="eyebrow">PRODUCT FOUND</small><h3>${esc([p.brand,p.model_line||p.garment_type].filter(Boolean).join(" ")||"Retailer item")}</h3><p>${esc([p.colour,p.material,p.fit_cut].filter(Boolean).join(" · "))}</p></div>
+   <div class="notice"><b>Stylist view:</b> ${esc(r.summary||"")}</div>${(r.outfits||[]).map((o,i)=>productLookCard(o,i,p)).join("")}`;
+ }catch(err){box.innerHTML=`<div class="notice"><b>I couldn't build looks from that product.</b><br>${esc(err.message)}</div>`}
+ finally{btn.disabled=false;btn.textContent=original}
+}
+
+async function tryProductWardrobeLook(encoded,index,button){
+ const data=JSON.parse(decodeURIComponent(encoded)),o=data.o,p=data.product,box=$(`productLookVisual-${index}`);
+ const original=button.textContent;button.disabled=true;button.textContent="Creating…";
+ box.innerHTML='<div class="shopping-working"><span class="retailer-search-spinner"></span><div><b>Showing this on you…</b></div></div>';
+ try{
+  const x=await api("/api/product-tryon",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+   garment_ids:o.owned_garment_ids||[],product_name:p.model_line||p.garment_type||"Retailer product",product_brand:p.brand||"",
+   product_retailer:"Retailer",product_image_url:productLookContext?.page_image_url||"",product_description:p.notes||"",
+   product_colour:p.colour||"",product_material:p.material||"",product_fit:p.fit_cut||"",outfit_label:o.label,outfit_reason:o.why_it_works,use_my_likeness:true
+  })});
+  box.innerHTML=`<div class="built-look-result"><img src="${x.image_path}" alt=""><button class="ghost" data-product-look-try="${encoded}" data-product-look-index="${index}">Regenerate image</button><small>${esc(x.notice||"")}</small></div>`;
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+ finally{button.disabled=false;button.textContent=original}
 }
 
 async function init(){
@@ -1800,4 +1901,25 @@ $("quickWardrobeResults")?.addEventListener("click",e=>{
  if(!remove)return;
  quickWardrobeItems.splice(Number(remove.dataset.quickRemove),1);
  renderQuickWardrobeResults();
+});
+
+$("buildLookPicker")?.addEventListener("click",e=>{
+ const tile=e.target.closest("[data-build-garment]");if(!tile)return;
+ const id=Number(tile.dataset.buildGarment);
+ buildLookSelected.has(id)?buildLookSelected.delete(id):buildLookSelected.add(id);
+ renderBuildLookPicker();
+});
+$("buildLookTray")?.addEventListener("click",e=>{
+ if(e.target.closest("#clearBuildLook")){buildLookSelected.clear();renderBuildLookPicker();$("buildLookVisual").innerHTML="";$("buildLookCritique").innerHTML="";return;}
+ if(e.target.closest("#showBuiltLook"))showBuiltLook();
+ const c=e.target.closest("[data-look-critique]");if(c)critiqueBuiltLook(c.dataset.lookCritique);
+});
+$("buildLookVisual")?.addEventListener("click",e=>{
+ if(e.target.closest("#refreshBuiltLook"))showBuiltLook();
+ const c=e.target.closest("[data-look-critique]");if(c)critiqueBuiltLook(c.dataset.lookCritique);
+});
+$("productLookBuild")?.addEventListener("click",buildProductWardrobeLooks);
+$("productLookResults")?.addEventListener("click",e=>{
+ const b=e.target.closest("[data-product-look-try]");if(!b)return;
+ tryProductWardrobeLook(b.dataset.productLookTry,Number(b.dataset.productLookIndex),b);
 });

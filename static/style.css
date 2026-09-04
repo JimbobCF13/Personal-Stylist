@@ -407,3 +407,21 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .quick-grid{grid-template-columns:1fr 1fr}.quick-wide{grid-column:span 2}
  .wardrobe-add-actions{flex-wrap:wrap;justify-content:flex-end}
 }
+
+/* V5.1 Build My Own Look + Product-to-Wardrobe */
+.build-look-section,.product-look-section{max-width:1050px}
+.build-help{font-size:10px;color:#666;margin:5px 0}
+.build-category{margin:18px 0}.build-picker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.build-garment{position:relative;text-align:left;border:1px solid var(--line);border-radius:13px;background:#fff;padding:7px;cursor:pointer;min-width:0}
+.build-garment.selected{border:2px solid #111;padding:6px}.build-check{position:absolute;right:7px;top:7px;width:22px;height:22px;border-radius:50%;background:#fff;border:1px solid #ccc;display:grid;place-items:center;font-weight:900;z-index:2}
+.build-garment.selected .build-check{background:#111;color:#fff;border-color:#111}
+.build-garment img,.build-no-photo{width:100%;height:150px;object-fit:contain;background:#f5f5f2;border-radius:9px}
+.build-no-photo{display:grid;place-items:center;font-size:9px;color:#999}
+.build-garment b{display:block;font-size:9px;line-height:1.3;margin-top:6px}.build-garment small{font-size:8px;color:#777}
+.build-look-tray{position:sticky;bottom:8px;z-index:5;margin:15px 0}.build-look-tray>.card{box-shadow:0 8px 30px rgba(0,0,0,.12)}
+.build-selected-strip{display:flex;gap:7px;overflow-x:auto;margin:9px 0}.build-selected-strip>div{flex:0 0 82px}.build-selected-strip img{width:82px;height:95px;object-fit:contain;background:#f5f5f2;border-radius:8px}.build-selected-strip span{display:block;font-size:8px;margin-top:3px}
+.build-look-actions{display:flex;gap:7px;flex-wrap:wrap}.built-look-result{margin:12px 0}.built-look-result>img{width:100%;max-height:700px;object-fit:contain;border-radius:14px;background:#f4f4f1}.built-look-result>.row{gap:8px;margin:8px 0}
+.look-critique{margin:12px 0}.score{font-size:18px;font-weight:850}.critique-section{margin:12px 0}.critique-section>b{font-size:10px}.critique-section p{font-size:10px;margin:6px 0}.critique-section small{display:block;color:#777;margin-top:2px}
+.product-found{margin:14px 0}.product-wardrobe-look{margin:14px 0}.product-wardrobe-look .style-note{font-size:9px;color:#666}
+@media(max-width:800px){.build-picker-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:520px){.build-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.build-garment img,.build-no-photo{height:135px}}

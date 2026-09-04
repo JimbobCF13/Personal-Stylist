@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
-<link rel="stylesheet" href="/static/style.css?v=5.0">
+<link rel="stylesheet" href="/static/style.css?v=5.1">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.0</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.1</span></header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
@@ -43,6 +43,14 @@
     <button class="home-card" data-go="profile">
      <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c1-5 4-7 7-7s6 2 7 7M4 4h3M17 4h3"/></svg></span>
      <span><small>FIT & PREFERENCES</small><b>My Profile</b><em>Measurements, brands and style learning</em></span>
+    </button>
+    <button class="home-card" data-go="buildlook">
+     <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4h10M9 4v5l-4 3v8h14v-8l-4-3V4"/><path d="M9 14h6"/></svg></span>
+     <span><small>CREATE</small><b>Build My Own Look</b><em>Pick your pieces, see them on you, then ask the stylist</em></span>
+    </button>
+    <button class="home-card" data-go="productlook">
+     <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 5h9v9"/><path d="m19 5-9 9"/><path d="M17 13v6H5V7h6"/></svg></span>
+     <span><small>TRY BEFORE YOU BUY</small><b>Style an Online Item</b><em>Paste a product link and combine it with your wardrobe</em></span>
     </button>
     <button class="home-card" data-go="quickwardrobe">
      <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14M5 12h14M5 19h9"/><path d="M18 16v6M15 19h6"/></svg></span>
@@ -147,6 +155,34 @@
  </div>
 </section>
 
+
+
+<section id="buildlook" class="screen">
+ <div class="section build-look-section">
+  <div class="row between"><div><small class="eyebrow">YOUR WARDROBE</small><h3>Build My Own Look</h3></div><button class="ghost" data-go="wardrobe">Wardrobe</button></div>
+  <div class="card form">
+   <label>OPTIONAL CONTEXT<input id="buildLookContext" placeholder="e.g. Dinner in London, smart casual"></label>
+   <p class="build-help">Tap the clothes you want to combine. You can choose as few or as many pieces as you like.</p>
+  </div>
+  <div id="buildLookPicker"></div>
+  <div id="buildLookTray" class="build-look-tray"></div>
+  <div id="buildLookVisual"></div>
+  <div id="buildLookCritique"></div>
+ </div>
+</section>
+
+<section id="productlook" class="screen">
+ <div class="section product-look-section">
+  <div class="row between"><div><small class="eyebrow">TRY BEFORE YOU BUY</small><h3>Style an Online Item</h3></div><button class="ghost" data-go="wardrobe">Wardrobe</button></div>
+  <div class="card form">
+   <p>Paste a retailer product page. I’ll identify the item and build outfits around it using clothes you already own.</p>
+   <label>PRODUCT URL<input id="productLookUrl" type="url" placeholder="https://retailer.com/product/..."></label>
+   <label>OPTIONAL OCCASION<input id="productLookOccasion" placeholder="e.g. Smart dinner, work, weekend"></label>
+   <button id="productLookBuild" class="primary full" type="button">Build looks with my wardrobe</button>
+  </div>
+  <div id="productLookResults"></div>
+ </div>
+</section>
 
 <section id="stylistv4" class="screen">
  <div class="section">
@@ -303,5 +339,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=5.0"></script>
+<script src="/static/app.js?v=5.1"></script>
 </body></html>
