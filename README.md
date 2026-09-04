@@ -465,3 +465,14 @@ V4.9 only adds a new independent favourites table. Existing `garments` rows, gar
 - Uses low reasoning effort for this structured wardrobe-comparison task to reduce latency.
 - Extends only the Wardrobe Gaps front-end timeout from 75 to 105 seconds and adds a clear "still working" message at 45 seconds.
 - No garment rows, uploaded images or wardrobe database records are modified or migrated by this change.
+
+
+## V5.0 — Fast Wardrobe Setup
+- Adds **Quick Add Wardrobe** from both Home and My Wardrobe.
+- Users can type, paste or dictate a natural-language list of clothes they already own.
+- AI converts the description into separate, structured wardrobe entries without inventing missing brand/model/size/material details.
+- Every proposed item is shown in an editable review screen before saving.
+- Individual items can be unticked or removed.
+- **Save selected items** uses a single database transaction; nothing is written during the analysis/review stage.
+- Quick-added garments can have photos/screenshots added later through the existing Edit Garment photo flow.
+- No database migration is required and existing wardrobe rows/images are untouched.

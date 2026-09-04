@@ -1048,6 +1048,129 @@ async def add_garment(
     con.commit(); gid=cur.lastrowid; con.close()
     return {"ok":True,"id":gid}
 
+
+class QuickWardrobeRequest(BaseModel):
+    description: str
+
+QUICK_WARDROBE_SCHEMA = {
+ "type":"object",
+ "properties":{
+  "summary":{"type":"string"},
+  "items":{"type":"array","minItems":1,"maxItems":40,"items":{
+   "type":"object",
+   "properties":{
+    "category":{"type":"string"},
+    "garment_type":{"type":"string"},
+    "brand":{"type":"string"},
+    "model_line":{"type":"string"},
+    "labelled_size":{"type":"string"},
+    "colour":{"type":"string"},
+    "material":{"type":"string"},
+    "pattern":{"type":"string"},
+    "fit_cut":{"type":"string"},
+    "fit_feedback":{"type":"string","enum":["Unknown","Perfect fit","Slightly tight","Slightly loose","Too tight","Too loose"]},
+    "season":{"type":"string"},
+    "formality":{"type":"string"},
+    "notes":{"type":"string"},
+    "confidence":{"type":"string","enum":["high","medium","low"]}
+   },
+   "required":["category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","fit_feedback","season","formality","notes","confidence"],
+   "additionalProperties":False
+  }}
+ },
+ "required":["summary","items"],
+ "additionalProperties":False
+}
+
+@app.post("/api/quick-wardrobe/parse")
+def parse_quick_wardrobe(req: QuickWardrobeRequest):
+    text=(req.description or "").strip()
+    if len(text)<3:
+        raise HTTPException(400,"Describe at least one wardrobe item.")
+    if len(text)>12000:
+        raise HTTPException(400,"That wardrobe description is too long. Split it into two batches.")
+
+    client=OpenAI()
+    instructions="""You convert a user's plain-language description of their existing men's wardrobe into reviewable garment records.
+Extract only garments the user actually says they own. One physical garment = one item.
+If they describe multiples, create separate items only when the description distinguishes them; otherwise create the stated quantity as separate records with the same known metadata.
+Never invent a brand, model, size, material, colour, pattern, fit or season. Leave unknown strings blank.
+Use these canonical categories only: Jackets & Outerwear, Knitwear, Shirts, Polos & T-Shirts, Trousers, Shorts, Footwear, Accessories, Other.
+Normalise obvious garment wording into a useful garment_type, e.g. polo shirt, crew-neck T-shirt, chinos, loafers, overshirt.
+Season and formality can be inferred conservatively from the garment itself, but leave blank when uncertain.
+Set confidence based on how completely the user's description supports the record.
+The user will review every item before saving, so concise notes are better than speculation."""
+
+    try:
+        response=client.responses.create(
+            model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+            reasoning={"effort":"low"},
+            instructions=instructions,
+            input=text,
+            text={"format":{"type":"json_schema","name":"quick_wardrobe","schema":QUICK_WARDROBE_SCHEMA,"strict":True}}
+        )
+        data=json.loads(response.output_text)
+        for item in data.get("items",[]):
+            item["category"]=canonical_wardrobe_category(item.get("category",""),item.get("garment_type",""))
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500,f"I couldn't turn that description into wardrobe items: {str(e)[:240]}")
+
+class QuickWardrobeItem(BaseModel):
+    category: str=""
+    garment_type: str=""
+    brand: str=""
+    model_line: str=""
+    labelled_size: str=""
+    colour: str=""
+    material: str=""
+    pattern: str=""
+    fit_cut: str=""
+    fit_feedback: str="Unknown"
+    season: str=""
+    formality: str=""
+    notes: str=""
+
+class QuickWardrobeSaveRequest(BaseModel):
+    items: list[QuickWardrobeItem]
+
+@app.post("/api/quick-wardrobe/save")
+def save_quick_wardrobe(req: QuickWardrobeSaveRequest):
+    if not req.items:
+        raise HTTPException(400,"There are no items to save.")
+    if len(req.items)>50:
+        raise HTTPException(400,"Save a maximum of 50 items at a time.")
+
+    con=db()
+    saved=[]
+    try:
+        for item in req.items:
+            garment_type=(item.garment_type or "").strip()
+            if not garment_type:
+                continue
+            cur=con.execute("""INSERT INTO garments
+              (image_path,original_image_path,category,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+              ("","",canonical_wardrobe_category(item.category,garment_type),garment_type,
+               item.brand.strip(),item.model_line.strip(),item.labelled_size.strip(),item.colour.strip(),
+               item.material.strip(),item.pattern.strip(),item.fit_cut.strip(),
+               item.fit_feedback if item.fit_feedback in ["Unknown","Perfect fit","Slightly tight","Slightly loose","Too tight","Too loose"] else "Unknown",
+               item.season.strip(),item.formality.strip(),item.notes.strip(),0))
+            saved.append(cur.lastrowid)
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+
+    if not saved:
+        raise HTTPException(400,"No valid garments were available to save.")
+    return {"ok":True,"saved_count":len(saved),"ids":saved}
+
+
 class OutfitRequest(BaseModel):
     occasion: str
     temperature_c: float

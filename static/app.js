@@ -7,6 +7,9 @@ let detailGarmentId=null;
 let enrichmentPollTimer=null;
 let photoQueue=[], currentPhotoIndex=-1, batchMode=false, analysisInProgress=false, garmentAnalysisController=null, previewObjectUrl="";
 const cleanupInProgress=new Set();
+let quickWardrobeItems=[];
+let quickWardrobeRecognition=null;
+
 
 
 function esc(value){
@@ -35,6 +38,7 @@ function go(id){
  if(id==="outfits")populateAnchor();
  if(id==="stylistv4")populateV4Anchor();
  if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}
+ if(id==="quickwardrobe")renderQuickWardrobeResults();
 }
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-go]");
@@ -43,6 +47,121 @@ document.addEventListener("click",e=>{
  if(activeAdd && b.dataset.go!=="add" && b.id!=="cancelAdd")resetAddFlow();
  go(b.dataset.go);
 });
+
+function quickWardrobeField(item,index,key,label,wide=false){
+ const value=esc(item[key]||"");
+ return `<label class="${wide?"quick-wide":""}">${label}<input data-quick-index="${index}" data-quick-key="${key}" value="${value}"></label>`;
+}
+
+function renderQuickWardrobeResults(){
+ const box=$("quickWardrobeResults");
+ if(!box)return;
+ if(!quickWardrobeItems.length){box.innerHTML="";return;}
+
+ box.innerHTML=`<div class="quick-review-head">
+   <div><small class="eyebrow">REVIEW BEFORE SAVING</small><h3>${quickWardrobeItems.length} item${quickWardrobeItems.length===1?"":"s"} found</h3><p>Edit anything that needs correcting, untick anything you don't want, then save.</p></div>
+   <button id="quickSaveSelected" class="primary" type="button">Save selected items</button>
+  </div>
+  <div class="quick-review-list">${quickWardrobeItems.map((item,index)=>`
+   <article class="card quick-item" data-quick-card="${index}">
+    <div class="row between quick-item-top">
+     <label class="quick-include"><input type="checkbox" data-quick-include="${index}" ${item._include===false?"":"checked"}> Add this item</label>
+     <div><span class="pill">${esc(item.confidence||"")}${item.confidence?" confidence":""}</span><button class="text-delete" type="button" data-quick-remove="${index}">Remove</button></div>
+    </div>
+    <div class="quick-grid">
+     ${quickWardrobeField(item,index,"garment_type","GARMENT TYPE")}
+     ${quickWardrobeField(item,index,"category","CATEGORY")}
+     ${quickWardrobeField(item,index,"brand","BRAND")}
+     ${quickWardrobeField(item,index,"model_line","MODEL / LINE")}
+     ${quickWardrobeField(item,index,"labelled_size","SIZE")}
+     ${quickWardrobeField(item,index,"colour","COLOUR")}
+     ${quickWardrobeField(item,index,"material","MATERIAL")}
+     ${quickWardrobeField(item,index,"fit_cut","FIT / CUT")}
+     ${quickWardrobeField(item,index,"season","SEASON")}
+     ${quickWardrobeField(item,index,"formality","FORMALITY")}
+     ${quickWardrobeField(item,index,"notes","NOTES",true)}
+    </div>
+   </article>`).join("")}</div>`;
+
+ $("quickSaveSelected")?.addEventListener("click",saveQuickWardrobeSelected);
+}
+
+async function analyseQuickWardrobe(){
+ const text=$("quickWardrobeText").value.trim();
+ const btn=$("quickWardrobeAnalyse"),box=$("quickWardrobeResults");
+ if(!text){box.innerHTML='<div class="notice">Describe at least one item first.</div>';return;}
+ const original=btn.textContent;
+ btn.disabled=true;btn.innerHTML='<span class="inline-spinner"></span> Building your list…';
+ box.innerHTML='<div class="shopping-working"><span class="retailer-search-spinner"></span><div><b>Reading your wardrobe description…</b><p>I’m separating the garments and filling only the details you actually gave me.</p><small>You’ll review everything before it is saved.</small></div></div>';
+ try{
+  const x=await api("/api/quick-wardrobe/parse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({description:text})});
+  quickWardrobeItems=(x.items||[]).map(item=>({...item,_include:true}));
+  renderQuickWardrobeResults();
+  requestAnimationFrame(()=>$("quickWardrobeResults")?.scrollIntoView({behavior:"smooth",block:"start"}));
+ }catch(err){
+  box.innerHTML=`<div class="notice"><b>I couldn't build the list.</b><br>${esc(err.message)}</div>`;
+ }finally{
+  btn.disabled=false;btn.textContent=original;
+ }
+}
+
+async function saveQuickWardrobeSelected(){
+ const btn=$("quickSaveSelected");
+ document.querySelectorAll("[data-quick-key]").forEach(input=>{
+  const i=Number(input.dataset.quickIndex),key=input.dataset.quickKey;
+  if(quickWardrobeItems[i])quickWardrobeItems[i][key]=input.value.trim();
+ });
+ document.querySelectorAll("[data-quick-include]").forEach(input=>{
+  const i=Number(input.dataset.quickInclude);
+  if(quickWardrobeItems[i])quickWardrobeItems[i]._include=input.checked;
+ });
+ const selected=quickWardrobeItems.filter(x=>x._include!==false && String(x.garment_type||"").trim());
+ if(!selected.length){$("quickWardrobeResults").insertAdjacentHTML("afterbegin",'<div class="notice">Select at least one valid item to save.</div>');return;}
+
+ const original=btn.textContent;
+ btn.disabled=true;btn.innerHTML='<span class="inline-spinner"></span> Saving…';
+ try{
+  const payload=selected.map(({confidence,_include,...item})=>({...item,pattern:item.pattern||"",fit_feedback:item.fit_feedback||"Unknown"}));
+  const x=await api("/api/quick-wardrobe/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:payload})});
+  quickWardrobeItems=[];
+  $("quickWardrobeText").value="";
+  await loadGarments();
+  go("wardrobe");
+  setTimeout(()=>{const nav=$("categoryNav");if(nav)nav.insertAdjacentHTML("afterend",`<div class="notice quick-saved-notice">${x.saved_count} item${x.saved_count===1?"":"s"} added. You can open any item later to add a photo or refine its details.</div>`);},50);
+ }catch(err){
+  btn.disabled=false;btn.textContent=original;
+  $("quickWardrobeResults").insertAdjacentHTML("afterbegin",`<div class="notice"><b>I couldn't save the list.</b><br>${esc(err.message)}</div>`);
+ }
+}
+
+function startQuickWardrobeDictation(){
+ const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+ const btn=$("quickWardrobeDictate"),status=$("quickWardrobeDictationStatus");
+ if(!SpeechRecognition){
+  status.textContent="Dictation isn't available in this browser. You can type or paste the list instead.";
+  status.classList.remove("hidden");return;
+ }
+ if(quickWardrobeRecognition){
+  try{quickWardrobeRecognition.stop()}catch{}
+  quickWardrobeRecognition=null;return;
+ }
+ const recognition=new SpeechRecognition();
+ quickWardrobeRecognition=recognition;
+ recognition.continuous=true;recognition.interimResults=false;recognition.lang="en-GB";
+ recognition.onstart=()=>{btn.textContent="Stop dictation";status.textContent="Listening… describe your wardrobe naturally.";status.classList.remove("hidden");};
+ recognition.onresult=e=>{
+  let addition="";
+  for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)addition+=e.results[i][0].transcript+" ";
+  if(addition){
+   const area=$("quickWardrobeText");
+   area.value=(area.value.trim()?area.value.trim()+" ":"")+addition.trim();
+  }
+ };
+ recognition.onerror=e=>{status.textContent=`Dictation stopped: ${e.error||"browser speech error"}.`;status.classList.remove("hidden");};
+ recognition.onend=()=>{quickWardrobeRecognition=null;btn.textContent="Dictate";if(status.textContent==="Listening… describe your wardrobe naturally.")status.textContent="Dictation stopped. You can edit the text before analysing it.";};
+ try{recognition.start()}catch{quickWardrobeRecognition=null;btn.textContent="Dictate";}
+}
+
 async function init(){
  loadPersistentStylistState();
  try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
@@ -1659,4 +1778,26 @@ $("makePackingPlan")?.addEventListener("click",async()=>{
   const missing=(x.missing_items||[]).length?`<div class="notice"><b>Useful gaps:</b> ${x.missing_items.map(esc).join(" · ")}</div>`:"";
   box.innerHTML=`<div class="notice">${esc(x.summary)}</div><div class="card"><h3>Pack these</h3>${packed}</div><div class="card"><h3>Outfit plan</h3>${days}</div>${missing}<div class="card"><b>Packing tip</b><p>${esc(x.packing_tip)}</p></div>`;
  }catch(err){box.innerHTML=`<div class="card">${esc(err.message)}</div>`}
+});
+
+
+$("quickWardrobeAnalyse")?.addEventListener("click",analyseQuickWardrobe);
+$("quickWardrobeDictate")?.addEventListener("click",startQuickWardrobeDictation);
+$("quickWardrobeResults")?.addEventListener("input",e=>{
+ const input=e.target.closest("[data-quick-key]");
+ if(input){
+  const i=Number(input.dataset.quickIndex);
+  if(quickWardrobeItems[i])quickWardrobeItems[i][input.dataset.quickKey]=input.value;
+ }
+ const include=e.target.closest("[data-quick-include]");
+ if(include){
+  const i=Number(include.dataset.quickInclude);
+  if(quickWardrobeItems[i])quickWardrobeItems[i]._include=include.checked;
+ }
+});
+$("quickWardrobeResults")?.addEventListener("click",e=>{
+ const remove=e.target.closest("[data-quick-remove]");
+ if(!remove)return;
+ quickWardrobeItems.splice(Number(remove.dataset.quickRemove),1);
+ renderQuickWardrobeResults();
 });

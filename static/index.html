@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist V2</title>
-<link rel="stylesheet" href="/static/style.css?v=4.9.3">
+<link rel="stylesheet" href="/static/style.css?v=5.0">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V4.9.3</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.0</span></header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
@@ -44,6 +44,10 @@
      <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c1-5 4-7 7-7s6 2 7 7M4 4h3M17 4h3"/></svg></span>
      <span><small>FIT & PREFERENCES</small><b>My Profile</b><em>Measurements, brands and style learning</em></span>
     </button>
+    <button class="home-card" data-go="quickwardrobe">
+     <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14M5 12h14M5 19h9"/><path d="M18 16v6M15 19h6"/></svg></span>
+     <span><small>FAST SETUP</small><b>Quick Add Wardrobe</b><em>Describe or dictate several items at once</em></span>
+    </button>
     <button class="home-card" data-go="shortlist">
      <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h12v16l-6-4-6 4V4Z"/></svg></span>
      <span><small>SHOPPING</small><b>My Shortlist</b><em>Compare saved pieces before you buy</em></span>
@@ -60,12 +64,32 @@
 
 <section id="wardrobe" class="screen">
  <div class="section">
-  <div class="row between"><h3>My Wardrobe</h3><button class="primary" data-go="add">＋ Add item</button></div>
+  <div class="row between"><h3>My Wardrobe</h3><div class="row wardrobe-add-actions"><button class="ghost" data-go="quickwardrobe" type="button">Quick add</button><button class="primary" data-go="add">＋ Add item</button></div></div>
   <div class="wardrobe-toolbar">
    <input id="search" placeholder="Search wardrobe…">
    <div id="categoryNav" class="wardrobe-category-nav" aria-label="Wardrobe categories"></div>
   </div>
   <div id="garments" class="garments"></div>
+ </div>
+</section>
+
+
+<section id="quickwardrobe" class="screen">
+ <div class="section quick-wardrobe-section">
+  <div class="row between"><div><small class="eyebrow">FAST SETUP</small><h3>Quick Add Wardrobe</h3></div><button class="ghost" data-go="wardrobe" type="button">Wardrobe</button></div>
+  <div class="card form">
+   <p class="quick-intro">Describe several things you already own in ordinary language. I’ll turn them into wardrobe entries for you to check before anything is saved.</p>
+   <label>WHAT'S IN YOUR WARDROBE?
+    <div class="dictation-wrap">
+     <textarea id="quickWardrobeText" rows="7" placeholder="For example: Navy Ralph Lauren polo, medium, fits perfectly. Two Uniqlo Supima T-shirts in white and navy, medium. Cream M&S tailored trousers, 32 waist. Dark brown suede loafers from Loake…"></textarea>
+     <button id="quickWardrobeDictate" class="ghost dictate-btn" type="button">Dictate</button>
+    </div>
+   </label>
+   <div id="quickWardrobeDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+   <button id="quickWardrobeAnalyse" class="primary full" type="button">Turn this into wardrobe items</button>
+   <small class="quick-safety-note">Nothing is added until you review the list and press Save selected items.</small>
+  </div>
+  <div id="quickWardrobeResults"></div>
  </div>
 </section>
 
@@ -279,5 +303,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=4.9.3"></script>
+<script src="/static/app.js?v=5.0"></script>
 </body></html>

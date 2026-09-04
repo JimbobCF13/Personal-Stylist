@@ -384,3 +384,26 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 .gap-outfit-ideas{margin:9px 0}.gap-outfit-ideas>small{font-size:8px;letter-spacing:.08em;color:#888;font-weight:800}.gap-outfit-ideas p{font-size:10px;line-height:1.4;margin:5px 0;padding-left:9px;border-left:2px solid #e3e3df}
 .gap-actions{margin-top:12px}.v4-product-results:not(:empty){margin:10px 0 14px;padding-top:4px}
 .find-piece-btn:disabled,#analyseGaps:disabled{cursor:wait;opacity:.7}
+
+/* V5.0 Fast Wardrobe Setup */
+.wardrobe-add-actions{gap:7px}
+.quick-wardrobe-section{max-width:1050px}
+.quick-intro{margin:0 0 12px;color:#4d4d4d;line-height:1.5}
+.quick-safety-note{display:block;margin-top:8px;color:#777}
+.quick-review-head{display:flex;justify-content:space-between;align-items:end;gap:18px;margin:22px 0 12px}
+.quick-review-head h3{margin:2px 0}.quick-review-head p{margin:4px 0 0;color:#666;font-size:11px}
+.quick-review-list{display:grid;gap:12px}
+.quick-item{padding:16px}
+.quick-item-top{margin-bottom:12px}.quick-include{display:flex;align-items:center;gap:7px;font-weight:800;font-size:11px}
+.quick-item-top>div{display:flex;align-items:center;gap:8px}
+.text-delete{border:0;background:transparent;text-decoration:underline;color:#777;font-size:10px;cursor:pointer}
+.quick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.quick-grid label{font-size:8px;font-weight:800;color:#777;letter-spacing:.04em}
+.quick-grid input{width:100%;margin-top:4px}
+.quick-wide{grid-column:span 3}
+.quick-saved-notice{margin:10px 0}
+@media(max-width:700px){
+ .quick-review-head{align-items:stretch;flex-direction:column}.quick-review-head button{width:100%}
+ .quick-grid{grid-template-columns:1fr 1fr}.quick-wide{grid-column:span 2}
+ .wardrobe-add-actions{flex-wrap:wrap;justify-content:flex-end}
+}
