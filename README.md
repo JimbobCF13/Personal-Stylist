@@ -561,3 +561,18 @@ On startup, existing garments may have their **category field only** reclassifie
 - Crew-neck sweatshirts, quarter-zip sweatshirts and hoodies no longer fall into Polos & T-Shirts.
 - Removes the overly broad `top/tops` matching from Polos & T-Shirts.
 - Existing categories are safely re-normalised on startup from the stored garment type/details.
+
+
+## V5.1.6 — Wardrobe-role classification
+Classification now prioritises how a garment is actually worn over literal retailer naming.
+
+Key rules:
+- Rugby shirt / rugby top → **Knitwear**
+- Short-sleeve knitted polo → **Polos & T-Shirts**
+- Long-sleeve knitted polo / pullover → **Knitwear**
+- Sweatshirts / hoodies → **Sweatshirts & Hoodies**
+- Overshirts / shirt jackets → **Overshirts & Shirt Jackets**
+- True buttoned shirts → **Shirts**
+- Lightweight knitted pullovers can remain **Knitwear** even when sold as a long-sleeve T-shirt.
+
+Existing wardrobe items are re-evaluated from stored garment type, model, fit, notes, brand and material. Only the category field can change; no garment or image data is removed.

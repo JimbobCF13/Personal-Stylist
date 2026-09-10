@@ -64,60 +64,81 @@ def canonical_wardrobe_category(
     model_line: str = "",
     fit_cut: str = "",
     notes: str = "",
+    brand: str = "",
+    material: str = "",
 ) -> str:
     primary = re.sub(r"\s+", " ", f"{garment_type or ''}".strip().lower())
     support = re.sub(
         r"\s+", " ",
-        f"{category or ''} {model_line or ''} {fit_cut or ''} {notes or ''}".strip().lower()
+        f"{category or ''} {model_line or ''} {fit_cut or ''} {notes or ''} {brand or ''} {material or ''}".strip().lower()
     )
     raw = f"{primary} {support}".strip()
 
     footwear = ["footwear","shoe","shoes","sneaker","sneakers","trainer","trainers","loafer","loafers","boot","boots","derby","derbies","brogue","brogues","oxford shoe","monk strap","espadrille","slipper"]
     shorts = ["shorts","swim short","swim shorts"]
     trousers = ["trouser","trousers","chino","chinos","jean","jeans","jogger","joggers","cargo trouser","cargo pants","pants"]
-
-    # This group must be checked before generic jacket/tailoring rules.
-    overshirts = [
-        "overshirt","overshirts","shirt jacket","shirt-jacket","shirtjacket",
-        "shacket","shackets"
-    ]
-    tailoring = [
-        "blazer","blazers","sport coat","sports coat","sports jacket",
-        "suit jacket","dinner jacket","tuxedo jacket","tailored jacket",
-        "waistcoat","waistcoats"
-    ]
-    coats = [
-        "overcoat","topcoat","trench coat","trenchcoat","raincoat","rain coat",
-        "mac coat","parka","car coat","pea coat","peacoat","duffle coat",
-        "duffel coat","greatcoat","coat","coats"
-    ]
-    jackets = [
-        "jacket","jackets","bomber","harrington","field jacket","chore jacket",
-        "denim jacket","leather jacket","suede jacket","gilet","gilets",
-        "puffer jacket","quilted jacket","windbreaker"
-    ]
-    knitwear = ["knitwear","jumper","jumpers","sweater","sweaters","cardigan","cardigans","quarter zip","half zip","roll neck","turtleneck","knit"]
+    overshirts = ["overshirt","overshirts","shirt jacket","shirt-jacket","shirtjacket","shacket","shackets"]
+    tailoring = ["blazer","blazers","sport coat","sports coat","sports jacket","suit jacket","dinner jacket","tuxedo jacket","tailored jacket","waistcoat","waistcoats"]
+    coats = ["overcoat","topcoat","trench coat","trenchcoat","raincoat","rain coat","mac coat","parka","car coat","pea coat","peacoat","duffle coat","duffel coat","greatcoat","coat","coats"]
+    jackets = ["jacket","jackets","bomber","harrington","field jacket","chore jacket","denim jacket","leather jacket","suede jacket","gilet","gilets","puffer jacket","quilted jacket","windbreaker"]
     sweatshirts = ["sweatshirt","sweatshirts","sweat shirt","crew-neck sweatshirt","crew neck sweatshirt","quarter-zip sweatshirt","quarter zip sweatshirt","hoodie","hoodies","hooded sweatshirt"]
-    polos_tees = ["polo","polo shirt","t-shirt","t shirt","tee","tees","tshirt"]
-    shirts = [
-        "shirt","shirts","oxford shirt","dress shirt","casual shirt","linen shirt",
-        "utility shirt","work shirt"
-    ]
+    shirts = ["shirt","shirts","oxford shirt","dress shirt","casual shirt","linen shirt","utility shirt","work shirt"]
     accessories = ["accessory","accessories","tie","ties","belt","belts","hat","hats","cap","caps","beanie","scarf","scarves","glove","gloves","bag","bags","watch","watches"]
 
-    # Strong garment-type rules.
     if any(w in primary for w in footwear): return "Footwear"
     if any(w in primary for w in shorts): return "Shorts"
     if any(w in primary for w in trousers): return "Trousers"
     if any(w in primary for w in overshirts): return "Overshirts & Shirt Jackets"
     if any(w in primary for w in tailoring): return "Blazers & Tailoring"
     if any(w in primary for w in coats): return "Coats"
+    if any(w in primary for w in sweatshirts): return "Sweatshirts & Hoodies"
 
-    # A utility/work shirt belongs with shirts unless it explicitly says overshirt/shirt jacket.
+    # Retailer naming is not always the same as wardrobe function.
+    short_sleeve = any(x in raw for x in ["short sleeve","short-sleeve"])
+    long_sleeve = any(x in raw for x in ["long sleeve","long-sleeve"])
+    is_polo = "polo" in raw
+    is_rugby = any(x in raw for x in ["rugby shirt","rugby top","rugby jersey"])
+    knit_signal = any(x in raw for x in [
+        "knit","knitted","merino","wool","cashmere","fine gauge","fine-gauge",
+        "sweater","jumper","pullover"
+    ])
+
+    # A short-sleeve knitted polo still functions as a polo.
+    if is_polo and short_sleeve:
+        return "Polos & T-Shirts"
+
+    # Long-sleeve knitted polos/pullovers function as lightweight knitwear.
+    if is_polo and long_sleeve and knit_signal:
+        return "Knitwear"
+
+    # Rugby shirts are pullover layering pieces in this wardrobe.
+    if is_rugby:
+        return "Knitwear"
+
+    # Some retailers use "T-shirt" for a fine/lightweight pullover.
+    long_sleeve_crew_tee = (
+        long_sleeve
+        and any(x in raw for x in ["crew neck","crew-neck"])
+        and any(x in raw for x in ["t-shirt","t shirt","tee"])
+    )
+    if long_sleeve_crew_tee and (
+        knit_signal
+        or ("belstaff" in raw and any(x in raw for x in ["crew neck","crew-neck"]))
+    ):
+        return "Knitwear"
+
+    knitwear_terms = [
+        "knitwear","jumper","jumpers","sweater","sweaters","cardigan","cardigans",
+        "quarter zip","half zip","roll neck","turtleneck","pullover"
+    ]
+    if any(w in primary for w in knitwear_terms):
+        return "Knitwear"
+    if "knit" in primary and not is_polo:
+        return "Knitwear"
+
     if ("utility shirt" in primary or "work shirt" in primary) and "jacket" not in primary:
         return "Shirts"
 
-    # Retailers often call a blazer simply "jacket", so construction language can help.
     generic_jacket = ("jacket" in primary or primary in ("", "outerwear"))
     tailoring_signals = [
         "notch lapel","notched lapel","peak lapel","shawl lapel",
@@ -129,13 +150,12 @@ def canonical_wardrobe_category(
         return "Blazers & Tailoring"
 
     if any(w in primary for w in jackets): return "Jackets"
-    if any(w in primary for w in sweatshirts): return "Sweatshirts & Hoodies"
-    if any(w in primary for w in knitwear): return "Knitwear"
-    if any(w in primary for w in polos_tees): return "Polos & T-Shirts"
+
+    if is_polo or any(w in primary for w in ["t-shirt","t shirt","tee","tees","tshirt"]):
+        return "Polos & T-Shirts"
     if any(w in primary for w in shirts): return "Shirts"
     if any(w in primary for w in accessories): return "Accessories"
 
-    # Supporting-text fallback for older/imported entries with weak garment_type values.
     if any(w in raw for w in overshirts): return "Overshirts & Shirt Jackets"
     if any(w in raw for w in tailoring): return "Blazers & Tailoring"
     if any(w in raw for w in coats): return "Coats"
@@ -144,12 +164,14 @@ def canonical_wardrobe_category(
     if any(w in raw for w in shorts): return "Shorts"
     if any(w in raw for w in trousers): return "Trousers"
     if any(w in raw for w in sweatshirts): return "Sweatshirts & Hoodies"
-    if any(w in raw for w in knitwear): return "Knitwear"
-    if any(w in raw for w in polos_tees): return "Polos & T-Shirts"
+    if is_rugby: return "Knitwear"
+    if is_polo and short_sleeve: return "Polos & T-Shirts"
+    if is_polo and long_sleeve and knit_signal: return "Knitwear"
+    if knit_signal and not (is_polo and short_sleeve): return "Knitwear"
+    if is_polo or any(w in raw for w in ["t-shirt","t shirt","tee","tees","tshirt"]): return "Polos & T-Shirts"
     if any(w in raw for w in shirts): return "Shirts"
     if any(w in raw for w in accessories): return "Accessories"
 
-    # Legacy broad groups.
     legacy = (category or "").strip().casefold()
     if legacy == "jackets & outerwear": return "Jackets"
     if legacy == "blazers & tailoring": return "Blazers & Tailoring"
@@ -162,12 +184,16 @@ def canonical_wardrobe_category(
 
 def normalise_existing_wardrobe_categories():
     con=db()
-    rows=con.execute("SELECT id, category, garment_type, model_line, fit_cut, notes FROM garments").fetchall()
+    rows=con.execute("""
+        SELECT id, category, garment_type, model_line, fit_cut, notes, brand, material
+        FROM garments
+    """).fetchall()
     changed=0
     for row in rows:
         new_cat=canonical_wardrobe_category(
             row["category"] or "", row["garment_type"] or "",
-            row["model_line"] or "", row["fit_cut"] or "", row["notes"] or ""
+            row["model_line"] or "", row["fit_cut"] or "", row["notes"] or "",
+            row["brand"] or "", row["material"] or ""
         )
         if (row["category"] or "").strip()!=new_cat:
             con.execute("UPDATE garments SET category=? WHERE id=?",(new_cat,row["id"]))
@@ -1056,7 +1082,17 @@ Identify only details reasonably visible from the image. Do not invent brand, si
 fabric composition, model/line or fit if they cannot be seen or inferred with reasonable confidence.
 Use empty strings for unknown fields. Colour should be specific (e.g. stone, cream, navy, sage),
 not merely 'light'. Season and formality should be practical menswear classifications.
-The notes field should mention uncertainty or useful visible details."""
+The notes field should mention uncertainty or useful visible details.
+
+For CATEGORY, classify by wardrobe role and silhouette rather than blindly copying the product-name noun:
+- short-sleeve knitted polo -> Polos & T-Shirts
+- long-sleeve knitted polo/pullover -> Knitwear
+- rugby shirt/rugby top -> Knitwear
+- sweatshirt/hoodie -> Sweatshirts & Hoodies
+- overshirt/shirt jacket -> Overshirts & Shirt Jackets
+- a true buttoned shirt -> Shirts
+- a lightweight knitted pullover remains Knitwear even if a retailer calls it a "T-shirt".
+Use the closest established wardrobe category and do not let the word "shirt" override the actual construction/use."""
     response = client.responses.create(
         model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
         reasoning={"effort":"low"},
@@ -1197,7 +1233,7 @@ async def add_garment(
     cur = con.execute("""INSERT INTO garments
       (image_path,original_image_path,category,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-      (image_path,original_image_path or image_path,canonical_wardrobe_category(category, garment_type),garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence))
+      (image_path,original_image_path or image_path,canonical_wardrobe_category(category, garment_type, model_line, fit_cut, notes, brand, material),garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence))
     con.commit(); gid=cur.lastrowid; con.close()
     return {"ok":True,"id":gid}
 
@@ -1248,7 +1284,8 @@ def parse_quick_wardrobe(req: QuickWardrobeRequest):
 Extract only garments the user actually says they own. One physical garment = one item.
 If they describe multiples, create separate items only when the description distinguishes them; otherwise create the stated quantity as separate records with the same known metadata.
 Never invent a brand, model, size, material, colour, pattern, fit or season. Leave unknown strings blank.
-Use these canonical categories only: Blazers & Tailoring, Overshirts & Shirt Jackets, Jackets, Coats, Knitwear, Sweatshirts & Hoodies, Shirts, Polos & T-Shirts, Trousers, Shorts, Footwear, Accessories, Other. Blazers, sports jackets and suit jackets belong in Blazers & Tailoring. Overshirts, shirt jackets and shackets belong in Overshirts & Shirt Jackets. Utility shirts and work shirts belong in Shirts unless explicitly described as an overshirt or shirt jacket. Sweatshirts and hoodies belong in Sweatshirts & Hoodies; do not classify them as Polos & T-Shirts or Knitwear. Casual jackets such as Harringtons, bombers and gilets belong in Jackets. Overcoats, trench coats, macs, raincoats and parkas belong in Coats.
+Use these canonical categories only: Blazers & Tailoring, Overshirts & Shirt Jackets, Jackets, Coats, Knitwear, Sweatshirts & Hoodies, Shirts, Polos & T-Shirts, Trousers, Shorts, Footwear, Accessories, Other. Blazers, sports jackets and suit jackets belong in Blazers & Tailoring. Overshirts, shirt jackets and shackets belong in Overshirts & Shirt Jackets. Utility shirts and work shirts belong in Shirts unless explicitly described as an overshirt or shirt jacket. Sweatshirts and hoodies belong in Sweatshirts & Hoodies; do not classify them as Polos & T-Shirts or Knitwear.
+Classify by wardrobe role rather than literal product naming: rugby shirts belong in Knitwear; short-sleeve knitted polos belong in Polos & T-Shirts; long-sleeve knitted polos/pullovers belong in Knitwear. A lightweight knitted pullover can belong in Knitwear even if a retailer calls it a long-sleeve T-shirt. Casual jackets such as Harringtons, bombers and gilets belong in Jackets. Overcoats, trench coats, macs, raincoats and parkas belong in Coats.
 Normalise obvious garment wording into a useful garment_type, e.g. polo shirt, crew-neck T-shirt, chinos, loafers, overshirt.
 Season and formality can be inferred conservatively from the garment itself, but leave blank when uncertain.
 Set confidence based on how completely the user's description supports the record.
@@ -1917,7 +1954,8 @@ def canonicalise_analysis_category(analysis: dict) -> dict:
         return analysis
     analysis["category"] = canonical_wardrobe_category(
         analysis.get("category",""), analysis.get("garment_type",""),
-        analysis.get("model_line",""), analysis.get("fit_cut",""), analysis.get("notes","")
+        analysis.get("model_line",""), analysis.get("fit_cut",""), analysis.get("notes",""),
+        analysis.get("brand",""), analysis.get("material","")
     )
     return analysis
 
@@ -2013,7 +2051,8 @@ Use the retailer page as the factual source.
 - For fit_cut, prefer an explicit retailer fit description; otherwise provide a conservative stylist classification only when the page's cut/silhouette description supports it.
 - season may be classified from the known garment type and evidenced material.
 - formality may be classified from the garment's known type and design.
-- Keep notes factual and concise."""
+- Keep notes factual and concise.
+- For category, classify by wardrobe function rather than literal naming. A short-sleeve knitted polo is Polos & T-Shirts; a long-sleeve knitted polo/pullover or rugby shirt is Knitwear; an overshirt is Overshirts & Shirt Jackets; a sweatshirt is Sweatshirts & Hoodies."""
             try:
                 response=client.responses.create(
                     model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
@@ -2042,7 +2081,8 @@ Rules:
 - season: classify practical seasonality from the known garment type and evidenced material (for example "Spring/Summer" or "Year-round"). This is a stylist classification, not a retailer claim.
 - formality: classify the garment's normal menswear formality from its known type/design (for example "Casual", "Smart casual", "Business casual", "Formal"). This is a stylist classification.
 - If material cannot be established from a reliable web result, leave material empty rather than guessing.
-- category and garment_type should describe the exact item.
+- category should reflect wardrobe function, not merely the retailer's noun: short-sleeve knitted polos are Polos & T-Shirts; long-sleeve knitted polos/pullovers and rugby shirts are Knitwear; sweatshirts are Sweatshirts & Hoodies; overshirts are Overshirts & Shirt Jackets; true buttoned shirts are Shirts.
+- garment_type should still describe the exact item using the retailer's wording where useful.
 - notes should be short and factual; if season/formality/fit_cut are stylist classifications, do not describe them as retailer-provided facts.
 - If exact product identification is uncertain, leave uncertain factual fields empty and use low confidence.
 """
@@ -2066,9 +2106,8 @@ Rules:
         analysis={"category":"Other","garment_type":slug.title() or "Imported product","brand":"","model_line":"","labelled_size":"","colour":"","material":"","pattern":"","fit_cut":"","season":"","formality":"","notes":"Imported from retailer product URL.","confidence":0}
         import_method="url_only"
 
-    analysis["category"]=canonical_wardrobe_category(analysis.get("category") or "",analysis.get("garment_type") or "")
-    display,original=_download_import_image(meta.get("image_url") or "")
     analysis=canonicalise_analysis_category(analysis)
+    display,original=_download_import_image(meta.get("image_url") or "")
     return {
         "ok":True,"source_url":url,"image_path":display,"original_image_path":original,
         "image_available":bool(display),"analysis":analysis,"page_title":meta.get("title") or "",
