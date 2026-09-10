@@ -556,3 +556,15 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .garment img{height:170px}
  nav button{min-width:50px}
 }
+
+/* V5.1.4 — resilient wardrobe image loading */
+.garment-photo-wrap,.detail-image-wrap{position:relative}
+.image-missing{opacity:0}
+.image-load-fallback{
+ position:absolute;inset:8px;border:1px dashed #c8c8c3;border-radius:12px;
+ background:#f4f4f1;color:#555;display:grid;place-content:center;gap:4px;
+ text-align:center;cursor:pointer;z-index:3
+}
+.image-load-fallback b{font-size:11px}
+.image-load-fallback small{font-size:9px;color:#888}
+.detail-image-wrap .image-load-fallback{inset:18px}

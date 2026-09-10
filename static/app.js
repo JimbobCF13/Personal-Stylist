@@ -270,7 +270,7 @@ async function init(){
  await loadGarments(); await loadProfile();
  if(latestStylistSession)renderLatestStylistSession();
 }
-const WARDROBE_ORDER=["Blazers & Tailoring","Jackets","Coats","Knitwear","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
+const WARDROBE_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets","Coats","Knitwear","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
 let selectedWardrobeCategory="";
 let wardrobeReturnGarmentId=null;
 let wardrobeReturnCategory="";
@@ -279,6 +279,7 @@ let wardrobeRestorePending=false;
 function normalisedCategory(c){
  const raw=String(c||"Other").trim().toLowerCase();
  if(raw==="jackets & outerwear")return "Jackets";
+ if(raw==="overshirts")return "Overshirts & Shirt Jackets";
  return WARDROBE_ORDER.find(x=>x.toLowerCase()===raw)||"Other";
 }
 
@@ -317,7 +318,53 @@ async function loadGarments(){
  }
 }
 
-function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=g.image_path?`<img class="garment-photo" src="${g.image_path}" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="this.classList.add('image-missing')">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}" data-garment-id="${g.id}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
+
+function retryableImageSrc(src){
+ if(!src)return "";
+ const joiner=src.includes("?")?"&":"?";
+ return `${src}${joiner}img_retry=${Date.now()}`;
+}
+
+function handleWardrobeImageError(img){
+ if(!img)return;
+ const attempts=Number(img.dataset.retryCount||0);
+ const original=img.dataset.originalSrc||"";
+ const currentBase=(img.dataset.baseSrc||img.getAttribute("src")||"").split("?")[0];
+
+ // One retry of the current image path handles occasional delayed/static-file responses.
+ if(attempts===0 && currentBase){
+  img.dataset.retryCount="1";
+  setTimeout(()=>{img.src=retryableImageSrc(currentBase)},350);
+  return;
+ }
+
+ // If the cleaned/catalogue image is unavailable, fall back to the original upload.
+ if(attempts<=1 && original && original!==currentBase){
+  img.dataset.retryCount="2";
+  img.dataset.baseSrc=original;
+  img.src=retryableImageSrc(original);
+  return;
+ }
+
+ img.classList.add("image-missing");
+ const wrap=img.closest(".garment-photo-wrap,.detail-image-wrap");
+ if(wrap && !wrap.querySelector(".image-load-fallback")){
+  const fallback=document.createElement("button");
+  fallback.type="button";
+  fallback.className="image-load-fallback";
+  fallback.innerHTML="<b>Photo didn’t load</b><small>Tap to retry</small>";
+  fallback.addEventListener("click",()=>{
+   img.classList.remove("image-missing");
+   fallback.remove();
+   img.dataset.retryCount="0";
+   const src=img.dataset.baseSrc||img.dataset.originalSrc||"";
+   if(src)img.src=retryableImageSrc(src);
+  });
+  wrap.appendChild(fallback);
+ }
+}
+
+function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=g.image_path?`<img class="garment-photo" src="${g.image_path}" data-base-src="${esc(g.image_path)}" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="handleWardrobeImageError(this)">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}" data-garment-id="${g.id}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
 function categorySlug(cat){
  return String(cat||"other").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 }
@@ -525,7 +572,7 @@ async function loadGarmentDetail(id){
    : `<div class="detail-history detail-history-empty"><span>Outfit history</span><p>Not used in a rated outfit yet.</p></div>`;
 
   box.innerHTML=`<div class="garment-detail-hero">
-    <div class="detail-image-wrap">${g.image_path?`<img src="${g.image_path}" alt="${title}">`:`<div class="detail-no-photo"><b>No photo yet</b><small>Use Add photo / edit garment to attach one.</small></div>`}</div>
+    <div class="detail-image-wrap">${g.image_path?`<img src="${g.image_path}" data-base-src="${esc(g.image_path)}" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${title}" onerror="handleWardrobeImageError(this)">`:`<div class="detail-no-photo"><b>No photo yet</b><small>Use Add photo / edit garment to attach one.</small></div>`}</div>
     <div class="detail-summary">
      <small>${esc(g.category||"WARDROBE ITEM")}</small>
      <h2>${title}</h2>

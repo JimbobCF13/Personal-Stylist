@@ -53,8 +53,9 @@ def db():
 
 
 WARDROBE_CATEGORY_ORDER = [
-    "Blazers & Tailoring", "Jackets", "Coats", "Knitwear", "Shirts",
-    "Polos & T-Shirts", "Trousers", "Shorts", "Footwear", "Accessories", "Other",
+    "Blazers & Tailoring", "Overshirts & Shirt Jackets", "Jackets", "Coats",
+    "Knitwear", "Shirts", "Polos & T-Shirts", "Trousers", "Shorts",
+    "Footwear", "Accessories", "Other",
 ]
 
 def canonical_wardrobe_category(
@@ -64,9 +65,6 @@ def canonical_wardrobe_category(
     fit_cut: str = "",
     notes: str = "",
 ) -> str:
-    # Garment type is the strongest signal. Supporting product text is deliberately
-    # included so a retailer calling a blazer simply "Jacket" can still be classified
-    # correctly when it clearly describes tailoring (lapels, single-breasted, etc.).
     primary = re.sub(r"\s+", " ", f"{garment_type or ''}".strip().lower())
     support = re.sub(
         r"\s+", " ",
@@ -77,23 +75,48 @@ def canonical_wardrobe_category(
     footwear = ["footwear","shoe","shoes","sneaker","sneakers","trainer","trainers","loafer","loafers","boot","boots","derby","derbies","brogue","brogues","oxford shoe","monk strap","espadrille","slipper"]
     shorts = ["shorts","swim short","swim shorts"]
     trousers = ["trouser","trousers","chino","chinos","jean","jeans","jogger","joggers","cargo trouser","cargo pants","pants"]
-    tailoring = ["blazer","blazers","sport coat","sports coat","sports jacket","suit jacket","dinner jacket","tuxedo jacket","tailored jacket","waistcoat","waistcoats"]
-    coats = ["overcoat","topcoat","trench coat","trenchcoat","raincoat","rain coat","mac coat","parka","car coat","pea coat","peacoat","duffle coat","duffel coat","greatcoat","coat","coats"]
-    jackets = ["jacket","jackets","bomber","harrington","field jacket","chore jacket","denim jacket","leather jacket","suede jacket","gilet","gilets","overshirt","overshirts","shacket","puffer jacket","quilted jacket","windbreaker"]
+
+    # This group must be checked before generic jacket/tailoring rules.
+    overshirts = [
+        "overshirt","overshirts","shirt jacket","shirt-jacket","shirtjacket",
+        "shacket","shackets"
+    ]
+    tailoring = [
+        "blazer","blazers","sport coat","sports coat","sports jacket",
+        "suit jacket","dinner jacket","tuxedo jacket","tailored jacket",
+        "waistcoat","waistcoats"
+    ]
+    coats = [
+        "overcoat","topcoat","trench coat","trenchcoat","raincoat","rain coat",
+        "mac coat","parka","car coat","pea coat","peacoat","duffle coat",
+        "duffel coat","greatcoat","coat","coats"
+    ]
+    jackets = [
+        "jacket","jackets","bomber","harrington","field jacket","chore jacket",
+        "denim jacket","leather jacket","suede jacket","gilet","gilets",
+        "puffer jacket","quilted jacket","windbreaker"
+    ]
     knitwear = ["knitwear","jumper","jumpers","sweater","sweaters","cardigan","cardigans","quarter zip","half zip","roll neck","turtleneck","knit"]
     polos_tees = ["polo","polo shirt","t-shirt","t shirt","tee","tees","tshirt","top","tops"]
-    shirts = ["shirt","shirts","oxford shirt","dress shirt","casual shirt","linen shirt"]
+    shirts = [
+        "shirt","shirts","oxford shirt","dress shirt","casual shirt","linen shirt",
+        "utility shirt","work shirt"
+    ]
     accessories = ["accessory","accessories","tie","ties","belt","belts","hat","hats","cap","caps","beanie","scarf","scarves","glove","gloves","bag","bags","watch","watches"]
 
-    # Strong garment-type rules first.
+    # Strong garment-type rules.
     if any(w in primary for w in footwear): return "Footwear"
     if any(w in primary for w in shorts): return "Shorts"
     if any(w in primary for w in trousers): return "Trousers"
+    if any(w in primary for w in overshirts): return "Overshirts & Shirt Jackets"
     if any(w in primary for w in tailoring): return "Blazers & Tailoring"
     if any(w in primary for w in coats): return "Coats"
 
-    # Retailers often use "jacket" for a blazer. Tailoring construction language
-    # is enough to move a generic jacket into Blazers & Tailoring.
+    # A utility/work shirt belongs with shirts unless it explicitly says overshirt/shirt jacket.
+    if ("utility shirt" in primary or "work shirt" in primary) and "jacket" not in primary:
+        return "Shirts"
+
+    # Retailers often call a blazer simply "jacket", so construction language can help.
     generic_jacket = ("jacket" in primary or primary in ("", "outerwear"))
     tailoring_signals = [
         "notch lapel","notched lapel","peak lapel","shawl lapel",
@@ -101,7 +124,7 @@ def canonical_wardrobe_category(
         "two-button","two button","three-button","three button",
         "suit jacket","tailored jacket","blazer"
     ]
-    if generic_jacket and sum(1 for s in tailoring_signals if s in support) >= 1:
+    if generic_jacket and any(s in support for s in tailoring_signals):
         return "Blazers & Tailoring"
 
     if any(w in primary for w in jackets): return "Jackets"
@@ -110,7 +133,8 @@ def canonical_wardrobe_category(
     if any(w in primary for w in shirts): return "Shirts"
     if any(w in primary for w in accessories): return "Accessories"
 
-    # Supporting text fallback for weak/legacy garment types.
+    # Supporting-text fallback for older/imported entries with weak garment_type values.
+    if any(w in raw for w in overshirts): return "Overshirts & Shirt Jackets"
     if any(w in raw for w in tailoring): return "Blazers & Tailoring"
     if any(w in raw for w in coats): return "Coats"
     if any(w in raw for w in jackets): return "Jackets"
@@ -122,11 +146,14 @@ def canonical_wardrobe_category(
     if any(w in raw for w in shirts): return "Shirts"
     if any(w in raw for w in accessories): return "Accessories"
 
-    # Legacy broad category safely maps to Jackets when there is no stronger clue.
-    if (category or "").strip().casefold() == "jackets & outerwear":
-        return "Jackets"
+    # Legacy broad groups.
+    legacy = (category or "").strip().casefold()
+    if legacy == "jackets & outerwear": return "Jackets"
+    if legacy == "blazers & tailoring": return "Blazers & Tailoring"
+    if legacy in ("overshirts & shirt jackets","overshirts"): return "Overshirts & Shirt Jackets"
+
     for canonical in WARDROBE_CATEGORY_ORDER:
-        if (category or "").strip().casefold() == canonical.casefold():
+        if legacy == canonical.casefold():
             return canonical
     return "Other"
 
@@ -136,13 +163,14 @@ def normalise_existing_wardrobe_categories():
     changed=0
     for row in rows:
         new_cat=canonical_wardrobe_category(
-            row["category"] or "", row["garment_type"] or "", row["model_line"] or "",
-            row["fit_cut"] or "", row["notes"] or ""
+            row["category"] or "", row["garment_type"] or "",
+            row["model_line"] or "", row["fit_cut"] or "", row["notes"] or ""
         )
         if (row["category"] or "").strip()!=new_cat:
             con.execute("UPDATE garments SET category=? WHERE id=?",(new_cat,row["id"]))
             changed+=1
-    if changed: con.commit()
+    if changed:
+        con.commit()
     con.close()
     return changed
 
@@ -1157,7 +1185,7 @@ def parse_quick_wardrobe(req: QuickWardrobeRequest):
 Extract only garments the user actually says they own. One physical garment = one item.
 If they describe multiples, create separate items only when the description distinguishes them; otherwise create the stated quantity as separate records with the same known metadata.
 Never invent a brand, model, size, material, colour, pattern, fit or season. Leave unknown strings blank.
-Use these canonical categories only: Blazers & Tailoring, Jackets, Coats, Knitwear, Shirts, Polos & T-Shirts, Trousers, Shorts, Footwear, Accessories, Other. Blazers, sports jackets and suit jackets belong in Blazers & Tailoring. Casual jackets, overshirts and gilets belong in Jackets. Overcoats, trench coats, macs, raincoats and parkas belong in Coats.
+Use these canonical categories only: Blazers & Tailoring, Overshirts & Shirt Jackets, Jackets, Coats, Knitwear, Shirts, Polos & T-Shirts, Trousers, Shorts, Footwear, Accessories, Other. Blazers, sports jackets and suit jackets belong in Blazers & Tailoring. Overshirts, shirt jackets and shackets belong in Overshirts & Shirt Jackets. Utility shirts and work shirts belong in Shirts unless explicitly described as an overshirt or shirt jacket. Casual jackets such as Harringtons, bombers and gilets belong in Jackets. Overcoats, trench coats, macs, raincoats and parkas belong in Coats.
 Normalise obvious garment wording into a useful garment_type, e.g. polo shirt, crew-neck T-shirt, chinos, loafers, overshirt.
 Season and formality can be inferred conservatively from the garment itself, but leave blank when uncertain.
 Set confidence based on how completely the user's description supports the record.

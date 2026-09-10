@@ -530,3 +530,18 @@ The old broad `Jackets & Outerwear` group is split into:
 Classification now also uses restrained construction clues such as lapels and single/double-breasted tailoring when a retailer generically calls a blazer a “jacket”.
 
 On startup, existing garments may have their **category field only** reclassified into the new taxonomy. No garment records, photos, enrichment data or other wardrobe information are deleted or recreated.
+
+
+## V5.1.4 — Category precision + image loading resilience
+### Categories
+- Adds **Overshirts & Shirt Jackets** as its own wardrobe category.
+- Overshirts, shirt jackets and shackets are classified there before generic jacket/tailoring rules can catch them.
+- Utility shirts and work shirts stay in **Shirts** unless explicitly described as an overshirt or shirt jacket.
+- Blazers remain in **Blazers & Tailoring**, casual jackets in **Jackets**, and true coats in **Coats**.
+- Existing garments may have only their category field reclassified; photos and garment data are untouched.
+
+### Images
+- Wardrobe and garment-detail images automatically retry once if a static image request fails.
+- If a cleaned image is unavailable, the UI falls back to the original uploaded image where one exists.
+- If both paths fail, the user gets a visible **Photo didn’t load — Tap to retry** control instead of a blank/broken image.
+- No image files are deleted, moved or rewritten by this patch.
