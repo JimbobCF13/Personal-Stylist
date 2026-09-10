@@ -601,3 +601,30 @@ Existing wardrobe items are re-evaluated from stored garment type, model, fit, n
   - Help Me Pack dress needs
   - Help Me Pack notes
 - No database migration. No wardrobe or image data is altered by this patch.
+
+
+## V5.3 — Help Me Pack 2.0 + Activity UI
+
+### Help Me Pack
+- Exact departure and return dates, with trip length calculated automatically.
+- Live destination research before wardrobe selection.
+- Current published forecast when dates are close enough for a useful forecast.
+- Seasonal/historical weather context when a trip is too far away for a reliable forecast — it will not pretend a long-range forecast is known.
+- Research of named hotels, restaurants, venues and events.
+- Explicit distinction between a verified dress requirement and a stylist inference from destination/venue context.
+- A true capsule strategy with deliberate garment re-use across the trip.
+- Every packing-plan outfit has **Show on me**, **Regenerate image** and **More like this**.
+- Packing visualisations are generated only when requested and cached during the session.
+
+### Activity feedback
+- A prominent centre-screen activity card now appears for longer AI work.
+- Dictation displays a clear pulsing **Listening…** state, followed by **Transcribing…**.
+- Stylist planning, trip research, capsule building and image generation have obvious working states.
+
+### Image-generation speed
+- Existing image quality remains at the current medium-quality portrait setting.
+- The default personalised visualisation now uses up to 2 likeness reference photos instead of 3, while retaining up to 5 garment references. This reduces input overhead without deliberately lowering output quality.
+- Existing image caching remains in place, and packing-plan images are generated on demand rather than all at once.
+- `OUTFIT_LIKENESS_REFS=3` can be set in Render if three personal reference photos are preferred.
+
+No database migration. Existing wardrobe records and images are untouched.

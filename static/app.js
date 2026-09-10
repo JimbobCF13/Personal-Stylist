@@ -32,6 +32,37 @@ async function api(url,opts={}){
 }
 
 let activeAiDictation=null;
+let currentPackingPlan=null;
+let currentTripContext=null;
+const appActivities=new Map();
+const packingVisualCache=new Map();
+
+function renderAppActivity(){
+ const overlay=$("appActivityOverlay");
+ if(!overlay)return;
+ const values=[...appActivities.values()];
+ if(!values.length){overlay.classList.add("hidden");return;}
+ const item=values[values.length-1];
+ overlay.classList.remove("hidden");
+ $("activityTitle").textContent=item.title||"Working…";
+ $("activityDetail").textContent=item.detail||"Please wait a moment.";
+ $("activityVisual").className=`activity-visual ${item.mode||"working"}`;
+}
+function beginAppActivity(key,title,detail="",mode="working"){
+ appActivities.delete(key);
+ appActivities.set(key,{title,detail,mode});
+ renderAppActivity();
+}
+function updateAppActivity(key,title,detail="",mode=null){
+ if(!appActivities.has(key))return;
+ const old=appActivities.get(key);
+ appActivities.set(key,{title:title||old.title,detail:detail||old.detail,mode:mode||old.mode});
+ renderAppActivity();
+}
+function endAppActivity(key){
+ appActivities.delete(key);
+ renderAppActivity();
+}
 
 function dictationMimeType(){
  const candidates=[
@@ -116,6 +147,7 @@ async function toggleAiDictation(button,field,status){
  };
 
  recorder.onerror=()=>{
+  endAppActivity("dictation");
   status.classList.remove("hidden");
   status.textContent="Recording stopped unexpectedly. Please try again.";
  };
@@ -125,6 +157,7 @@ async function toggleAiDictation(button,field,status){
   button.classList.add("recording");
   status.classList.remove("hidden");
   status.textContent="Listening… tap Stop when you've finished.";
+  beginAppActivity("dictation","Listening…","Speak naturally, then tap Stop when you've finished.","listening");
   safetyTimer=setTimeout(()=>{
    if(recorder.state==="recording"){
     try{recorder.stop()}catch{}
@@ -135,6 +168,7 @@ async function toggleAiDictation(button,field,status){
  recorder.onstop=async()=>{
   clearTimeout(safetyTimer);
   stream.getTracks().forEach(t=>t.stop());
+  updateAppActivity("dictation","Transcribing…","Turning your recording into text.","transcribing");
   const wasActive=activeAiDictation?.recorder===recorder;
   if(wasActive)activeAiDictation=null;
 
@@ -157,6 +191,7 @@ async function toggleAiDictation(button,field,status){
   }catch(err){
    status.textContent=`Dictation couldn't be transcribed: ${err.message}`;
   }finally{
+   endAppActivity("dictation");
    button.disabled=false;
    button.textContent="🎙️ Dictate";
   }
@@ -167,6 +202,7 @@ async function toggleAiDictation(button,field,status){
  }catch(err){
   stream.getTracks().forEach(t=>t.stop());
   activeAiDictation=null;
+  endAppActivity("dictation");
   button.classList.remove("recording");
   button.textContent="🎙️ Dictate";
   status.classList.remove("hidden");
@@ -328,6 +364,8 @@ function renderBuildLookTray(){
 async function showBuiltLook(){
  const box=$("buildLookVisual"),ids=[...buildLookSelected];
  if(!ids.length)return;
+ const activityKey="built-look-image";
+ beginAppActivity(activityKey,"Creating your look…","Using the exact pieces you selected and your saved model photos.","image");
  box.innerHTML='<div class="shopping-working"><span class="retailer-search-spinner"></span><div><b>Creating your look…</b><p>Using the exact pieces you selected and your saved model photos.</p></div></div>';
  try{
   const x=await api("/api/outfit-visualisation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
@@ -335,6 +373,7 @@ async function showBuiltLook(){
   })});
   box.innerHTML=`<div class="card built-look-result"><img src="${x.image_path}" alt="Your outfit visualisation"><div class="row"><button class="ghost" id="refreshBuiltLook">Regenerate image</button><button class="primary" data-look-critique="analyse">Ask the stylist</button></div><small>${esc(x.notice||"AI visualisation")}</small></div>`;
  }catch(err){box.innerHTML=`<div class="notice"><b>I couldn't create the visual.</b><br>${esc(err.message)}</div>`}
+ finally{endAppActivity(activityKey)}
 }
 
 async function critiqueBuiltLook(mode){
@@ -1515,6 +1554,8 @@ function renderV4Outfit(o,index,isVariant=false,baseIndex=null){
 }
 
 async function v4Visualise(encoded,index,useMyLikeness,options={}){
+ const activityKey=`image-${index}-${useMyLikeness?"me":"model"}`;
+
  const o=JSON.parse(decodeURIComponent(encoded));
  const box=$(`v4Visual-${index}`);
  const cacheKey=v4VisualCacheKey(o,useMyLikeness);
@@ -1532,6 +1573,7 @@ async function v4Visualise(encoded,index,useMyLikeness,options={}){
  }
 
  box.classList.remove("hidden");
+ beginAppActivity(activityKey,useMyLikeness?"Creating your outfit…":"Creating outfit image…","The image model is dressing the look. Image quality is unchanged.","image");
  box.innerHTML=`<div class="visual-loading">${useMyLikeness?"Creating your look…":"Creating outfit visual…"} this can take a little while.</div>`;
 
  try{
@@ -1553,6 +1595,8 @@ async function v4Visualise(encoded,index,useMyLikeness,options={}){
   box.innerHTML=`<img src="${x.image_path}" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
  }catch(err){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }finally{
+  endAppActivity(activityKey);
  }
 }
 
@@ -1978,6 +2022,7 @@ if(runStylistV4Btn){
   const when=($("v4When")?.value||"today").trim()||"today";
 
   runStylistV4Btn.disabled=true;
+  beginAppActivity("stylist-plan","Stylist is working…","Checking your request, wardrobe, fit history and context.","working");
 
   if(location){
    const weatherBox=$("v4WeatherStatus");
@@ -2059,6 +2104,7 @@ if(runStylistV4Btn){
   }finally{
    clearTimeout(statusTimer);
    clearTimeout(timeoutTimer);
+   endAppActivity("stylist-plan");
    runStylistV4Btn.disabled=false;
   }
  });
@@ -2073,19 +2119,248 @@ setupAiDictation("packNotesDictate","pack_notes","packNotesDictationStatus");
 init();
 
 
+function packingDateSync(){
+ const start=$("pack_start_date")?.value;
+ const end=$("pack_end_date")?.value;
+ if(!start||!end)return;
+ const a=new Date(start+"T12:00:00");
+ const b=new Date(end+"T12:00:00");
+ if(Number.isNaN(a.getTime())||Number.isNaN(b.getTime())||b<a)return;
+ $("pack_days").value=String(Math.round((b-a)/86400000)+1);
+}
+$("pack_start_date")?.addEventListener("change",packingDateSync);
+$("pack_end_date")?.addEventListener("change",packingDateSync);
+
+function safeExternalUrl(url){
+ try{
+  const x=new URL(url);
+  return ["http:","https:"].includes(x.protocol)?x.href:"";
+ }catch{return ""}
+}
+
+function renderTripContext(ctx){
+ if(!ctx)return "";
+ const hasTemps=ctx.temperature_low_c!==null&&ctx.temperature_low_c!==undefined&&
+                ctx.temperature_high_c!==null&&ctx.temperature_high_c!==undefined;
+ const temps=hasTemps?`${Math.round(ctx.temperature_low_c)}–${Math.round(ctx.temperature_high_c)}°C`:"";
+ const labels={
+  forecast:"Current forecast",
+  seasonal:"Seasonal conditions",
+  "user-provided":"Your weather note",
+  unavailable:"Weather lookup unavailable"
+ };
+ const places=(ctx.named_places||[]).length
+  ? `<div class="trip-place-list">${ctx.named_places.map(p=>`<div>
+      <b>${esc(p.name)}</b><span>${esc(p.place_type||"")}</span>
+      <p>${esc(p.dress_context||p.note||"")}</p>
+      <small>${p.evidence_level==="verified"?"Verified dress information":p.evidence_level==="inferred"?"Stylist inference from venue context":"General destination context"}</small>
+     </div>`).join("")}</div>`
+  : "";
+ const sources=(ctx.sources||[]).filter(s=>safeExternalUrl(s.url)).slice(0,6);
+ return `<div class="card trip-context-card">
+  <div class="row between">
+   <div><small class="eyebrow">TRIP RESEARCH</small><h3>${esc(ctx.destination_summary||"Destination context")}</h3></div>
+   <span class="trip-mode">${esc(labels[ctx.weather_mode]||ctx.weather_mode||"")}</span>
+  </div>
+  <div class="trip-weather"><b>${esc([temps,ctx.weather_summary].filter(Boolean).join(" · "))}</b><p>${esc(ctx.packing_weather_note||"")}</p></div>
+  ${ctx.dress_context?`<div class="trip-context-line"><b>Dress context</b><p>${esc(ctx.dress_context)}</p></div>`:""}
+  ${ctx.activity_context?`<div class="trip-context-line"><b>Practical context</b><p>${esc(ctx.activity_context)}</p></div>`:""}
+  ${places}
+  ${sources.length?`<details class="trip-sources"><summary>Research sources</summary>${sources.map(s=>`<a href="${safeExternalUrl(s.url)}" target="_blank" rel="noopener"><b>${esc(s.title)}</b><small>${esc(s.supports)}</small></a>`).join("")}</details>`:""}
+  ${ctx.research_note?`<small class="trip-research-disclaimer">${esc(ctx.research_note)}</small>`:""}
+ </div>`;
+}
+
+function packingOutfitObject(d){
+ return {
+  label:[d.day,d.occasion].filter(Boolean).join(" — ")||"Trip outfit",
+  score:90,
+  owned_garment_ids:d.garment_ids||[],
+  missing_piece:"",
+  missing_piece_reason:"",
+  why_it_works:d.note||"",
+  occasion_fit:d.occasion||"",
+  weather_fit:currentTripContext?.weather_summary||"",
+  formality_fit:currentTripContext?.dress_context||"",
+  style_note:d.reuse_note||""
+ };
+}
+
+function renderPackingPlan(x){
+ const box=$("packingResults");
+ currentPackingPlan=x;
+ currentTripContext=x.trip_context||currentTripContext||{};
+
+ const packed=(x.packing_list||[]).map(p=>{
+  const g=garments.find(z=>z.id===p.garment_id);
+  return g?`<div class="outfitPiece">
+   <img src="/api/garments/${g.id}/image" alt="">
+   <div><b>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category))}</b><small>${esc(p.why_pack)} · wear ~${p.wear_count}×</small></div>
+  </div>`:"";
+ }).join("");
+
+ const outfits=(x.outfit_plan||[]).map((d,index)=>{
+  const pieces=(d.garment_ids||[]).map(id=>{
+   const g=garments.find(z=>z.id===id);
+   return g?`<div class="mini-garment"><img src="/api/garments/${g.id}/image" alt=""><span>${esc(g.garment_type||g.category)}</span></div>`:"";
+  }).join("");
+  return `<article class="pack-day pack-day-v53">
+   <div class="pack-day-head"><div><small>${esc(d.date||"")}</small><h4>${esc(d.day)} — ${esc(d.occasion)}</h4></div></div>
+   <div class="mini-strip">${pieces}</div>
+   <p>${esc(d.note||"")}</p>
+   ${d.reuse_note?`<small class="reuse-note">↻ ${esc(d.reuse_note)}</small>`:""}
+   <div class="pack-look-actions">
+    <button class="primary" type="button" onclick="packingVisualise(${index},false,this)">Show on me</button>
+    <button class="ghost" type="button" onclick="packingVisualise(${index},true,this)">Regenerate image</button>
+    <button class="ghost" type="button" onclick="packingMoreLike(${index},this)">More like this</button>
+   </div>
+   <div id="packingVisual-${index}" class="packing-visual"></div>
+   <div id="packingMore-${index}" class="packing-more"></div>
+  </article>`;
+ }).join("");
+
+ const missing=(x.missing_items||[]).length
+  ? `<div class="notice"><b>Useful gaps:</b> ${x.missing_items.map(esc).join(" · ")}</div>`
+  : "";
+
+ box.innerHTML=
+  renderTripContext(currentTripContext)+
+  `<div class="notice packing-summary"><b>Your capsule</b><p>${esc(x.summary||"")}</p>${x.capsule_strategy?`<small>${esc(x.capsule_strategy)}</small>`:""}</div>
+   <div class="card"><h3>Pack these</h3>${packed}</div>
+   <div class="card pack-plan-card"><div class="row between"><h3>Outfit plan</h3><span class="pill">Tap Show on me</span></div>${outfits}</div>
+   ${missing}
+   <div class="card"><b>Packing tip</b><p>${esc(x.packing_tip||"")}</p></div>`;
+}
+
+async function packingVisualise(index,force=false,button=null){
+ const d=currentPackingPlan?.outfit_plan?.[index];
+ if(!d)return;
+ const box=$(`packingVisual-${index}`);
+ const key=`${currentPackingPlan?.destination||""}|${d.date||d.day}|${(d.garment_ids||[]).join(",")}`;
+ const original=button?.textContent||"Show on me";
+
+ if(!force&&packingVisualCache.has(key)){
+  const x=packingVisualCache.get(key);
+  box.innerHTML=`<div class="packing-generated"><img src="${x.image_path}" alt="Packing outfit on you"><small>${esc(x.notice||"")}</small></div>`;
+  return;
+ }
+
+ if(button){button.disabled=true;button.textContent=force?"Regenerating…":"Creating…";}
+ const activityKey=`packing-image-${index}`;
+ beginAppActivity(activityKey,"Creating your trip outfit…",`${d.day||"Trip look"} · ${d.occasion||""}`,"image");
+ box.innerHTML='<div class="visual-loading">Creating your personalised outfit visual…</div>';
+
+ try{
+  const x=await api("/api/outfit-visualisation",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    garment_ids:d.garment_ids||[],
+    label:[d.day,d.occasion].filter(Boolean).join(" — "),
+    reason:d.note||"",
+    occasion:d.occasion||"",
+    temperature_c:null,
+    use_my_likeness:true,
+    requested_extra_piece:""
+   })
+  });
+  packingVisualCache.set(key,x);
+  box.innerHTML=`<div class="packing-generated"><img src="${x.image_path}" alt="Packing outfit on you"><small>${esc(x.notice||"")}</small></div>`;
+ }catch(err){
+  box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }finally{
+  endAppActivity(activityKey);
+  if(button){button.disabled=false;button.textContent=original;}
+ }
+}
+
+async function packingMoreLike(index,button){
+ const d=currentPackingPlan?.outfit_plan?.[index];
+ if(!d)return;
+ const box=$(`packingMore-${index}`);
+ const original=button?.textContent||"More like this";
+ if(button){button.disabled=true;button.textContent="Creating…";}
+ beginAppActivity(`packing-more-${index}`,"Styling alternatives…","Keeping the same trip context and character of this look.","working");
+ box.innerHTML='<div class="visual-loading">Building a couple of useful variations…</div>';
+
+ try{
+  const base=packingOutfitObject(d);
+  const x=await api("/api/stylist-v4/more-like-this",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    base_outfit:base,
+    request_text:`Packing for ${$("pack_destination").value}. ${d.occasion}. ${d.note||""}`,
+    weather_context:currentTripContext?.weather_summary||"",
+    owned_only:true,max_options:3
+   })
+  });
+  box.innerHTML=(x.outfits||[]).map((o,j)=>{
+   const pieces=(o.owned_garment_ids||[]).map(id=>{
+    const g=garments.find(z=>z.id===id);
+    return g?`<span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category))}</span>`:"";
+   }).join("");
+   const payload=encodeURIComponent(JSON.stringify(o));
+   const visualIndex=3000+index*10+j;
+   return `<div class="packing-alt">
+    <b>${esc(o.label||`Variation ${j+1}`)}</b>
+    <div class="packing-alt-pieces">${pieces}</div>
+    <p>${esc(o.why_it_works||"")}</p>
+    <button class="ghost" type="button" onclick="v4Visualise('${payload}',${visualIndex},true)">Show variation on me</button>
+    <div id="v4Visual-${visualIndex}" class="model-visual hidden"></div>
+   </div>`;
+  }).join("")||'<div class="notice">No useful variation found.</div>';
+ }catch(err){
+  box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }finally{
+  endAppActivity(`packing-more-${index}`);
+  if(button){button.disabled=false;button.textContent=original;}
+ }
+}
+
 $("makePackingPlan")?.addEventListener("click",async()=>{
  const box=$("packingResults");
- box.innerHTML='<div class="card">Building the most useful capsule from your wardrobe…</div>';
- try{
-  const payload={destination:$("pack_destination").value,days:Number($("pack_days").value||5),trip_type:$("pack_trip_type").value,weather:$("pack_weather").value,activities:$("pack_activities").value,dress_needs:$("pack_dress_needs").value,laundry:$("pack_laundry").value,shopping_allowed:$("pack_shopping").value==="Yes",notes:$("pack_notes").value};
-  const x=await api("/api/help-me-pack",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-  const packed=(x.packing_list||[]).map(p=>{const g=garments.find(z=>z.id===p.garment_id);return g?`<div class="outfitPiece"><img src="${g.image_path}"><div><b>${esc((g.brand?g.brand+" ":"")+g.garment_type)}</b><small>${esc(p.why_pack)} · wear ~${p.wear_count}×</small></div></div>`:""}).join("");
-  const days=(x.outfit_plan||[]).map(d=>`<div class="pack-day"><b>${esc(d.day)} — ${esc(d.occasion)}</b><div class="mini-strip">${(d.garment_ids||[]).map(id=>{const g=garments.find(z=>z.id===id);return g?`<div class="mini-garment"><img src="${g.image_path}"><span>${esc(g.garment_type)}</span></div>`:""}).join("")}</div><small>${esc(d.note)}</small></div>`).join("");
-  const missing=(x.missing_items||[]).length?`<div class="notice"><b>Useful gaps:</b> ${x.missing_items.map(esc).join(" · ")}</div>`:"";
-  box.innerHTML=`<div class="notice">${esc(x.summary)}</div><div class="card"><h3>Pack these</h3>${packed}</div><div class="card"><h3>Outfit plan</h3>${days}</div>${missing}<div class="card"><b>Packing tip</b><p>${esc(x.packing_tip)}</p></div>`;
- }catch(err){box.innerHTML=`<div class="card">${esc(err.message)}</div>`}
-});
+ const destination=$("pack_destination").value.trim();
+ if(!destination){alert("Add your destination first.");return;}
 
+ packingDateSync();
+
+ const payload={
+  destination,
+  start_date:$("pack_start_date").value||"",
+  end_date:$("pack_end_date").value||"",
+  days:Number($("pack_days").value||5),
+  trip_type:$("pack_trip_type").value,
+  weather:$("pack_weather").value,
+  activities:$("pack_activities").value,
+  dress_needs:$("pack_dress_needs").value,
+  laundry:$("pack_laundry").value,
+  shopping_allowed:$("pack_shopping").value==="Yes",
+  notes:$("pack_notes").value
+ };
+
+ beginAppActivity("packing-plan","Researching your trip…","Checking weather, destination and any named hotels, restaurants or venues.","research");
+ box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Researching the trip…</b><small>I’ll use a real forecast when the dates are close enough; otherwise I’ll use seasonal conditions.</small></div></div>';
+
+ try{
+  currentTripContext=await api("/api/trip-context",{
+   method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)
+  });
+
+  box.innerHTML=renderTripContext(currentTripContext)+
+   '<div class="card v4-thinking"><span class="spinner"></span><div><b>Building your capsule…</b><small>Now matching the trip context to your actual wardrobe.</small></div></div>';
+  updateAppActivity("packing-plan","Building your capsule…","Choosing versatile pieces and planning intentional re-wears.","working");
+
+  const x=await api("/api/help-me-pack",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({...payload,trip_context:currentTripContext})
+  });
+  x.destination=destination;
+  renderPackingPlan(x);
+ }catch(err){
+  box.innerHTML=`<div class="notice"><b>I couldn't complete the packing plan.</b><br>${esc(err.message)}</div>`;
+ }finally{
+  endAppActivity("packing-plan");
+ }
+});
 
 $("quickWardrobeAnalyse")?.addEventListener("click",analyseQuickWardrobe);
 $("quickWardrobeDictate")?.addEventListener("click",startQuickWardrobeDictation);

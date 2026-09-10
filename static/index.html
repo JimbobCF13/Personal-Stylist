@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist</title>
-<link rel="stylesheet" href="/static/style.css?v=5.2">
+<link rel="stylesheet" href="/static/style.css?v=5.3">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.2</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.3</span></header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
@@ -267,9 +267,14 @@
  <div class="section"><h3>Help Me Pack</h3>
   <div class="card form">
    <div class="stylist-intro"><span class="eyebrow">TRAVEL STYLIST</span><p>Tell me about the trip. I'll reuse versatile pieces from your wardrobe to create a compact packing list and outfit plan.</p></div>
-   <label>DESTINATION<input id="pack_destination" placeholder="e.g. San Francisco"></label>
-   <div class="two"><label>DAYS<input id="pack_days" type="number" min="1" max="30" value="5"></label><label>TRIP TYPE<select id="pack_trip_type"><option>Mixed</option><option>Business</option><option>City break</option><option>Holiday / resort</option><option>Wedding / event</option><option>Weekend</option></select></label></div>
-   <label>EXPECTED WEATHER<input id="pack_weather" placeholder="e.g. 15–22°C, cool mornings, dry"></label>
+   <label>DESTINATION<input id="pack_destination" placeholder="e.g. San Francisco, Grand Hyatt San Francisco"></label>
+   <div class="two">
+    <label>DEPART<input id="pack_start_date" type="date"></label>
+    <label>RETURN<input id="pack_end_date" type="date"></label>
+   </div>
+   <div class="two"><label>DAYS<input id="pack_days" type="number" min="1" max="60" value="5"></label><label>TRIP TYPE<select id="pack_trip_type"><option>Mixed</option><option>Business</option><option>City break</option><option>Holiday / resort</option><option>Wedding / event</option><option>Weekend</option></select></label></div>
+   <label>WEATHER YOU ALREADY KNOW <small class="field-hint">optional — I'll research this automatically when possible</small><input id="pack_weather" placeholder="e.g. I know evenings are likely to be cool"></label>
+   <div class="trip-research-note"><b>Automatic trip research</b><span>I'll check forecast or seasonal weather for your dates and look up named hotels, restaurants, venues or events to help judge what to wear.</span></div>
    <label>ACTIVITIES
     <div class="dictation-wrap">
      <textarea id="pack_activities" rows="2" placeholder="e.g. lectures, walking around the city, drinks, dinners"></textarea>
@@ -366,8 +371,21 @@
 </section>
 </div>
 
+<div id="appActivityOverlay" class="app-activity-overlay hidden" aria-live="polite" aria-atomic="true">
+ <div class="activity-card">
+  <div id="activityVisual" class="activity-visual working" aria-hidden="true">
+   <span class="activity-ring"></span>
+   <span class="activity-person">◇</span>
+  </div>
+  <div class="activity-copy">
+   <b id="activityTitle">Working…</b>
+   <span id="activityDetail">Please wait a moment.</span>
+  </div>
+ </div>
+</div>
+
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=5.2"></script>
+<script src="/static/app.js?v=5.3"></script>
 </body></html>

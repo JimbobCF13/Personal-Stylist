@@ -598,3 +598,103 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .v4-actions button{width:100%}
  .v4-variation{margin-left:0;margin-right:0}
 }
+
+
+/* V5.3 — prominent centre-screen activity feedback */
+.app-activity-overlay{
+ position:fixed;inset:0;z-index:80;display:grid;place-items:center;
+ background:rgba(247,246,242,.30);backdrop-filter:blur(1.5px);
+ pointer-events:none;padding:20px
+}
+.app-activity-overlay.hidden{display:none}
+.activity-card{
+ width:min(340px,calc(100vw - 38px));background:rgba(255,255,255,.97);
+ border:1px solid rgba(0,0,0,.1);border-radius:22px;padding:20px;
+ box-shadow:0 18px 60px rgba(0,0,0,.16);
+ display:grid;grid-template-columns:58px 1fr;gap:15px;align-items:center
+}
+.activity-copy{display:grid;gap:4px}
+.activity-copy b{font-size:16px;letter-spacing:-.02em}
+.activity-copy span{font-size:12px;line-height:1.45;color:#666}
+.activity-visual{width:58px;height:58px;display:grid;place-items:center;position:relative}
+.activity-ring{
+ position:absolute;inset:2px;border:2px solid #d7d7d1;border-top-color:#333;
+ border-radius:50%;animation:activitySpin 1.05s linear infinite
+}
+.activity-person{font-size:17px;opacity:.55}
+.activity-visual.listening .activity-ring{
+ border-color:#e9c9c4;border-top-color:#8a3e34;animation-duration:.72s
+}
+.activity-visual.listening:after{
+ content:"";position:absolute;inset:12px;border-radius:50%;
+ border:1px solid rgba(138,62,52,.45);animation:listenPulse 1.2s ease-out infinite
+}
+.activity-visual.listening .activity-person{font-size:0}
+.activity-visual.listening .activity-person:before{content:"●";font-size:18px;color:#8a3e34}
+.activity-visual.research .activity-ring{animation-duration:1.35s}
+.activity-visual.transcribing .activity-ring{animation-duration:.85s}
+@keyframes activitySpin{to{transform:rotate(360deg)}}
+@keyframes listenPulse{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.75);opacity:0}}
+
+/* Help Me Pack 2.0 */
+.field-hint{font-size:9px;font-weight:500;letter-spacing:0;text-transform:none;color:#999}
+.trip-research-note{
+ border:1px solid var(--line);border-radius:14px;padding:12px 13px;
+ display:grid;gap:3px;background:#fafaf8
+}
+.trip-research-note b{font-size:11px}
+.trip-research-note span{font-size:10px;line-height:1.45;color:#777}
+.trip-context-card{background:#fafaf8}
+.trip-context-card h3{margin:4px 0 0;font-size:19px}
+.trip-mode{
+ font-size:9px;border:1px solid var(--line);border-radius:999px;
+ padding:6px 8px;white-space:nowrap
+}
+.trip-weather{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
+.trip-weather b{font-size:13px}
+.trip-weather p,.trip-context-line p{font-size:11px;line-height:1.5;color:#666;margin:5px 0}
+.trip-context-line{margin-top:12px}
+.trip-context-line>b{font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.trip-place-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.trip-place-list>div{border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff}
+.trip-place-list b{font-size:11px;display:block}
+.trip-place-list span{font-size:9px;color:#888}
+.trip-place-list p{font-size:10px;line-height:1.4;margin:5px 0}
+.trip-place-list small{font-size:8px;color:#999}
+.trip-sources{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.trip-sources summary{font-size:10px;font-weight:800;cursor:pointer}
+.trip-sources a{display:grid;gap:2px;text-decoration:none;color:inherit;padding:8px 0;border-bottom:1px solid #ecece8}
+.trip-sources a b{font-size:10px}
+.trip-sources a small{font-size:9px;color:#888}
+.trip-research-disclaimer{display:block;margin-top:10px;font-size:8px;line-height:1.4;color:#999}
+.packing-summary p{margin:5px 0}
+.pack-plan-card{overflow:visible}
+.pack-day-v53{padding:14px 0;border-bottom:1px solid var(--line)}
+.pack-day-v53:last-child{border-bottom:0}
+.pack-day-head small{font-size:9px;color:#888}
+.pack-day-head h4{font-size:15px;margin:2px 0 10px}
+.pack-day-v53>p{font-size:11px;line-height:1.5;color:#555}
+.reuse-note{display:block;color:#6c725f;margin:7px 0}
+.pack-look-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.pack-look-actions button{font-size:10px;padding:8px 10px;min-height:36px}
+.packing-visual{margin-top:10px}
+.packing-generated img{
+ display:block;width:100%;max-height:620px;object-fit:contain;
+ border-radius:14px;background:#f3f3f0
+}
+.packing-generated small{display:block;margin-top:6px;font-size:8px;color:#999}
+.packing-more{margin-top:10px}
+.packing-alt{border:1px solid var(--line);border-radius:12px;padding:11px;margin-top:7px;background:#fafaf8}
+.packing-alt>b{font-size:11px}
+.packing-alt-pieces{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}
+.packing-alt-pieces span{font-size:8px;border:1px solid var(--line);border-radius:999px;padding:4px 6px;background:#fff}
+.packing-alt p{font-size:10px;line-height:1.45;color:#666}
+
+@media(max-width:700px){
+ .activity-card{grid-template-columns:50px 1fr;padding:17px;border-radius:19px}
+ .activity-visual{width:50px;height:50px}
+ .activity-copy b{font-size:15px}
+ .trip-place-list{grid-template-columns:1fr}
+ .pack-look-actions{display:grid;grid-template-columns:1fr 1fr}
+ .pack-look-actions .primary{grid-column:1/-1}
+}

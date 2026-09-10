@@ -1,5 +1,6 @@
 
 import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re, tempfile
+from datetime import date
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
@@ -1583,8 +1584,134 @@ def fallback_outfits(garments, req):
 
 
 
+class TripContextRequest(BaseModel):
+    destination: str
+    start_date: str = ""
+    end_date: str = ""
+    days: int = 5
+    trip_type: str = "Mixed"
+    weather: str = ""
+    activities: str = ""
+    dress_needs: str = ""
+    notes: str = ""
+
+TRIP_CONTEXT_SCHEMA = {
+ "type":"object","properties":{
+  "weather_mode":{"type":"string","enum":["forecast","seasonal","user-provided","unavailable"]},
+  "weather_summary":{"type":"string"},
+  "temperature_low_c":{"type":["number","null"]},
+  "temperature_high_c":{"type":["number","null"]},
+  "rain":{"type":"string"},
+  "wind":{"type":"string"},
+  "packing_weather_note":{"type":"string"},
+  "destination_summary":{"type":"string"},
+  "dress_context":{"type":"string"},
+  "activity_context":{"type":"string"},
+  "named_places":{"type":"array","maxItems":8,"items":{"type":"object","properties":{
+   "name":{"type":"string"},"place_type":{"type":"string"},"dress_context":{"type":"string"},
+   "evidence_level":{"type":"string","enum":["verified","inferred","general"]},"note":{"type":"string"}
+  },"required":["name","place_type","dress_context","evidence_level","note"],"additionalProperties":False}},
+  "sources":{"type":"array","maxItems":10,"items":{"type":"object","properties":{
+   "title":{"type":"string"},"url":{"type":"string"},"supports":{"type":"string"}
+  },"required":["title","url","supports"],"additionalProperties":False}},
+  "research_note":{"type":"string"}
+ },
+ "required":["weather_mode","weather_summary","temperature_low_c","temperature_high_c","rain","wind",
+ "packing_weather_note","destination_summary","dress_context","activity_context","named_places","sources","research_note"],
+ "additionalProperties":False
+}
+
+@app.post("/api/trip-context")
+def trip_context(req: TripContextRequest):
+    if not (req.destination or "").strip():
+        raise HTTPException(400,"Add a destination first.")
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(503,"Trip research needs the AI connection.")
+
+    today=date.today()
+    start_date=end_date=None
+    try:
+        if req.start_date:
+            start_date=date.fromisoformat(req.start_date)
+        if req.end_date:
+            end_date=date.fromisoformat(req.end_date)
+    except ValueError:
+        raise HTTPException(400,"Please use valid trip dates.")
+    if start_date and end_date and end_date < start_date:
+        raise HTTPException(400,"The return date cannot be before the departure date.")
+
+    days=max(1,min(int(req.days or 5),60))
+    if start_date and end_date:
+        days=(end_date-start_date).days+1
+
+    if start_date:
+        days_until=(start_date-today).days
+        requested_mode="forecast" if 0 <= days_until <= 14 else "seasonal"
+    elif (req.weather or "").strip():
+        requested_mode="user-provided"
+    else:
+        requested_mode="seasonal"
+
+    prompt=f"""Research this trip for a personal menswear packing assistant.
+
+TODAY: {today.isoformat()}
+DESTINATION: {req.destination}
+TRIP DATES: {req.start_date or 'not supplied'} to {req.end_date or 'not supplied'}
+TRIP LENGTH: {days} days
+TRIP TYPE: {req.trip_type}
+USER WEATHER NOTE: {req.weather or 'none'}
+ACTIVITIES / NAMED VENUES: {req.activities or 'none'}
+DRESS NEEDS: {req.dress_needs or 'none'}
+OTHER NOTES / HOTELS / RESTAURANTS / EVENTS: {req.notes or 'none'}
+
+REQUESTED WEATHER MODE: {requested_mode}
+
+Rules:
+- Use live web search.
+- If forecast mode, use current published forecasts for the destination and dates. Prefer an official meteorological service where practical; corroborate with another reputable source when useful.
+- If the dates are beyond a reasonably reliable forecast window, do not pretend a forecast exists. Use seasonal/historical typical conditions for that place and time of year and set weather_mode to seasonal.
+- Consider weather supplied by the user alongside web evidence.
+- Identify hotels, restaurants, venues, resorts or events explicitly named in the user's text and research the exact place where possible.
+- For dress context, distinguish an explicit dress code from a stylist inference based on the venue's positioning, photographs or reputable descriptions.
+- Never invent a dress code. Use evidence_level verified only for an explicit source-supported requirement.
+- Include practical styling context such as walking, indoor/outdoor transitions and local formality where supported.
+- Return real source pages used during research.
+- This is clothing and packing guidance, not safety-critical weather advice.
+"""
+    try:
+        response=OpenAI().responses.create(
+            model=os.getenv("OPENAI_SHOPPING_MODEL",os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
+            reasoning={"effort":"low"},
+            tools=[{"type":"web_search"}],
+            tool_choice="auto",
+            include=["web_search_call.action.sources"],
+            input=prompt,
+            text={"format":{"type":"json_schema","name":"trip_context","schema":TRIP_CONTEXT_SCHEMA,"strict":True}}
+        )
+        result=json.loads(response.output_text)
+    except Exception as exc:
+        result={
+         "weather_mode":"user-provided" if req.weather else "unavailable",
+         "weather_summary":req.weather or "Live weather research was unavailable.",
+         "temperature_low_c":None,"temperature_high_c":None,"rain":"","wind":"",
+         "packing_weather_note":"Use your written weather expectations and layer conservatively." if req.weather else "Check the forecast again closer to departure.",
+         "destination_summary":f"{req.destination} — destination research was temporarily unavailable.",
+         "dress_context":req.dress_needs or "","activity_context":req.activities or "",
+         "named_places":[],"sources":[],
+         "research_note":f"Live trip research could not complete: {str(exc)[:180]}"
+        }
+
+    result["today"]=today.isoformat()
+    result["start_date"]=req.start_date
+    result["end_date"]=req.end_date
+    result["days"]=days
+    return result
+
+
 class PackingRequest(BaseModel):
     destination: str
+    start_date: str = ""
+    end_date: str = ""
     days: int = 5
     trip_type: str = "Mixed"
     weather: str = ""
@@ -1593,19 +1720,25 @@ class PackingRequest(BaseModel):
     laundry: str = "No"
     shopping_allowed: bool = True
     notes: str = ""
+    trip_context: dict = {}
 
 PACKING_SCHEMA = {
  "type":"object","properties":{
   "summary":{"type":"string"},
+  "capsule_strategy":{"type":"string"},
   "packing_list":{"type":"array","items":{"type":"object","properties":{
    "garment_id":{"type":"integer"},"why_pack":{"type":"string"},"wear_count":{"type":"integer"}
   },"required":["garment_id","why_pack","wear_count"],"additionalProperties":False}},
   "outfit_plan":{"type":"array","items":{"type":"object","properties":{
-   "day":{"type":"string"},"occasion":{"type":"string"},"garment_ids":{"type":"array","items":{"type":"integer"}},"note":{"type":"string"}
-  },"required":["day","occasion","garment_ids","note"],"additionalProperties":False}},
+   "day":{"type":"string"},"date":{"type":"string"},"occasion":{"type":"string"},
+   "garment_ids":{"type":"array","items":{"type":"integer"}},
+   "note":{"type":"string"},"reuse_note":{"type":"string"}
+  },"required":["day","date","occasion","garment_ids","note","reuse_note"],"additionalProperties":False}},
   "missing_items":{"type":"array","items":{"type":"string"}},
   "packing_tip":{"type":"string"}
- },"required":["summary","packing_list","outfit_plan","missing_items","packing_tip"],"additionalProperties":False
+ },
+ "required":["summary","capsule_strategy","packing_list","outfit_plan","missing_items","packing_tip"],
+ "additionalProperties":False
 }
 
 @app.post("/api/help-me-pack")
@@ -1615,15 +1748,80 @@ def help_me_pack(req: PackingRequest):
     profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     feedback=[dict(r) for r in con.execute("SELECT rating,outfit_json,created_at FROM feedback ORDER BY id DESC LIMIT 30").fetchall()]
     con.close()
+
     if len(garments)<3:
         raise HTTPException(400,"Add at least three wardrobe items before using Help Me Pack.")
     if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
         raise HTTPException(503,"Help Me Pack needs the AI stylist connection.")
-    instructions="""You are a meticulous personal menswear stylist and efficient travel packer. Build a practical capsule from the user's ACTUAL wardrobe. Reuse versatile garments across outfits to reduce luggage. Respect destination, trip length, activities, dress needs, weather, laundry access, fit history and style feedback. Use only supplied garment IDs for owned pieces. Never claim the user owns something absent from the wardrobe. If something genuinely useful is missing, list it briefly under missing_items; if shopping_allowed is false, keep missing_items empty. Include enough outfit planning to make the suitcase useful, but do not force a unique outfit for every day when rewearing is sensible."""
-    context={"trip":req.model_dump(),"profile":profile,"wardrobe":garments,"recent_feedback":feedback}
-    client=OpenAI()
-    response=client.responses.create(model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"medium"},instructions=instructions,input=json.dumps(context,ensure_ascii=False),text={"format":{"type":"json_schema","name":"packing_plan","schema":PACKING_SCHEMA,"strict":True}})
-    return json.loads(response.output_text)
+
+    valid_ids={g["id"] for g in garments}
+    compact=[{k:g.get(k) for k in [
+     "id","category","garment_type","brand","model_line","labelled_size","colour","material",
+     "pattern","fit_cut","fit_feedback","season","formality"
+    ]} for g in garments]
+
+    instructions="""You are a meticulous personal menswear stylist and efficient travel packer.
+Build a coherent capsule from the user's ACTUAL wardrobe, not unrelated outfits.
+
+Rules:
+- Use only supplied garment IDs for owned pieces.
+- Never claim the user owns something absent from the wardrobe.
+- Reuse versatile garments deliberately across days/occasions to reduce luggage.
+- Respect researched weather, destination/venue context, activities, dates, dress needs, laundry, fit history and style feedback.
+- Treat inferred venue dress guidance as guidance, not a verified rule.
+- Avoid overpacking. Shoes, trousers and outer layers should earn their place by working across multiple looks where possible.
+- If shopping_allowed is false, missing_items must be empty.
+- If shopping_allowed is true, list a missing item only for a genuine gap.
+- date should be YYYY-MM-DD when exact dates are supplied; otherwise blank.
+- reuse_note should make rewearing clear.
+- Do not invent weather or dress codes beyond trip_context.
+"""
+    context={
+     "trip":{
+      "destination":req.destination,"start_date":req.start_date,"end_date":req.end_date,
+      "days":req.days,"trip_type":req.trip_type,"user_weather":req.weather,
+      "activities":req.activities,"dress_needs":req.dress_needs,"laundry":req.laundry,
+      "shopping_allowed":req.shopping_allowed,"notes":req.notes
+     },
+     "researched_trip_context":req.trip_context or {},
+     "profile":profile,"wardrobe":compact,"recent_feedback":feedback
+    }
+
+    try:
+        response=OpenAI().responses.create(
+            model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+            reasoning={"effort":"medium"},
+            instructions=instructions,
+            input=json.dumps(context,ensure_ascii=False),
+            text={"format":{"type":"json_schema","name":"packing_plan","schema":PACKING_SCHEMA,"strict":True}}
+        )
+        result=json.loads(response.output_text)
+    except Exception as exc:
+        raise HTTPException(502,f"I couldn't build the packing plan: {str(exc)[:220]}")
+
+    clean_pack=[]
+    for item in result.get("packing_list",[]):
+        try: gid=int(item.get("garment_id"))
+        except Exception: continue
+        if gid in valid_ids:
+            item["garment_id"]=gid
+            clean_pack.append(item)
+    result["packing_list"]=clean_pack
+
+    clean_outfits=[]
+    for outfit in result.get("outfit_plan",[]):
+        ids=[]
+        for value in outfit.get("garment_ids",[]):
+            try: gid=int(value)
+            except Exception: continue
+            if gid in valid_ids and gid not in ids:
+                ids.append(gid)
+        if ids:
+            outfit["garment_ids"]=ids
+            clean_outfits.append(outfit)
+    result["outfit_plan"]=clean_outfits
+    result["trip_context"]=req.trip_context or {}
+    return result
 
 @app.get("/api/model-photos")
 def get_model_photos():
@@ -1715,11 +1913,8 @@ def outfit_visualisation(req: OutfitVisualisationRequest):
             f"colour: {g.get('colour') or 'unknown'}; material: {g.get('material') or 'unknown'}; "
             f"pattern: {g.get('pattern') or 'none/unknown'}; fit: {g.get('fit_cut') or 'unknown'}."
         )
-        rel = (g.get("image_path") or "").lstrip("/")
-        if rel.startswith("uploads/"):
-            p = DATA_DIR / rel
-        else:
-            p = ROOT / rel
+        rel = g.get("image_path") or ""
+        p = resolve_saved_image_path(rel)
         if p.exists():
             garment_image_files.append(p)
 
@@ -1779,10 +1974,11 @@ Important:
     try:
         reference_files = []
         if req.use_my_likeness:
-            reference_files.extend(likeness_files[:3])
+            likeness_limit=max(1,min(int(os.getenv("OUTFIT_LIKENESS_REFS","2")),3))
+            reference_files.extend(likeness_files[:likeness_limit])
         reference_files.extend(garment_image_files[:5])
         if reference_files:
-            opened = [open(p, "rb") for p in reference_files[:8]]
+            opened = [open(p, "rb") for p in reference_files[:7]]
             result = client.images.edit(
                 model=image_model,
                 image=opened,
