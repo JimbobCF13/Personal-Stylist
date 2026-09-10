@@ -1,7 +1,7 @@
 let currentGarmentDetail=null;
 
 const $=id=>document.getElementById(id);
-let garments=[], uploadedPath="", aiConfidence=0, importedProductSourceUrl="";
+let garments=[], uploadedPath="", originalUploadedPath="", aiConfidence=0, importedProductSourceUrl="";
 let addFlowHasUserPhoto=false;
 let editingGarmentId=null;
 let detailGarmentId=null;
@@ -270,7 +270,7 @@ async function init(){
  await loadGarments(); await loadProfile();
  if(latestStylistSession)renderLatestStylistSession();
 }
-const WARDROBE_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets","Coats","Knitwear","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
+const WARDROBE_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
 let selectedWardrobeCategory="";
 let wardrobeReturnGarmentId=null;
 let wardrobeReturnCategory="";
@@ -352,7 +352,7 @@ function handleWardrobeImageError(img){
   const fallback=document.createElement("button");
   fallback.type="button";
   fallback.className="image-load-fallback";
-  fallback.innerHTML="<b>Photo didn’t load</b><small>Tap to retry</small>";
+  fallback.innerHTML="<b>Photo unavailable</b><small>Tap to retry · if this persists, add the photo again</small>";
   fallback.addEventListener("click",()=>{
    img.classList.remove("image-missing");
    fallback.remove();
@@ -364,7 +364,7 @@ function handleWardrobeImageError(img){
  }
 }
 
-function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=g.image_path?`<img class="garment-photo" src="${g.image_path}" data-base-src="${esc(g.image_path)}" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="handleWardrobeImageError(this)">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}" data-garment-id="${g.id}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
+function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=(g.image_path && g.image_available!==false)?`<img class="garment-photo" src="/api/garments/${g.id}/image" data-base-src="/api/garments/${g.id}/image" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="handleWardrobeImageError(this)">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}" data-garment-id="${g.id}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
 function categorySlug(cat){
  return String(cat||"other").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 }
@@ -572,7 +572,7 @@ async function loadGarmentDetail(id){
    : `<div class="detail-history detail-history-empty"><span>Outfit history</span><p>Not used in a rated outfit yet.</p></div>`;
 
   box.innerHTML=`<div class="garment-detail-hero">
-    <div class="detail-image-wrap">${g.image_path?`<img src="${g.image_path}" data-base-src="${esc(g.image_path)}" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${title}" onerror="handleWardrobeImageError(this)">`:`<div class="detail-no-photo"><b>No photo yet</b><small>Use Add photo / edit garment to attach one.</small></div>`}</div>
+    <div class="detail-image-wrap">${(g.image_path && g.image_available!==false)?`<img src="/api/garments/${g.id}/image" data-base-src="/api/garments/${g.id}/image" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${title}" onerror="handleWardrobeImageError(this)">`:`<div class="detail-no-photo"><b>Photo unavailable</b><small>The garment is safe. Use Edit to add the photo again if retrying does not restore it.</small></div>`}</div>
     <div class="detail-summary">
      <small>${esc(g.category||"WARDROBE ITEM")}</small>
      <h2>${title}</h2>
@@ -811,6 +811,7 @@ function clearGarmentFields(){
  ids.forEach(id=>$(id).value="");
  $("fit_feedback").value="Unknown";
  uploadedPath="";
+ originalUploadedPath="";
  aiConfidence=0;
  importedProductSourceUrl="";
  addFlowHasUserPhoto=false;
@@ -905,6 +906,7 @@ async function handleGarmentPhoto(file,{preserveDetails=false}={}){
   const x=await api("/api/analyse-garment",{method:"POST",body:fd,signal:garmentAnalysisController.signal});
 
   uploadedPath=x.image_path||uploadedPath;
+  originalUploadedPath=x.original_image_path||originalUploadedPath||uploadedPath;
   addFlowHasUserPhoto=true;
   if(preserveDetails)importedProductSourceUrl=retainedSource;
 
@@ -989,6 +991,7 @@ async function importProductUrl(){
 
  const keepUserPhoto=Boolean(addFlowHasUserPhoto && uploadedPath);
  const retainedPhotoPath=uploadedPath;
+ const retainedOriginalPhotoPath=originalUploadedPath;
  const retainedPreview=$("preview").getAttribute("src")||"";
 
  if(!keepUserPhoto)resetAddFlow();
@@ -1007,6 +1010,7 @@ async function importProductUrl(){
 
   if(keepUserPhoto){
    uploadedPath=retainedPhotoPath;
+   originalUploadedPath=retainedOriginalPhotoPath||retainedPhotoPath;
    addFlowHasUserPhoto=true;
    if(retainedPreview){
     $("preview").src=retainedPreview;
@@ -1014,6 +1018,7 @@ async function importProductUrl(){
    }
   }else{
    uploadedPath=x.image_path||"";
+   originalUploadedPath=x.original_image_path||x.image_path||"";
    addFlowHasUserPhoto=false;
    if(x.image_path){
     $("preview").src=x.image_path;
@@ -1085,7 +1090,7 @@ $("saveGarment").addEventListener("click",async()=>{
  const ids=["category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","fit_feedback","season","formality","notes"];
  const fd=new FormData();
  fd.append("image_path",uploadedPath||"");
- fd.append("original_image_path",uploadedPath||"");
+ fd.append("original_image_path",originalUploadedPath||uploadedPath||"");
  ids.forEach(id=>fd.append(id,$(id).value||""));
  fd.append("ai_confidence",String(aiConfidence||0));
 

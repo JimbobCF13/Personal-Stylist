@@ -54,8 +54,8 @@ def db():
 
 WARDROBE_CATEGORY_ORDER = [
     "Blazers & Tailoring", "Overshirts & Shirt Jackets", "Jackets", "Coats",
-    "Knitwear", "Shirts", "Polos & T-Shirts", "Trousers", "Shorts",
-    "Footwear", "Accessories", "Other",
+    "Knitwear", "Sweatshirts & Hoodies", "Shirts", "Polos & T-Shirts",
+    "Trousers", "Shorts", "Footwear", "Accessories", "Other",
 ]
 
 def canonical_wardrobe_category(
@@ -97,7 +97,8 @@ def canonical_wardrobe_category(
         "puffer jacket","quilted jacket","windbreaker"
     ]
     knitwear = ["knitwear","jumper","jumpers","sweater","sweaters","cardigan","cardigans","quarter zip","half zip","roll neck","turtleneck","knit"]
-    polos_tees = ["polo","polo shirt","t-shirt","t shirt","tee","tees","tshirt","top","tops"]
+    sweatshirts = ["sweatshirt","sweatshirts","sweat shirt","crew-neck sweatshirt","crew neck sweatshirt","quarter-zip sweatshirt","quarter zip sweatshirt","hoodie","hoodies","hooded sweatshirt"]
+    polos_tees = ["polo","polo shirt","t-shirt","t shirt","tee","tees","tshirt"]
     shirts = [
         "shirt","shirts","oxford shirt","dress shirt","casual shirt","linen shirt",
         "utility shirt","work shirt"
@@ -128,6 +129,7 @@ def canonical_wardrobe_category(
         return "Blazers & Tailoring"
 
     if any(w in primary for w in jackets): return "Jackets"
+    if any(w in primary for w in sweatshirts): return "Sweatshirts & Hoodies"
     if any(w in primary for w in knitwear): return "Knitwear"
     if any(w in primary for w in polos_tees): return "Polos & T-Shirts"
     if any(w in primary for w in shirts): return "Shirts"
@@ -141,6 +143,7 @@ def canonical_wardrobe_category(
     if any(w in raw for w in footwear): return "Footwear"
     if any(w in raw for w in shorts): return "Shorts"
     if any(w in raw for w in trousers): return "Trousers"
+    if any(w in raw for w in sweatshirts): return "Sweatshirts & Hoodies"
     if any(w in raw for w in knitwear): return "Knitwear"
     if any(w in raw for w in polos_tees): return "Polos & T-Shirts"
     if any(w in raw for w in shirts): return "Shirts"
@@ -298,33 +301,86 @@ def save_profile(p: Profile):
     con.commit(); con.close()
     return {"ok": True}
 
+
+def saved_image_is_usable(rel_path: str) -> bool:
+    if not rel_path:
+        return False
+    try:
+        path=resolve_saved_image_path(rel_path)
+        if not path.exists() or not path.is_file() or path.stat().st_size < 512:
+            return False
+        with Image.open(path) as im:
+            im.verify()
+        # A second lightweight pass catches a completely blank generated catalogue
+        # canvas while remaining conservative for pale garments.
+        with Image.open(path) as im:
+            thumb=ImageOps.exif_transpose(im).convert("L")
+            thumb.thumbnail((64,64))
+            extrema=thumb.getextrema()
+            if extrema and (extrema[1]-extrema[0]) < 4:
+                return False
+        return True
+    except Exception:
+        return False
+
+
+def best_garment_image(row: dict) -> tuple[str,str]:
+    display=row.get("image_path") or ""
+    original=row.get("original_image_path") or ""
+    if saved_image_is_usable(display):
+        return display, "display"
+    if original and original != display and saved_image_is_usable(original):
+        return original, "original"
+    if original and saved_image_is_usable(original):
+        return original, "original"
+    return "", "missing"
+
+
+@app.get("/api/garments/{gid}/image")
+def garment_image(gid: int):
+    con=db()
+    row=con.execute("SELECT id,image_path,original_image_path FROM garments WHERE id=?",(gid,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404,"Garment not found.")
+    data=dict(row)
+    rel,source=best_garment_image(data)
+    if not rel:
+        con.close()
+        raise HTTPException(404,"This garment's saved photo file is unavailable.")
+    if source=="original" and rel != (data.get("image_path") or ""):
+        con.execute("UPDATE garments SET image_path=? WHERE id=?",(rel,gid))
+        con.commit()
+    con.close()
+    path=resolve_saved_image_path(rel)
+    return FileResponse(path, headers={"Cache-Control":"no-store, max-age=0"})
+
+
 @app.get("/api/garments")
 def garments():
     con = db()
     rows = [dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    changed=False
 
-    # V3.6 safety repair: a cleaned/display image is disposable; the uploaded
-    # original is the source of truth. If a display file has disappeared, fall
-    # back to the original automatically. Also backfill original_image_path for
-    # older rows where the current image is itself an uploaded source image.
-    changed = False
     for row in rows:
-        image_rel = row.get("image_path") or ""
-        original_rel = row.get("original_image_path") or ""
-        image_exists = bool(image_rel) and resolve_saved_image_path(image_rel).exists()
-        original_exists = bool(original_rel) and resolve_saved_image_path(original_rel).exists()
+        display=row.get("image_path") or ""
+        original=row.get("original_image_path") or ""
 
-        if not original_exists and image_exists and str(image_rel).startswith("/uploads/"):
-            original_rel = image_rel
-            row["original_image_path"] = original_rel
-            con.execute("UPDATE garments SET original_image_path=? WHERE id=?", (original_rel, row["id"]))
-            original_exists = True
-            changed = True
+        # Older records sometimes legitimately used an upload as the display image.
+        if not original and display.startswith("/uploads/") and saved_image_is_usable(display):
+            original=display
+            row["original_image_path"]=display
+            con.execute("UPDATE garments SET original_image_path=? WHERE id=?",(display,row["id"]))
+            changed=True
 
-        if not image_exists and original_exists:
-            row["image_path"] = original_rel
-            con.execute("UPDATE garments SET image_path=? WHERE id=?", (original_rel, row["id"]))
-            changed = True
+        best,source=best_garment_image(row)
+        row["image_status"]=source
+        row["image_available"]=bool(best)
+
+        if best and best != display:
+            row["image_path"]=best
+            con.execute("UPDATE garments SET image_path=? WHERE id=?",(best,row["id"]))
+            changed=True
 
     if changed:
         con.commit()
@@ -498,6 +554,13 @@ def garment_detail(gid: int):
         raise HTTPException(404, "Garment not found")
 
     garment = dict(row)
+    best_image,image_source=best_garment_image(garment)
+    garment["image_status"]=image_source
+    garment["image_available"]=bool(best_image)
+    if best_image and best_image != (garment.get("image_path") or ""):
+        garment["image_path"]=best_image
+        con.execute("UPDATE garments SET image_path=? WHERE id=?",(best_image,gid))
+        con.commit()
     feedback_rows = con.execute(
         "SELECT rating, outfit_json, created_at FROM feedback ORDER BY id DESC LIMIT 100"
     ).fetchall()
@@ -1185,7 +1248,7 @@ def parse_quick_wardrobe(req: QuickWardrobeRequest):
 Extract only garments the user actually says they own. One physical garment = one item.
 If they describe multiples, create separate items only when the description distinguishes them; otherwise create the stated quantity as separate records with the same known metadata.
 Never invent a brand, model, size, material, colour, pattern, fit or season. Leave unknown strings blank.
-Use these canonical categories only: Blazers & Tailoring, Overshirts & Shirt Jackets, Jackets, Coats, Knitwear, Shirts, Polos & T-Shirts, Trousers, Shorts, Footwear, Accessories, Other. Blazers, sports jackets and suit jackets belong in Blazers & Tailoring. Overshirts, shirt jackets and shackets belong in Overshirts & Shirt Jackets. Utility shirts and work shirts belong in Shirts unless explicitly described as an overshirt or shirt jacket. Casual jackets such as Harringtons, bombers and gilets belong in Jackets. Overcoats, trench coats, macs, raincoats and parkas belong in Coats.
+Use these canonical categories only: Blazers & Tailoring, Overshirts & Shirt Jackets, Jackets, Coats, Knitwear, Sweatshirts & Hoodies, Shirts, Polos & T-Shirts, Trousers, Shorts, Footwear, Accessories, Other. Blazers, sports jackets and suit jackets belong in Blazers & Tailoring. Overshirts, shirt jackets and shackets belong in Overshirts & Shirt Jackets. Utility shirts and work shirts belong in Shirts unless explicitly described as an overshirt or shirt jacket. Sweatshirts and hoodies belong in Sweatshirts & Hoodies; do not classify them as Polos & T-Shirts or Knitwear. Casual jackets such as Harringtons, bombers and gilets belong in Jackets. Overcoats, trench coats, macs, raincoats and parkas belong in Coats.
 Normalise obvious garment wording into a useful garment_type, e.g. polo shirt, crew-neck T-shirt, chinos, loafers, overshirt.
 Season and formality can be inferred conservatively from the garment itself, but leave blank when uncertain.
 Set confidence based on how completely the user's description supports the record.

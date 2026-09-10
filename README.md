@@ -545,3 +545,19 @@ On startup, existing garments may have their **category field only** reclassifie
 - If a cleaned image is unavailable, the UI falls back to the original uploaded image where one exists.
 - If both paths fail, the user gets a visible **Photo didn’t load — Tap to retry** control instead of a blank/broken image.
 - No image files are deleted, moved or rewritten by this patch.
+
+
+## V5.1.5 — Image source integrity + sweatshirt taxonomy
+### Image fix
+- New uploads now preserve two distinct paths: the catalogue/display image and the original source image.
+- Fixes the Add Garment bug that previously saved the catalogue image as both paths.
+- Retailer URL imports also retain their true downloaded source image separately.
+- Wardrobe cards now request images through a stable garment-image endpoint rather than directly depending on a random static filename.
+- The server verifies the display file and automatically serves the original source when the display file is missing/corrupt/blank.
+- Existing garment records are not deleted. If neither recorded image is usable, the garment remains intact and the UI clearly marks the photo as unavailable.
+
+### Categories
+- Adds **Sweatshirts & Hoodies**.
+- Crew-neck sweatshirts, quarter-zip sweatshirts and hoodies no longer fall into Polos & T-Shirts.
+- Removes the overly broad `top/tops` matching from Polos & T-Shirts.
+- Existing categories are safely re-normalised on startup from the stored garment type/details.
