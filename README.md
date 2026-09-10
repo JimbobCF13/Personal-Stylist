@@ -507,3 +507,15 @@ V4.9 only adds a new independent favourites table. Existing `garments` rows, gar
 - Start with a personal photo, then import a retailer URL without losing the photo.
 - Retailer data enriches product identity while explicit user size/fit entries are retained.
 - Existing saved wardrobe data and images are untouched.
+
+
+## V5.1.2 — Mobile UI polish
+- Reworks garment detail on phones into a product-first fashion layout with a full-width hero image.
+- Moves the title, useful metadata, chips and primary actions directly beneath the image.
+- Garment Details and Brand Intelligence are expandable on mobile, reducing long dense pages.
+- Product URLs/long notes remain available but no longer dominate the default phone view.
+- Empty outfit history is reduced to one compact status row.
+- Improves phone typography, touch targets, card spacing, form sizing and bottom navigation.
+- Adds mobile-specific treatment for Wardrobe, Stylist, Build My Own Look, Saved Looks, Shopping and Pack.
+- Desktop layouts remain intact.
+- No database migrations and no changes to saved wardrobe records or images.

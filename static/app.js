@@ -519,22 +519,28 @@ async function loadGarmentDetail(id){
   currentGarmentDetail=g;
   detailGarmentId=id;
   const title=esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"));
+  const conciseMeta=[g.colour,g.fit_cut,g.material,g.labelled_size].filter(Boolean);
   const hist=(g.outfit_history||[]).length
-   ? `<div class="detail-history"><small>RECENT OUTFIT FEEDBACK</small>${g.outfit_history.map(h=>`<div><b>${esc(h.label)}</b><span>${esc(h.rating||"")}</span></div>`).join("")}</div>`
-   : `<div class="detail-history"><small>OUTFIT HISTORY</small><p>This garment has not appeared in rated outfits yet.</p></div>`;
+   ? `<details class="detail-accordion detail-history-accordion">
+        <summary><span><small>OUTFIT HISTORY</small><b>${g.outfit_history.length} rated look${g.outfit_history.length===1?"":"s"}</b></span><i>›</i></summary>
+        <div class="detail-history">${g.outfit_history.map(h=>`<div><b>${esc(h.label)}</b><span>${esc(h.rating||"")}</span></div>`).join("")}</div>
+      </details>`
+   : `<div class="detail-history detail-history-empty"><span>Outfit history</span><p>Not used in a rated outfit yet.</p></div>`;
 
   box.innerHTML=`<div class="garment-detail-hero">
     <div class="detail-image-wrap">${g.image_path?`<img src="${g.image_path}" alt="${title}">`:`<div class="detail-no-photo"><b>No photo yet</b><small>Use Add photo / edit garment to attach one.</small></div>`}</div>
     <div class="detail-summary">
      <small>${esc(g.category||"WARDROBE ITEM")}</small>
      <h2>${title}</h2>
-     <p>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</p>
+     <p class="detail-meta-line">${esc(conciseMeta.join(" · "))}</p>
      <div class="detail-pills"><span>${esc(g.fit_feedback||"Fit unknown")}</span>${g.season?`<span>${esc(g.season)}</span>`:""}${g.formality?`<span>${esc(g.formality)}</span>`:""}</div>
      <div class="detail-actions"><button class="primary" onclick="buildAround(${g.id})">Build an outfit</button><button class="ghost" onclick="cleanupPhoto(${g.id})">Clean up photo</button></div>
     </div>
    </div>
-   <div class="detail-columns">
-    <div class="detail-card"><small>GARMENT DETAILS</small>
+
+   <details class="detail-accordion garment-details-accordion">
+    <summary><span><small>GARMENT DETAILS</small><b>View all details</b></span><i>›</i></summary>
+    <div class="detail-card detail-card-inside">
      <dl>
       <div><dt>Brand</dt><dd>${detailValue(g.brand)}</dd></div>
       <div><dt>Model / line</dt><dd>${detailValue(g.model_line)}</dd></div>
@@ -543,16 +549,25 @@ async function loadGarmentDetail(id){
       <div><dt>Material</dt><dd>${detailValue(g.material)}</dd></div>
       <div><dt>Pattern</dt><dd>${detailValue(g.pattern)}</dd></div>
       <div><dt>Fit / cut</dt><dd>${detailValue(g.fit_cut)}</dd></div>
-      <div><dt>Notes</dt><dd>${detailValue(g.notes)}</dd></div>
+      <div class="detail-notes-row"><dt>Notes</dt><dd>${detailValue(g.notes)}</dd></div>
      </dl>
     </div>
-    ${hist}
-   </div>
-   <div id="fitReviewPanel">${renderFitReviewPanel(g)}</div>
-   <div id="brandIntelligencePanel">${renderEnrichmentPanel(g)}</div>`;
+   </details>
 
-  $("detailEdit").textContent=g.image_path?"Edit garment":"Add photo / edit garment";
+   ${hist}
+   <div id="fitReviewPanel">${renderFitReviewPanel(g)}</div>
+   <details id="brandIntelligenceAccordion" class="detail-accordion brand-intelligence-accordion">
+    <summary><span><small>BRAND INTELLIGENCE</small><b>${esc(g.brand||"Fit, sizing & construction")}</b></span><i>›</i></summary>
+    <div id="brandIntelligencePanel">${renderEnrichmentPanel(g)}</div>
+   </details>`;
+
+  $("detailEdit").textContent=g.image_path?"Edit":"Add photo";
   $("detailEdit").onclick=()=>editGarment(g.id);
+
+  // Desktop can show the supporting detail open; mobile starts with a calm,
+  // product-first view and lets the user expand information on demand.
+  const mobile=window.matchMedia("(max-width: 700px)").matches;
+  box.querySelectorAll(".detail-accordion").forEach(d=>d.open=!mobile);
 
   if(g.enrichment_status==="researching"){
    enrichmentPollTimer=setTimeout(()=>pollGarmentEnrichment(id),2200);
@@ -561,7 +576,6 @@ async function loadGarmentDetail(id){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
  }
 }
-
 
 async function pollGarmentEnrichment(id){
  clearTimeout(enrichmentPollTimer);

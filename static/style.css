@@ -428,3 +428,131 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 
 /* V5.1.1 — combined photo + retailer-link add flow */
 .combine-source-note{display:block;margin-top:8px;line-height:1.45;color:#6d6d6d;font-size:9px}
+
+/* V5.1.2 — Mobile UI polish */
+.detail-accordion{border:1px solid var(--line);border-radius:18px;background:#fff;margin:0 0 12px;overflow:hidden}
+.detail-accordion>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px}
+.detail-accordion>summary::-webkit-details-marker{display:none}
+.detail-accordion>summary span{display:grid;gap:3px}
+.detail-accordion>summary small{font-size:9px;letter-spacing:.12em;font-weight:850;color:#888}
+.detail-accordion>summary b{font-size:13px}
+.detail-accordion>summary i{font-style:normal;font-size:22px;line-height:1;transition:transform .18s;color:#777}
+.detail-accordion[open]>summary i{transform:rotate(90deg)}
+.detail-card-inside{border:0;border-top:1px solid var(--line);border-radius:0;margin:0;box-shadow:none}
+.brand-intelligence-accordion #brandIntelligencePanel>.detail-research{border:0;border-top:1px solid var(--line);border-radius:0;margin:0}
+.detail-history-accordion .detail-history{border:0;border-top:1px solid var(--line);border-radius:0;margin:0}
+.detail-history-empty{display:flex;align-items:center;justify-content:space-between;gap:15px}
+.detail-history-empty>span{font-size:10px;font-weight:800;color:#666}
+.detail-history-empty p{margin:0;font-size:11px}
+
+@media(max-width:700px){
+ html,body{background:#f8f7f4}
+ body{font-size:16px;padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+ .app{width:100%;max-width:none;min-height:100vh}
+
+ header{
+  position:sticky;top:0;padding:12px 16px 10px;
+  background:rgba(248,247,244,.94);border-bottom:1px solid rgba(0,0,0,.06);
+ }
+ header h1{font-size:17px;letter-spacing:-.02em}
+ header small{font-size:10px}
+ header .badge{font-size:8px;padding:4px 6px;background:#ecece8;color:#555}
+
+ .section{padding:14px 14px 24px}
+ .section h3{font-size:22px}
+ .card{border-radius:16px;padding:14px}
+ .primary,.ghost,.secondary,.danger{min-height:44px;padding:11px 14px;border-radius:12px;font-size:13px}
+ input,select,textarea{font-size:16px!important}
+
+ /* Garment detail becomes a fashion-product page rather than a compressed desktop grid. */
+ .detail-section{max-width:none;padding:8px 0 26px}
+ .detail-topbar{padding:4px 16px 8px;margin:0}
+ .detail-topbar .text-back{font-size:12px;padding:10px 0}
+ .detail-topbar #detailEdit{min-height:36px;padding:7px 11px;font-size:11px;border-radius:10px}
+
+ #garmentDetailContent{width:100%}
+ .garment-detail-hero{display:flex;flex-direction:column;gap:0;margin:0 0 12px}
+ .detail-image-wrap{
+  width:100%;min-height:0;height:auto;border:0;border-radius:0;
+  padding:12px 18px 8px;background:#f2f2ef;
+ }
+ .detail-image-wrap img{height:auto;max-height:52vh;min-height:300px;width:100%;object-fit:contain}
+ .detail-summary{width:100%;padding:17px 16px 6px}
+ .detail-summary>small{display:block;font-size:8px;letter-spacing:.12em;margin-bottom:5px}
+ .detail-summary h2{font-size:27px;line-height:1.06;margin:0 0 8px;letter-spacing:-.035em}
+ .detail-summary>p.detail-meta-line{font-size:13px;line-height:1.4;margin-bottom:11px;color:#666}
+ .detail-pills{gap:5px}
+ .detail-pills span{font-size:9px;padding:5px 8px;background:#f7f7f5}
+ .detail-actions{display:grid;grid-template-columns:1.25fr 1fr;gap:8px;margin-top:14px}
+ .detail-actions button{width:100%}
+
+ .detail-accordion,.detail-history-empty,#fitReviewPanel>.detail-research{
+  margin-left:14px;margin-right:14px;border-radius:15px
+ }
+ .detail-accordion>summary{padding:13px 14px}
+ .detail-accordion>summary b{font-size:12px}
+ .detail-card-inside{padding:6px 14px 10px}
+ .detail-card dl{margin:0}
+ .detail-card dl>div{grid-template-columns:88px 1fr;gap:8px;padding:10px 0}
+ .detail-card dt{font-size:10px}
+ .detail-card dd{font-size:12px;line-height:1.42;overflow-wrap:anywhere}
+ .detail-notes-row dd{max-height:150px;overflow:auto;padding-right:3px}
+ .detail-history-empty{padding:12px 14px;background:#fff;border:1px solid var(--line)}
+ .detail-history-empty p{font-size:10px;color:#888}
+ .detail-research{padding:14px}
+ .detail-research h4{font-size:17px}
+ .detail-research>p{font-size:11px}
+ .research-grid{grid-template-columns:1fr;gap:4px}
+ .research-grid p{font-size:11px}
+ .research-actions{display:grid;grid-template-columns:1fr 1fr}
+ .research-actions .text-button{grid-column:1/-1}
+ .research-sources a{overflow-wrap:anywhere}
+
+ /* Wardrobe */
+ #wardrobe .section{padding-bottom:18px}
+ .wardrobe-toolbar{position:sticky;top:56px;z-index:5;background:#f8f7f4;padding-bottom:8px}
+ .wardrobe-category-nav{overflow-x:auto;flex-wrap:nowrap!important;scrollbar-width:none;padding-bottom:3px}
+ .wardrobe-category-nav::-webkit-scrollbar{display:none}
+ .wardrobe-category-nav button{white-space:nowrap;flex:0 0 auto}
+ .garments{grid-template-columns:1fr 1fr;gap:9px}
+ .garment img{height:190px}
+ .meta{padding:9px}
+ .meta b{font-size:12px}
+ .meta small{font-size:9px}
+ .pill{font-size:9px;padding:5px 7px}
+
+ /* Stylist, Saved Looks, Shopping and Pack */
+ .two,.three{grid-template-columns:1fr}
+ .v4-outfit,.saved-look,.product-wardrobe-look{border-radius:16px}
+ .outfitPiece{grid-template-columns:72px 1fr;gap:10px}
+ .outfitPiece img{width:72px;height:72px}
+ .generated-look img,.v4-visual img,.saved-look img{max-height:62vh;object-fit:contain}
+ .build-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .build-garment img,.build-no-photo{height:150px}
+ .build-look-tray{bottom:calc(66px + env(safe-area-inset-bottom))}
+ .quick-grid{grid-template-columns:1fr 1fr}
+
+ /* Bottom navigation: larger, purposefully mobile, horizontally scrollable if needed. */
+ nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;
+  background:rgba(255,255,255,.96);backdrop-filter:blur(18px);
+  border-top:1px solid rgba(0,0,0,.08);
+  padding:5px 5px calc(5px + env(safe-area-inset-bottom));
+ }
+ nav .navinner{
+  max-width:none;margin:0;display:flex;overflow-x:auto;justify-content:flex-start;scrollbar-width:none
+ }
+ nav .navinner::-webkit-scrollbar{display:none}
+ nav button{
+  flex:1 0 13.8%;min-width:54px;min-height:50px;padding:4px 2px;
+  font-size:17px;line-height:1;background:transparent;border:0;color:#333
+ }
+ nav button span{display:block;font-size:8px;margin-top:5px;color:#777;font-weight:650}
+}
+
+@media(max-width:390px){
+ .detail-summary h2{font-size:24px}
+ .detail-image-wrap img{min-height:270px;max-height:48vh}
+ .garment img{height:170px}
+ nav button{min-width:50px}
+}
