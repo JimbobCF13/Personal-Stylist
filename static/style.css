@@ -425,3 +425,6 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 .product-found{margin:14px 0}.product-wardrobe-look{margin:14px 0}.product-wardrobe-look .style-note{font-size:9px;color:#666}
 @media(max-width:800px){.build-picker-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:520px){.build-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.build-garment img,.build-no-photo{height:135px}}
+
+/* V5.1.1 — combined photo + retailer-link add flow */
+.combine-source-note{display:block;margin-top:8px;line-height:1.45;color:#6d6d6d;font-size:9px}

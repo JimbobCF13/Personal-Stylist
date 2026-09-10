@@ -498,3 +498,12 @@ V4.9 only adds a new independent favourites table. Existing `garments` rows, gar
 ### Safety / persistence
 - No wardrobe database migration is introduced by V5.1.
 - Existing garment rows and uploaded wardrobe images are not rewritten or deleted.
+
+
+## V5.1.1 — Add Garment workflow polish
+- Photo-first and retailer-link-first now work as a single combined garment workflow.
+- Import a retailer URL first, then add one personal photo without clearing brand/model/material/etc.
+- Photo analysis fills only missing fields when web details already exist.
+- Start with a personal photo, then import a retailer URL without losing the photo.
+- Retailer data enriches product identity while explicit user size/fit entries are retained.
+- Existing saved wardrobe data and images are untouched.
