@@ -568,3 +568,33 @@ h1,h2,h3,h4{letter-spacing:-.02em}
 .image-load-fallback b{font-size:11px}
 .image-load-fallback small{font-size:9px;color:#888}
 .detail-image-wrap .image-load-fallback{inset:18px}
+
+
+/* V5.2 — AI dictation + Stylist variations */
+.dictation-wrap.single-line input{padding-right:118px}
+.dictation-wrap.single-line .dictate-btn{
+ top:50%;bottom:auto;transform:translateY(-50%);
+}
+.dictation-status{font-size:11px;line-height:1.4;color:#666}
+.more-like-working{display:flex;gap:10px;align-items:center;margin-top:12px}
+.v4-more-results{margin-top:14px}
+.more-like-heading{
+ padding:12px 2px 8px;border-top:1px solid var(--line);display:grid;gap:3px
+}
+.more-like-heading small{font-size:9px;letter-spacing:.12em;font-weight:850;color:#888}
+.more-like-heading b{font-size:13px}
+.more-like-heading p{margin:3px 0 0;font-size:11px;color:var(--muted)}
+.v4-variation{
+ margin:10px 0 0;
+ background:#fafaf8;
+ box-shadow:none;
+}
+.v4-variation .rank-pill{background:#ecece8}
+.more-like-btn{border-color:#bdbdb7}
+@media(max-width:700px){
+ .dictation-wrap.single-line input{padding-right:108px}
+ .dictate-btn{font-size:11px;min-height:38px}
+ .v4-actions{display:grid;grid-template-columns:1fr 1fr}
+ .v4-actions button{width:100%}
+ .v4-variation{margin-left:0;margin-right:0}
+}

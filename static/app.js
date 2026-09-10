@@ -30,6 +30,156 @@ async function api(url,opts={}){
  if(!r.ok) throw new Error(data.detail||"Something went wrong");
  return data;
 }
+
+let activeAiDictation=null;
+
+function dictationMimeType(){
+ const candidates=[
+  "audio/webm;codecs=opus",
+  "audio/mp4",
+  "audio/webm",
+  "audio/ogg;codecs=opus"
+ ];
+ if(!window.MediaRecorder)return "";
+ for(const type of candidates){
+  try{
+   if(!MediaRecorder.isTypeSupported || MediaRecorder.isTypeSupported(type))return type;
+  }catch{}
+ }
+ return "";
+}
+
+function dictationFilename(type){
+ if((type||"").includes("mp4"))return "dictation.mp4";
+ if((type||"").includes("ogg"))return "dictation.ogg";
+ return "dictation.webm";
+}
+
+function appendDictationText(field,text){
+ const spoken=String(text||"").trim();
+ if(!spoken)return;
+ const existing=String(field.value||"").trim();
+ field.value=[existing,spoken].filter(Boolean).join(existing&&spoken?" ":"");
+ field.dispatchEvent(new Event("input",{bubbles:true}));
+ field.focus();
+}
+
+async function toggleAiDictation(button,field,status){
+ if(!button||!field||!status)return;
+
+ if(activeAiDictation){
+  if(activeAiDictation.button===button){
+   try{activeAiDictation.recorder.stop()}catch{}
+   return;
+  }
+  status.classList.remove("hidden");
+  status.textContent="Another dictation is recording. Stop that one first.";
+  return;
+ }
+
+ if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){
+  field.focus();
+  status.classList.remove("hidden");
+  status.textContent="Browser recording is unavailable here. You can still use the microphone on your phone or Mac keyboard.";
+  return;
+ }
+
+ let stream;
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({
+   audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+  });
+ }catch(err){
+  field.focus();
+  status.classList.remove("hidden");
+  status.textContent="Microphone access wasn't available. Check browser permission, or use the keyboard microphone.";
+  return;
+ }
+
+ const mime=dictationMimeType();
+ let recorder;
+ try{
+  recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+ }catch(err){
+  stream.getTracks().forEach(t=>t.stop());
+  status.classList.remove("hidden");
+  status.textContent="I couldn't start the microphone recorder in this browser.";
+  return;
+ }
+
+ const chunks=[];
+ let safetyTimer=null;
+ activeAiDictation={button,field,status,recorder,stream};
+
+ recorder.ondataavailable=e=>{
+  if(e.data && e.data.size)chunks.push(e.data);
+ };
+
+ recorder.onerror=()=>{
+  status.classList.remove("hidden");
+  status.textContent="Recording stopped unexpectedly. Please try again.";
+ };
+
+ recorder.onstart=()=>{
+  button.textContent="■ Stop";
+  button.classList.add("recording");
+  status.classList.remove("hidden");
+  status.textContent="Listening… tap Stop when you've finished.";
+  safetyTimer=setTimeout(()=>{
+   if(recorder.state==="recording"){
+    try{recorder.stop()}catch{}
+   }
+  },90000);
+ };
+
+ recorder.onstop=async()=>{
+  clearTimeout(safetyTimer);
+  stream.getTracks().forEach(t=>t.stop());
+  const wasActive=activeAiDictation?.recorder===recorder;
+  if(wasActive)activeAiDictation=null;
+
+  button.classList.remove("recording");
+  button.disabled=true;
+  button.textContent="Transcribing…";
+  status.classList.remove("hidden");
+  status.textContent="Turning your recording into text…";
+
+  try{
+   const contentType=recorder.mimeType||mime||"audio/webm";
+   const blob=new Blob(chunks,{type:contentType});
+   if(!blob.size)throw new Error("No speech was recorded.");
+
+   const fd=new FormData();
+   fd.append("file",blob,dictationFilename(contentType));
+   const x=await api("/api/transcribe-audio",{method:"POST",body:fd});
+   appendDictationText(field,x.text);
+   status.textContent="Dictation added. You can edit the text before continuing.";
+  }catch(err){
+   status.textContent=`Dictation couldn't be transcribed: ${err.message}`;
+  }finally{
+   button.disabled=false;
+   button.textContent="🎙️ Dictate";
+  }
+ };
+
+ try{
+  recorder.start(300);
+ }catch(err){
+  stream.getTracks().forEach(t=>t.stop());
+  activeAiDictation=null;
+  button.classList.remove("recording");
+  button.textContent="🎙️ Dictate";
+  status.classList.remove("hidden");
+  status.textContent="I couldn't start recording. Please try again.";
+ }
+}
+
+function setupAiDictation(buttonId,fieldId,statusId){
+ const button=$(buttonId),field=$(fieldId),status=$(statusId);
+ if(!button||!field||!status)return;
+ button.addEventListener("click",()=>toggleAiDictation(button,field,status));
+}
+
 function go(id){
  document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
  $(id).classList.add("active");
@@ -140,31 +290,7 @@ async function saveQuickWardrobeSelected(){
 }
 
 function startQuickWardrobeDictation(){
- const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
- const btn=$("quickWardrobeDictate"),status=$("quickWardrobeDictationStatus");
- if(!SpeechRecognition){
-  status.textContent="Dictation isn't available in this browser. You can type or paste the list instead.";
-  status.classList.remove("hidden");return;
- }
- if(quickWardrobeRecognition){
-  try{quickWardrobeRecognition.stop()}catch{}
-  quickWardrobeRecognition=null;return;
- }
- const recognition=new SpeechRecognition();
- quickWardrobeRecognition=recognition;
- recognition.continuous=true;recognition.interimResults=false;recognition.lang="en-GB";
- recognition.onstart=()=>{btn.textContent="Stop dictation";status.textContent="Listening… describe your wardrobe naturally.";status.classList.remove("hidden");};
- recognition.onresult=e=>{
-  let addition="";
-  for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)addition+=e.results[i][0].transcript+" ";
-  if(addition){
-   const area=$("quickWardrobeText");
-   area.value=(area.value.trim()?area.value.trim()+" ":"")+addition.trim();
-  }
- };
- recognition.onerror=e=>{status.textContent=`Dictation stopped: ${e.error||"browser speech error"}.`;status.classList.remove("hidden");};
- recognition.onend=()=>{quickWardrobeRecognition=null;btn.textContent="Dictate";if(status.textContent==="Listening… describe your wardrobe naturally.")status.textContent="Dictation stopped. You can edit the text before analysing it.";};
- try{recognition.start()}catch{quickWardrobeRecognition=null;btn.textContent="Dictate";}
+ toggleAiDictation($("quickWardrobeDictate"),$("quickWardrobeText"),$("quickWardrobeDictationStatus"));
 }
 
 
@@ -1213,158 +1339,9 @@ function populateV4Anchor(){
 }
 
 function setupV4Dictation(){
- const btn=$("v4Dictate"), field=$("v4Request"), status=$("dictationStatus");
- if(!btn||!field||!status)return;
-
- const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(!Recognition){
-  btn.textContent="🎙️ Use keyboard mic";
-  btn.addEventListener("click",()=>{
-   field.focus();
-   status.classList.remove("hidden");
-   status.textContent="Use the microphone on your iPhone or Mac keyboard to dictate into this box.";
-  });
-  return;
- }
-
- let recognition=null;
- let listening=false;
- let dictationEnabled=false;
- let restartTimer=null;
- let sessionBase="";
- let committed="";
-
- function scheduleRestart(delay=250){
-  clearTimeout(restartTimer);
-  if(!dictationEnabled || document.hidden)return;
-  restartTimer=setTimeout(()=>{
-   if(dictationEnabled && !listening && !document.hidden){
-    startRecognition();
-   }
-  },delay);
- }
-
- function startRecognition(){
-  if(listening || !dictationEnabled || document.hidden)return;
-
-  recognition=new Recognition();
-  recognition.lang="en-GB";
-  recognition.interimResults=true;
-  recognition.continuous=true;
-
-  sessionBase=field.value.trim();
-  committed="";
-
-  recognition.onstart=()=>{
-   listening=true;
-   btn.textContent="■ Stop";
-   btn.classList.add("recording");
-   status.classList.remove("hidden");
-   status.textContent="Listening…";
-  };
-
-  recognition.onresult=e=>{
-   let interim="";
-   for(let i=e.resultIndex;i<e.results.length;i++){
-    const t=e.results[i][0].transcript;
-    if(e.results[i].isFinal){
-     committed += (committed ? " " : "") + t.trim();
-    }else{
-     interim += (interim ? " " : "") + t.trim();
-    }
-   }
-
-   const spoken=[committed,interim].filter(Boolean).join(" ").trim();
-   field.value=[sessionBase,spoken].filter(Boolean).join(sessionBase&&spoken?" ":"");
-   status.textContent=interim ? "Listening…" : "Listening…";
-  };
-
-  recognition.onerror=e=>{
-   listening=false;
-   btn.textContent="🎙️ Dictate";
-   btn.classList.remove("recording");
-   status.classList.remove("hidden");
-
-   if(e.error==="not-allowed" || e.error==="service-not-allowed"){
-    dictationEnabled=false;
-    status.textContent="Microphone permission was not granted. You can still use the keyboard microphone.";
-    return;
-   }
-
-   if(e.error==="no-speech"){
-    status.textContent="Still listening…";
-    scheduleRestart(150);
-    return;
-   }
-
-   if(document.hidden){
-    status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
-    return;
-   }
-
-   status.textContent="Dictation paused briefly. Resuming…";
-   scheduleRestart(300);
-  };
-
-  recognition.onend=()=>{
-   listening=false;
-   btn.textContent=dictationEnabled?"■ Stop":"🎙️ Dictate";
-   btn.classList.toggle("recording",dictationEnabled);
-
-   if(dictationEnabled){
-    if(document.hidden){
-     status.classList.remove("hidden");
-     status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
-    }else{
-     status.classList.remove("hidden");
-     status.textContent="Resuming dictation…";
-     scheduleRestart(200);
-    }
-   }
-  };
-
-  try{
-   recognition.start();
-  }catch{
-   listening=false;
-   scheduleRestart(300);
-  }
- }
-
- btn.addEventListener("click",()=>{
-  if(dictationEnabled){
-   dictationEnabled=false;
-   clearTimeout(restartTimer);
-   if(recognition && listening){
-    try{recognition.stop()}catch{}
-   }
-   listening=false;
-   btn.textContent="🎙️ Dictate";
-   btn.classList.remove("recording");
-   status.classList.remove("hidden");
-   status.textContent="Dictation stopped.";
-   return;
-  }
-
-  dictationEnabled=true;
-  status.classList.remove("hidden");
-  status.textContent="Starting dictation…";
-  startRecognition();
- });
-
- document.addEventListener("visibilitychange",()=>{
-  if(document.hidden){
-   if(dictationEnabled){
-    status.classList.remove("hidden");
-    status.textContent="Dictation paused because this window lost focus. It will resume when you return.";
-   }
-  }else if(dictationEnabled && !listening){
-   status.classList.remove("hidden");
-   status.textContent="Resuming dictation…";
-   scheduleRestart(250);
-  }
- });
+ setupAiDictation("v4Dictate","v4Request","dictationStatus");
 }
+
 
 const v4VisualCache=new Map();
 let latestStylistSession=null;
@@ -1493,7 +1470,14 @@ async function deleteSavedLook(id){
  loadSavedLooks();
 }
 
-function renderV4Outfit(o,index){
+function renderStoredMoreLike(baseIndex){
+ const stored=latestStylistSession?.more_like?.[String(baseIndex)]||[];
+ if(!stored.length)return "";
+ return `<div class="more-like-heading"><small>MORE LIKE THIS</small><b>${stored.length} variation${stored.length===1?"":"s"} based on this look</b></div>`+
+  stored.map((o,j)=>renderV4Outfit(o,1000+(Number(baseIndex)*10)+j,true,baseIndex)).join("");
+}
+
+function renderV4Outfit(o,index,isVariant=false,baseIndex=null){
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
  const pieceHtml=pieces.map(g=>`<div class="v4-piece">
   <img src="${g.image_path}" alt="">
@@ -1502,11 +1486,12 @@ function renderV4Outfit(o,index){
 
  const gap=o.missing_piece?`<div class="v4-missing"><b>Suggested addition:</b> ${esc(o.missing_piece)}<br><small>${esc(o.missing_piece_reason||"")}</small></div>`:"";
  const payload=encodeURIComponent(JSON.stringify(o));
+ const rankLabel=isVariant?`Variation ${o.rank||""}`:`#${o.rank}`;
 
  setTimeout(()=>v4Visualise(payload,index,true),0);
 
- return `<div class="card v4-outfit">
-  <div class="row between"><div><span class="rank-pill">#${o.rank}</span><h3>${esc(o.label)}</h3></div><div class="v4-score"><b>${o.score}</b><span>/100</span></div></div>
+ return `<div class="card v4-outfit${isVariant?" v4-variation":""}">
+  <div class="row between"><div><span class="rank-pill">${esc(rankLabel)}</span><h3>${esc(o.label)}</h3></div><div class="v4-score"><b>${o.score}</b><span>/100</span></div></div>
   ${pieceHtml}
   ${gap}
   <p><b>Why it works:</b> ${esc(o.why_it_works)}</p>
@@ -1518,24 +1503,32 @@ function renderV4Outfit(o,index){
   </div>
   <div class="v4-actions">
    <button class="primary favourite-look-btn" type="button" onclick="saveFavouriteOutfit('${payload}',${index},this)">☆ Favourite</button>
+   <button class="ghost" type="button" onclick="v4Regenerate('${payload}',${index},true,this)">Regenerate image</button>
    <button class="ghost" type="button" onclick="v4Visualise('${payload}',${index},false)">See on model</button>
+   ${!isVariant?`<button class="ghost more-like-btn" type="button" onclick="v4MoreLike('${payload}',${index},this)">More like this</button>`:""}
    ${o.missing_piece?`<button class="ghost find-piece-btn" type="button" onclick="v4FindPiece('${payload}',${index},this)">Find this piece</button>`:""}
   </div>
   <div id="v4Products-${index}" class="product-results v4-product-results"></div>
   <div id="v4Visual-${index}" class="model-visual"><div class="visual-loading">Creating your look…</div></div>
+  ${!isVariant?`<div id="v4More-${index}" class="v4-more-results">${renderStoredMoreLike(index)}</div>`:""}
  </div>`;
 }
 
-async function v4Visualise(encoded,index,useMyLikeness){
+async function v4Visualise(encoded,index,useMyLikeness,options={}){
  const o=JSON.parse(decodeURIComponent(encoded));
  const box=$(`v4Visual-${index}`);
  const cacheKey=v4VisualCacheKey(o,useMyLikeness);
 
- if(v4VisualCache.has(cacheKey)){
+ if(!options.force && v4VisualCache.has(cacheKey)){
   const x=v4VisualCache.get(cacheKey);
   box.classList.remove("hidden");
   box.innerHTML=`<img src="${x.image_path}" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
   return;
+ }
+
+ if(options.force){
+  v4VisualCache.delete(cacheKey);
+  persistVisualCache();
  }
 
  box.classList.remove("hidden");
@@ -1560,6 +1553,56 @@ async function v4Visualise(encoded,index,useMyLikeness){
   box.innerHTML=`<img src="${x.image_path}" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
  }catch(err){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }
+}
+
+
+async function v4Regenerate(encoded,index,useMyLikeness=true,button=null){
+ const original=button?.textContent||"Regenerate image";
+ if(button){button.disabled=true;button.textContent="Regenerating…";}
+ try{
+  await v4Visualise(encoded,index,useMyLikeness,{force:true});
+ }finally{
+  if(button){button.disabled=false;button.textContent=original;}
+ }
+}
+
+async function v4MoreLike(encoded,index,button){
+ const base=JSON.parse(decodeURIComponent(encoded));
+ const box=$(`v4More-${index}`);
+ if(!box)return;
+ const original=button?.textContent||"More like this";
+ if(button){button.disabled=true;button.textContent="Creating variations…";}
+
+ box.innerHTML=`<div class="card more-like-working"><span class="spinner"></span><div><b>Building variations from this look…</b><small>I’ll keep the character of the outfit and make only useful changes.</small></div></div>`;
+
+ try{
+  const x=await api("/api/stylist-v4/more-like-this",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    base_outfit:base,
+    request_text:latestStylistSession?.request_text||$("v4Request")?.value||"",
+    weather_context:latestStylistSession?.weather?.summary||"",
+    owned_only:Boolean(latestStylistSession?.owned_only),
+    max_options:3
+   })
+  });
+
+  latestStylistSession=latestStylistSession||{result:{outfits:[]}};
+  latestStylistSession.more_like=latestStylistSession.more_like||{};
+  latestStylistSession.more_like[String(index)]=x.outfits||[];
+  persistStylistSession();
+
+  const variants=x.outfits||[];
+  box.innerHTML=variants.length
+   ? `<div class="more-like-heading"><small>MORE LIKE THIS</small><b>${variants.length} variations based on this outfit</b><p>${esc(x.summary||"")}</p></div>`+
+      variants.map((o,j)=>renderV4Outfit(o,1000+(Number(index)*10)+j,true,index)).join("")
+   : `<div class="notice">I couldn't find a useful variation without weakening the original outfit.</div>`;
+ }catch(err){
+  box.innerHTML=`<div class="notice"><b>I couldn't create variations.</b><br>${esc(err.message)}</div>`;
+ }finally{
+  if(button){button.disabled=false;button.textContent=original;}
  }
 }
 
@@ -1993,7 +2036,9 @@ if(runStylistV4Btn){
     location,
     when,
     weather:weatherData,
+    owned_only:$("v4Shopping").value==="owned",
     result:x,
+    more_like:{},
     saved_at:new Date().toISOString()
    };
    persistStylistSession();
@@ -2019,6 +2064,11 @@ if(runStylistV4Btn){
  });
 }
 setupV4Dictation();
+setupAiDictation("buildLookDictate","buildLookContext","buildLookDictationStatus");
+setupAiDictation("productLookDictate","productLookOccasion","productLookDictationStatus");
+setupAiDictation("packActivitiesDictate","pack_activities","packActivitiesDictationStatus");
+setupAiDictation("packDressDictate","pack_dress_needs","packDressDictationStatus");
+setupAiDictation("packNotesDictate","pack_notes","packNotesDictationStatus");
 
 init();
 

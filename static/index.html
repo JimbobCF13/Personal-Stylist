@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist</title>
-<link rel="stylesheet" href="/static/style.css?v=5.1.6">
+<link rel="stylesheet" href="/static/style.css?v=5.2">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.1.6</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.2</span></header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
@@ -161,7 +161,13 @@
  <div class="section build-look-section">
   <div class="row between"><div><small class="eyebrow">YOUR WARDROBE</small><h3>Build My Own Look</h3></div><button class="ghost" data-go="wardrobe">Wardrobe</button></div>
   <div class="card form">
-   <label>OPTIONAL CONTEXT<input id="buildLookContext" placeholder="e.g. Dinner in London, smart casual"></label>
+   <label>OPTIONAL CONTEXT
+    <div class="dictation-wrap single-line">
+     <input id="buildLookContext" placeholder="e.g. Dinner in London, smart casual">
+     <button id="buildLookDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+    </div>
+   </label>
+   <div id="buildLookDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <p class="build-help">Tap the clothes you want to combine. You can choose as few or as many pieces as you like.</p>
   </div>
   <div id="buildLookPicker"></div>
@@ -177,7 +183,13 @@
   <div class="card form">
    <p>Paste a retailer product page. I’ll identify the item and build outfits around it using clothes you already own.</p>
    <label>PRODUCT URL<input id="productLookUrl" type="url" placeholder="https://retailer.com/product/..."></label>
-   <label>OPTIONAL OCCASION<input id="productLookOccasion" placeholder="e.g. Smart dinner, work, weekend"></label>
+   <label>OPTIONAL OCCASION
+    <div class="dictation-wrap single-line">
+     <input id="productLookOccasion" placeholder="e.g. Smart dinner, work, weekend">
+     <button id="productLookDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+    </div>
+   </label>
+   <div id="productLookDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <button id="productLookBuild" class="primary full" type="button">Build looks with my wardrobe</button>
   </div>
   <div id="productLookResults"></div>
@@ -258,10 +270,28 @@
    <label>DESTINATION<input id="pack_destination" placeholder="e.g. San Francisco"></label>
    <div class="two"><label>DAYS<input id="pack_days" type="number" min="1" max="30" value="5"></label><label>TRIP TYPE<select id="pack_trip_type"><option>Mixed</option><option>Business</option><option>City break</option><option>Holiday / resort</option><option>Wedding / event</option><option>Weekend</option></select></label></div>
    <label>EXPECTED WEATHER<input id="pack_weather" placeholder="e.g. 15–22°C, cool mornings, dry"></label>
-   <label>ACTIVITIES<textarea id="pack_activities" rows="2" placeholder="e.g. lectures, walking around the city, drinks, dinners"></textarea></label>
-   <label>DRESS NEEDS<textarea id="pack_dress_needs" rows="2" placeholder="e.g. smart casual daytime, two business meetings, one smarter dinner"></textarea></label>
+   <label>ACTIVITIES
+    <div class="dictation-wrap">
+     <textarea id="pack_activities" rows="2" placeholder="e.g. lectures, walking around the city, drinks, dinners"></textarea>
+     <button id="packActivitiesDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+    </div>
+   </label>
+   <div id="packActivitiesDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+   <label>DRESS NEEDS
+    <div class="dictation-wrap">
+     <textarea id="pack_dress_needs" rows="2" placeholder="e.g. smart casual daytime, two business meetings, one smarter dinner"></textarea>
+     <button id="packDressDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+    </div>
+   </label>
+   <div id="packDressDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <div class="two"><label>LAUNDRY<select id="pack_laundry"><option>No</option><option>Yes</option><option>Possibly</option></select></label><label>CAN SUGGEST MISSING ITEMS?<select id="pack_shopping"><option>Yes</option><option>No</option></select></label></div>
-   <label>ANYTHING ELSE?<textarea id="pack_notes" rows="2" placeholder="e.g. hand luggage only; comfortable shoes are important"></textarea></label>
+   <label>ANYTHING ELSE?
+    <div class="dictation-wrap">
+     <textarea id="pack_notes" rows="2" placeholder="e.g. hand luggage only; comfortable shoes are important"></textarea>
+     <button id="packNotesDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+    </div>
+   </label>
+   <div id="packNotesDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <button id="makePackingPlan" class="primary full" type="button">Build my packing plan</button>
   </div><div id="packingResults"></div>
  </div>
@@ -339,5 +369,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=5.1.6"></script>
+<script src="/static/app.js?v=5.2"></script>
 </body></html>

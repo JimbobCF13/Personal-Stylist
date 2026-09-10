@@ -576,3 +576,28 @@ Key rules:
 - Lightweight knitted pullovers can remain **Knitwear** even when sold as a long-sleeve T-shirt.
 
 Existing wardrobe items are re-evaluated from stored garment type, model, fit, notes, brand and material. Only the category field can change; no garment or image data is removed.
+
+
+## V5.2 — Stylist interaction + improved dictation
+
+### Ask My Stylist
+- Every normal stylist outfit now has **Regenerate image**.
+- Regenerating affects only that outfit's visual; the other suggestions remain intact.
+- Every main stylist outfit now has **More like this**.
+- More Like This creates 2–3 restrained variations based on the selected outfit rather than replacing the whole idea.
+- Variations preserve at least part of the original outfit, use valid owned garment IDs, and are stored with the current stylist session so they survive a refresh.
+- Variations can themselves be favourited, regenerated, shown on the generic model, and can source a missing piece where relevant.
+
+### Dictation
+- Replaces reliance on browser SpeechRecognition with recorded audio sent to the app's OpenAI speech-to-text endpoint.
+- Default transcription model is `gpt-4o-transcribe`, with `gpt-4o-mini-transcribe` as an automatic fallback.
+- Audio is held only in a temporary server file for transcription and deleted immediately afterwards.
+- Dictation now works in:
+  - Ask My Stylist
+  - Quick Add Wardrobe
+  - Build My Own Look context
+  - Style an Online Item occasion
+  - Help Me Pack activities
+  - Help Me Pack dress needs
+  - Help Me Pack notes
+- No database migration. No wardrobe or image data is altered by this patch.

@@ -1,5 +1,5 @@
 
-import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re
+import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re, tempfile
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
@@ -288,6 +288,67 @@ def init_db():
 
 init_db()
 normalise_existing_wardrobe_categories()
+
+
+@app.post("/api/transcribe-audio")
+async def transcribe_audio(file: UploadFile = File(...)):
+    """Transcribe short in-app dictation using OpenAI speech-to-text.
+
+    Audio is written only to a temporary file for the API request and is removed
+    immediately afterwards. Nothing is added to the wardrobe/database here.
+    """
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(400, "OpenAI dictation is not connected.")
+
+    data=await file.read()
+    if not data:
+        raise HTTPException(400, "No audio was received.")
+    if len(data) > 12 * 1024 * 1024:
+        raise HTTPException(400, "That dictation recording is too large. Please keep each recording under about 90 seconds.")
+
+    suffix=Path(file.filename or "dictation.webm").suffix.lower()
+    if suffix not in {".webm",".mp4",".m4a",".wav",".mp3",".mpeg",".mpga",".ogg"}:
+        suffix=".webm"
+
+    tmp_path=None
+    last_error=None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="stylist_dictation_",suffix=suffix,delete=False) as tmp:
+            tmp.write(data)
+            tmp_path=Path(tmp.name)
+
+        client=OpenAI()
+        preferred=(os.getenv("OPENAI_TRANSCRIBE_MODEL") or "gpt-4o-transcribe").strip()
+        models=[]
+        for model in [preferred, "gpt-4o-mini-transcribe"]:
+            if model and model not in models:
+                models.append(model)
+
+        for model in models:
+            try:
+                with tmp_path.open("rb") as audio_file:
+                    result=client.audio.transcriptions.create(
+                        model=model,
+                        file=audio_file,
+                        language="en"
+                    )
+                text=(getattr(result,"text","") or "").strip()
+                if text:
+                    return {"ok":True,"text":text,"model":model}
+                last_error=RuntimeError("The transcription returned no text.")
+            except Exception as exc:
+                last_error=exc
+
+        raise HTTPException(
+            502,
+            f"I couldn't transcribe that recording. Please try again. {str(last_error)[:180] if last_error else ''}".strip()
+        )
+    finally:
+        if tmp_path:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 @app.get("/")
 def home():
@@ -2444,6 +2505,129 @@ def stylist_v4(req: StylistV4Request):
     result["outfits"] = result.get("outfits", [])[:max_options]
     return result
 
+
+
+class StylistMoreLikeRequest(BaseModel):
+    base_outfit: dict
+    request_text: str = ""
+    weather_context: str = ""
+    owned_only: bool = False
+    max_options: int = 3
+
+@app.post("/api/stylist-v4/more-like-this")
+def stylist_v4_more_like_this(req: StylistMoreLikeRequest):
+    if not isinstance(req.base_outfit, dict):
+        raise HTTPException(400, "That outfit could not be read.")
+
+    con=db()
+    wardrobe=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    feedback=[dict(r) for r in con.execute(
+        "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 30"
+    ).fetchall()]
+    con.close()
+
+    if not wardrobe:
+        raise HTTPException(400, "Add some wardrobe items first.")
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(400, "OpenAI is not connected.")
+
+    valid_ids={g["id"] for g in wardrobe}
+    base_ids=[int(x) for x in (req.base_outfit.get("owned_garment_ids") or []) if int(x) in valid_ids]
+    if not base_ids:
+        raise HTTPException(400, "The original outfit no longer contains available wardrobe items.")
+
+    max_options=max(2,min(int(req.max_options or 3),3))
+    compact_wardrobe=[
+        {k:g.get(k) for k in [
+            "id","category","garment_type","brand","model_line","labelled_size",
+            "colour","material","pattern","fit_cut","fit_feedback","season","formality"
+        ]}
+        for g in wardrobe
+    ]
+
+    instructions="""You are extending an existing personal menswear styling result.
+
+Create 2–3 strong variations that are recognisably 'more like' the supplied base outfit.
+Do not replace the whole idea just to be different.
+
+Rules:
+- Preserve the original occasion, smartness and overall character.
+- Prefer small, deliberate changes: usually one or two owned-garment swaps per variation.
+- When the base outfit contains 3 or more owned pieces, normally retain at least 2 of them.
+- When it contains 1–2 owned pieces, retain at least 1.
+- Variations must be meaningfully different from each other and from the base outfit.
+- Use only supplied wardrobe IDs in owned_garment_ids.
+- Never claim the user owns anything else.
+- If owned_only is true, missing_piece must be blank.
+- If owned_only is false, suggest a missing item only when it materially improves a variation.
+- Respect fit history, colour harmony, silhouette, weather, formality and the user's original request.
+- Keep explanations concise and specific.
+- Rank the variations best-first and score each 0–100.
+"""
+
+    context={
+        "original_request":(req.request_text or "").strip(),
+        "weather_context":(req.weather_context or "").strip(),
+        "owned_only":bool(req.owned_only),
+        "base_outfit":req.base_outfit,
+        "base_owned_ids":base_ids,
+        "profile":profile,
+        "wardrobe":compact_wardrobe,
+        "recent_feedback":feedback,
+        "max_options":max_options
+    }
+
+    try:
+        response=OpenAI().responses.create(
+            model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+            reasoning={"effort":"low"},
+            instructions=instructions,
+            input=json.dumps(context,ensure_ascii=False),
+            text={"format":{
+                "type":"json_schema",
+                "name":"stylist_more_like_this",
+                "schema":STYLIST_V4_SCHEMA,
+                "strict":True
+            }}
+        )
+        result=json.loads(response.output_text)
+    except Exception as exc:
+        raise HTTPException(502,f"I couldn't create variations from that look: {str(exc)[:220]}")
+
+    cleaned=[]
+    seen=set()
+    base_set=set(base_ids)
+    for outfit in result.get("outfits",[]):
+        ids=[]
+        for value in outfit.get("owned_garment_ids",[]):
+            try:
+                gid=int(value)
+            except Exception:
+                continue
+            if gid in valid_ids and gid not in ids:
+                ids.append(gid)
+
+        # A More Like This result should still visibly inherit the original look.
+        if not ids or not (base_set & set(ids)):
+            continue
+
+        signature=tuple(sorted(ids))
+        if signature in seen or set(ids)==base_set:
+            continue
+        seen.add(signature)
+
+        outfit["owned_garment_ids"]=ids
+        outfit["rank"]=len(cleaned)+1
+        cleaned.append(outfit)
+        if len(cleaned)>=max_options:
+            break
+
+    if not cleaned:
+        raise HTTPException(502,"I couldn't make useful variations without losing the character of the original outfit. Please try again.")
+
+    result["outfits"]=cleaned
+    return result
 
 
 class ShortlistProductRequest(BaseModel):
