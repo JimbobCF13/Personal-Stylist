@@ -2186,10 +2186,46 @@ function packingOutfitObject(d){
  };
 }
 
+function packingDayKey(d,index){
+ return d.date||d.day||`day-${index+1}`;
+}
+
+function renderPackingLook(d,index){
+ const pieces=(d.garment_ids||[]).map(id=>{
+  const g=garments.find(z=>z.id===id);
+  return g?`<div class="mini-garment">
+   <img src="/api/garments/${g.id}/image" alt="">
+   <span>${esc(g.garment_type||g.category)}</span>
+  </div>`:"";
+ }).join("");
+
+ const when=[d.time_of_day,d.occasion].filter(Boolean).join(" · ");
+ return `<article class="pack-look-card" data-pack-look="${esc(d.look_id||String(index))}">
+  <div class="pack-look-head">
+   <div>
+    <small>${esc(d.time_of_day||"Outfit")}</small>
+    <h5>${esc(d.occasion||"Planned outfit")}</h5>
+   </div>
+   <span class="look-number">Look ${index+1}</span>
+  </div>
+  <div class="mini-strip pack-look-strip">${pieces}</div>
+  <p>${esc(d.note||"")}</p>
+  ${d.reuse_note?`<small class="reuse-note">↻ ${esc(d.reuse_note)}</small>`:""}
+  <div class="pack-look-actions">
+   <button class="primary" type="button" onclick="packingVisualise(${index},false,this)">Show this look on me</button>
+   <button class="ghost" type="button" onclick="packingVisualise(${index},true,this)">Regenerate this image</button>
+   <button class="ghost" type="button" onclick="packingMoreLike(${index},this)">More like this look</button>
+  </div>
+  <div id="packingVisual-${index}" class="packing-visual"></div>
+  <div id="packingMore-${index}" class="packing-more"></div>
+ </article>`;
+}
+
 function renderPackingPlan(x){
  const box=$("packingResults");
  currentPackingPlan=x;
  currentTripContext=x.trip_context||currentTripContext||{};
+ packingVisualCache.clear();
 
  const packed=(x.packing_list||[]).map(p=>{
   const g=garments.find(z=>z.id===p.garment_id);
@@ -2199,25 +2235,27 @@ function renderPackingPlan(x){
   </div>`:"";
  }).join("");
 
- const outfits=(x.outfit_plan||[]).map((d,index)=>{
-  const pieces=(d.garment_ids||[]).map(id=>{
-   const g=garments.find(z=>z.id===id);
-   return g?`<div class="mini-garment"><img src="/api/garments/${g.id}/image" alt=""><span>${esc(g.garment_type||g.category)}</span></div>`:"";
-  }).join("");
-  return `<article class="pack-day pack-day-v53">
-   <div class="pack-day-head"><div><small>${esc(d.date||"")}</small><h4>${esc(d.day)} — ${esc(d.occasion)}</h4></div></div>
-   <div class="mini-strip">${pieces}</div>
-   <p>${esc(d.note||"")}</p>
-   ${d.reuse_note?`<small class="reuse-note">↻ ${esc(d.reuse_note)}</small>`:""}
-   <div class="pack-look-actions">
-    <button class="primary" type="button" onclick="packingVisualise(${index},false,this)">Show on me</button>
-    <button class="ghost" type="button" onclick="packingVisualise(${index},true,this)">Regenerate image</button>
-    <button class="ghost" type="button" onclick="packingMoreLike(${index},this)">More like this</button>
-   </div>
-   <div id="packingVisual-${index}" class="packing-visual"></div>
-   <div id="packingMore-${index}" class="packing-more"></div>
-  </article>`;
- }).join("");
+ const groups=[];
+ const groupMap=new Map();
+ (x.outfit_plan||[]).forEach((d,index)=>{
+  const key=packingDayKey(d,index);
+  if(!groupMap.has(key)){
+   const group={key,date:d.date||"",day:d.day||key,looks:[]};
+   groupMap.set(key,group);
+   groups.push(group);
+  }
+  groupMap.get(key).looks.push({d,index});
+ });
+
+ const planHtml=groups.map(group=>`<section class="pack-day-group">
+  <div class="pack-day-group-head">
+   <div><small>${esc(group.date||"")}</small><h4>${esc(group.day)}</h4></div>
+   <span>${group.looks.length} ${group.looks.length===1?"look":"looks"}</span>
+  </div>
+  <div class="pack-day-look-list">
+   ${group.looks.map(({d,index})=>renderPackingLook(d,index)).join("")}
+  </div>
+ </section>`).join("");
 
  const missing=(x.missing_items||[]).length
   ? `<div class="notice"><b>Useful gaps:</b> ${x.missing_items.map(esc).join(" · ")}</div>`
@@ -2227,7 +2265,10 @@ function renderPackingPlan(x){
   renderTripContext(currentTripContext)+
   `<div class="notice packing-summary"><b>Your capsule</b><p>${esc(x.summary||"")}</p>${x.capsule_strategy?`<small>${esc(x.capsule_strategy)}</small>`:""}</div>
    <div class="card"><h3>Pack these</h3>${packed}</div>
-   <div class="card pack-plan-card"><div class="row between"><h3>Outfit plan</h3><span class="pill">Tap Show on me</span></div>${outfits}</div>
+   <div class="card pack-plan-card">
+    <div class="row between"><h3>Outfit plan</h3><span class="pill">Each look is separate</span></div>
+    ${planHtml}
+   </div>
    ${missing}
    <div class="card"><b>Packing tip</b><p>${esc(x.packing_tip||"")}</p></div>`;
 }
@@ -2236,7 +2277,15 @@ async function packingVisualise(index,force=false,button=null){
  const d=currentPackingPlan?.outfit_plan?.[index];
  if(!d)return;
  const box=$(`packingVisual-${index}`);
- const key=`${currentPackingPlan?.destination||""}|${d.date||d.day}|${(d.garment_ids||[]).join(",")}`;
+ const key=[
+  currentPackingPlan?.destination||"",
+  d.look_id||`look-${index}`,
+  d.date||d.day||"",
+  d.time_of_day||"",
+  d.occasion||"",
+  d.note||"",
+  (d.garment_ids||[]).join(",")
+ ].join("|");
  const original=button?.textContent||"Show on me";
 
  if(!force&&packingVisualCache.has(key)){
@@ -2255,9 +2304,9 @@ async function packingVisualise(index,force=false,button=null){
    method:"POST",headers:{"Content-Type":"application/json"},
    body:JSON.stringify({
     garment_ids:d.garment_ids||[],
-    label:[d.day,d.occasion].filter(Boolean).join(" — "),
-    reason:d.note||"",
-    occasion:d.occasion||"",
+    label:[d.day,d.time_of_day,d.occasion].filter(Boolean).join(" — "),
+    reason:`THIS IS ONE DISTINCT PACKING LOOK ONLY. Use exactly these garment IDs for this look: ${(d.garment_ids||[]).join(", ")}. ${d.note||""}`,
+    occasion:[d.time_of_day,d.occasion].filter(Boolean).join(" · "),
     temperature_c:null,
     use_my_likeness:true,
     requested_extra_piece:""
@@ -2288,7 +2337,7 @@ async function packingMoreLike(index,button){
    method:"POST",headers:{"Content-Type":"application/json"},
    body:JSON.stringify({
     base_outfit:base,
-    request_text:`Packing for ${$("pack_destination").value}. ${d.occasion}. ${d.note||""}`,
+    request_text:`Packing for ${$("pack_destination").value}. This is one distinct ${d.time_of_day||""} look for ${d.occasion||"the trip"}. Keep it separate from the other packing-plan outfits. ${d.note||""}`,
     weather_context:currentTripContext?.weather_summary||"",
     owned_only:true,max_options:3
    })

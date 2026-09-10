@@ -1730,10 +1730,15 @@ PACKING_SCHEMA = {
    "garment_id":{"type":"integer"},"why_pack":{"type":"string"},"wear_count":{"type":"integer"}
   },"required":["garment_id","why_pack","wear_count"],"additionalProperties":False}},
   "outfit_plan":{"type":"array","items":{"type":"object","properties":{
-   "day":{"type":"string"},"date":{"type":"string"},"occasion":{"type":"string"},
+   "look_id":{"type":"string"},
+   "day":{"type":"string"},
+   "date":{"type":"string"},
+   "time_of_day":{"type":"string"},
+   "occasion":{"type":"string"},
    "garment_ids":{"type":"array","items":{"type":"integer"}},
-   "note":{"type":"string"},"reuse_note":{"type":"string"}
-  },"required":["day","date","occasion","garment_ids","note","reuse_note"],"additionalProperties":False}},
+   "note":{"type":"string"},
+   "reuse_note":{"type":"string"}
+  },"required":["look_id","day","date","time_of_day","occasion","garment_ids","note","reuse_note"],"additionalProperties":False}},
   "missing_items":{"type":"array","items":{"type":"string"}},
   "packing_tip":{"type":"string"}
  },
@@ -1772,8 +1777,13 @@ Rules:
 - Avoid overpacking. Shoes, trousers and outer layers should earn their place by working across multiple looks where possible.
 - If shopping_allowed is false, missing_items must be empty.
 - If shopping_allowed is true, list a missing item only for a genuine gap.
+- Each outfit_plan entry must represent ONE discrete outfit for ONE occasion/time of day.
+- If one day needs different looks (for example lecture/daytime and dinner/evening), create separate outfit_plan entries for that same day/date. Never combine multiple looks into one garment_ids list or one note.
+- look_id must be unique within this packing plan and stable-looking, for example "2026-10-05-evening-dinner" or "day-2-afternoon".
+- time_of_day should be a simple label such as Morning, Daytime, Afternoon, Evening or Travel.
 - date should be YYYY-MM-DD when exact dates are supplied; otherwise blank.
 - reuse_note should make rewearing clear.
+- The garment_ids array is the COMPLETE and EXACT outfit to be visualised for that one look. Do not include alternative garments in the same array.
 - Do not invent weather or dress codes beyond trip_context.
 """
     context={
@@ -1809,16 +1819,28 @@ Rules:
     result["packing_list"]=clean_pack
 
     clean_outfits=[]
-    for outfit in result.get("outfit_plan",[]):
+    used_look_ids=set()
+    for n,outfit in enumerate(result.get("outfit_plan",[]),start=1):
         ids=[]
         for value in outfit.get("garment_ids",[]):
             try: gid=int(value)
             except Exception: continue
             if gid in valid_ids and gid not in ids:
                 ids.append(gid)
-        if ids:
-            outfit["garment_ids"]=ids
-            clean_outfits.append(outfit)
+        if not ids:
+            continue
+
+        outfit["garment_ids"]=ids
+        base_look_id=re.sub(r"[^a-z0-9_-]+","-",str(outfit.get("look_id") or f"look-{n}").strip().lower()).strip("-") or f"look-{n}"
+        look_id=base_look_id
+        suffix=2
+        while look_id in used_look_ids:
+            look_id=f"{base_look_id}-{suffix}"
+            suffix+=1
+        used_look_ids.add(look_id)
+        outfit["look_id"]=look_id
+        outfit["time_of_day"]=str(outfit.get("time_of_day") or "").strip()
+        clean_outfits.append(outfit)
     result["outfit_plan"]=clean_outfits
     result["trip_context"]=req.trip_context or {}
     return result
@@ -1950,8 +1972,11 @@ Context:
 - User height, if supplied: {height or 'not supplied'} cm
 
 Important:
-- Use the reference garment images as closely as reasonably possible for colour, material,
-  silhouette, pattern and footwear.
+- This request represents ONE outfit only. Do not combine it with another look or introduce alternative versions of any garment.
+- Use exactly the supplied outfit garments as the clothing brief. Each saved garment reference belongs to this one look only.
+- Use the reference garment images as closely as reasonably possible for colour, material, silhouette, pattern and footwear.
+- Do not swap colours between garments, merge two garments into one, or substitute a different top/trouser/jacket because another reference looks similar.
+- If multiple upper-body pieces are supplied because the outfit is layered, show them as distinct layers rather than blending their details together.
 - Do not add visible logos or brand marks that are not clearly present in the reference images.
 - Do not invent extra statement garments.
 - If a small neutral accessory is needed for realism, keep it unobtrusive.

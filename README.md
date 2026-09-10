@@ -628,3 +628,16 @@ Existing wardrobe items are re-evaluated from stored garment type, model, fit, n
 - `OUTFIT_LIKENESS_REFS=3` can be set in Render if three personal reference photos are preferred.
 
 No database migration. Existing wardrobe records and images are untouched.
+
+
+## V5.3.1 — Packing outfit separation
+
+- Every packing-plan entry is now exactly **one discrete outfit for one occasion/time of day**.
+- If the same day has a daytime look and an evening/dinner look, they are returned as separate records rather than being combined.
+- The UI groups looks under the relevant day, but each outfit has its own card, garment strip, **Show this look on me**, **Regenerate this image**, and **More like this look** controls.
+- Adds unique `look_id` and `time_of_day` fields to each packing look.
+- Packing visual cache keys now include the exact look ID, occasion, note and garment set, preventing one outfit's image from being reused for another.
+- The image-generation prompt now explicitly says this is one outfit only and not to merge, swap or blend details between different garment references.
+- A new packing plan clears the prior packing image cache so visuals cannot bleed across separate trips/plans.
+
+No database migration. Existing wardrobe records and images are untouched.
