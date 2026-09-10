@@ -270,7 +270,7 @@ async function init(){
  await loadGarments(); await loadProfile();
  if(latestStylistSession)renderLatestStylistSession();
 }
-const WARDROBE_ORDER=["Jackets & Outerwear","Knitwear","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
+const WARDROBE_ORDER=["Blazers & Tailoring","Jackets","Coats","Knitwear","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
 let selectedWardrobeCategory="";
 let wardrobeReturnGarmentId=null;
 let wardrobeReturnCategory="";
@@ -278,15 +278,12 @@ let wardrobeRestorePending=false;
 
 function normalisedCategory(c){
  const raw=String(c||"Other").trim().toLowerCase();
+ if(raw==="jackets & outerwear")return "Jackets";
  return WARDROBE_ORDER.find(x=>x.toLowerCase()===raw)||"Other";
 }
 
 function wardrobeCategoryLabel(cat){
- const labels={
-  "Jackets & Outerwear":"Outerwear",
-  "Polos & T-Shirts":"Polos & T-Shirts"
- };
- return labels[cat]||cat;
+ return cat;
 }
 
 function renderWardrobeCategoryNav(){

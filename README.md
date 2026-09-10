@@ -519,3 +519,14 @@ V4.9 only adds a new independent favourites table. Existing `garments` rows, gar
 - Adds mobile-specific treatment for Wardrobe, Stylist, Build My Own Look, Saved Looks, Shopping and Pack.
 - Desktop layouts remain intact.
 - No database migrations and no changes to saved wardrobe records or images.
+
+
+## V5.1.3 — Wardrobe category refinement
+The old broad `Jackets & Outerwear` group is split into:
+- **Blazers & Tailoring** — blazers, sports jackets, suit jackets, dinner jackets and waistcoats.
+- **Jackets** — casual jackets, bombers, Harringtons, field/chore jackets, gilets, overshirts and similar lighter outer layers.
+- **Coats** — overcoats, topcoats, trench coats, raincoats, macs, parkas, pea coats and other coat-length outerwear.
+
+Classification now also uses restrained construction clues such as lapels and single/double-breasted tailoring when a retailer generically calls a blazer a “jacket”.
+
+On startup, existing garments may have their **category field only** reclassified into the new taxonomy. No garment records, photos, enrichment data or other wardrobe information are deleted or recreated.
