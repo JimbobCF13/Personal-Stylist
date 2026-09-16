@@ -216,6 +216,195 @@ function setupAiDictation(buttonId,fieldId,statusId){
  button.addEventListener("click",()=>toggleAiDictation(button,field,status));
 }
 
+
+function setFieldValue(id,value){
+ const el=$(id);
+ if(!el || value===undefined || value===null || String(value).trim()==="")return false;
+ const v=String(value).trim();
+
+ if(el.tagName==="SELECT"){
+  const options=[...el.options];
+  const exact=options.find(o=>o.value.toLowerCase()===v.toLowerCase() || o.textContent.trim().toLowerCase()===v.toLowerCase());
+  if(exact)el.value=exact.value;
+  else return false;
+ }else if(el.type==="number"){
+  const n=v.replace(/[^\d.-]/g,"");
+  if(!n)return false;
+  el.value=n;
+ }else{
+  el.value=v;
+ }
+ el.dispatchEvent(new Event("input",{bubbles:true}));
+ el.dispatchEvent(new Event("change",{bubbles:true}));
+ return true;
+}
+
+const SMART_DICTATION_MAPS={
+ packing:{
+  destination:"pack_destination",start_date:"pack_start_date",end_date:"pack_end_date",
+  days:"pack_days",trip_type:"pack_trip_type",weather:"pack_weather",
+  activities:"pack_activities",dress_needs:"pack_dress_needs",laundry:"pack_laundry",
+  shopping_allowed:"pack_shopping",notes:"pack_notes"
+ },
+ stylist:{
+  request_text:"v4Request",location:"v4Location",when:"v4When",shopping:"v4Shopping"
+ },
+ outfit:{
+  occasion:"occasion",dress_code:"dress_code",smartness:"smartness",season:"outfit_season",
+  temperature:"temperature",weather:"weather",location:"location",
+  wardrobe_mode:"wardrobe_mode",context_notes:"context_notes"
+ },
+ shopping:{
+  goal:"shopGoal",budget:"shopBudget",season:"shopSeason",occasion:"shopOccasion"
+ },
+ profile:{
+  name:"name",height_cm:"height_cm",chest_cm:"chest_cm",waist_cm:"waist_cm",
+  hips_cm:"hips_cm",thigh_cm:"thigh_cm",inseam_cm:"inseam_cm",sleeve_cm:"sleeve_cm",
+  neck_cm:"neck_cm",preferred_fit:"preferred_fit",style_notes:"style_notes",brand_notes:"brand_notes"
+ },
+ garment:{
+  category:"category",garment_type:"garment_type",brand:"brand",model_line:"model_line",
+  labelled_size:"labelled_size",colour:"colour",material:"material",pattern:"pattern",
+  fit_cut:"fit_cut",fit_feedback:"fit_feedback",season:"season",formality:"formality",notes:"notes"
+ }
+};
+
+function normaliseSmartValue(mode,field,value){
+ if(mode==="packing" && field==="shopping_allowed"){
+  return /^yes|true|allow|open/i.test(String(value))?"Yes":"No";
+ }
+ if(mode==="stylist" && field==="shopping"){
+  return String(value).toLowerCase().includes("owned")?"owned":"open";
+ }
+ return value;
+}
+
+async function applySmartTranscript(mode,transcript,status){
+ updateAppActivity("dictation","Understanding your brief…","Filling the relevant fields for you.","working");
+ try{
+  if(mode==="packing" && $("pack_brief")){
+   $("pack_brief").value=String(transcript||"").trim();
+   $("pack_brief").dispatchEvent(new Event("input",{bubbles:true}));
+  }
+  const parsed=await api("/api/voice-form/parse",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({mode,transcript})
+  });
+  const map=SMART_DICTATION_MAPS[mode]||{};
+  let applied=0;
+  for(const item of parsed.fields||[]){
+   const id=map[item.field];
+   if(id && setFieldValue(id,normaliseSmartValue(mode,item.field,item.value)))applied++;
+  }
+  if(mode==="packing" && typeof packingDateSync==="function")packingDateSync();
+
+  status.classList.remove("hidden");
+  status.innerHTML=`<b>Voice brief added.</b> ${esc(parsed.summary||"")} <small>${applied} field${applied===1?"":"s"} filled — check anything you want before continuing.</small>`;
+ }catch(err){
+  status.classList.remove("hidden");
+  status.textContent=`I couldn't organise that brief: ${err.message}`;
+ }finally{
+  endAppActivity("dictation");
+ }
+}
+
+async function toggleSmartDictation(button,status,mode){
+ if(!button||!status)return;
+
+ if(activeAiDictation){
+  if(activeAiDictation.button===button){
+   try{activeAiDictation.recorder.stop()}catch{}
+   return;
+  }
+  status.classList.remove("hidden");
+  status.textContent="Another dictation is already recording. Stop that one first.";
+  return;
+ }
+
+ if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){
+  status.classList.remove("hidden");
+  status.textContent="Browser recording is unavailable here. You can still use your device keyboard microphone.";
+  return;
+ }
+
+ let stream;
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+ }catch{
+  status.classList.remove("hidden");
+  status.textContent="Microphone access wasn't available. Check browser permission.";
+  return;
+ }
+
+ const mime=dictationMimeType();
+ let recorder;
+ try{
+  recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+ }catch{
+  stream.getTracks().forEach(t=>t.stop());
+  status.classList.remove("hidden");
+  status.textContent="I couldn't start the microphone recorder.";
+  return;
+ }
+
+ const chunks=[];
+ let timer=null;
+ activeAiDictation={button,status,recorder,stream};
+
+ recorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+ recorder.onstart=()=>{
+  button.textContent="■ Stop";
+  button.classList.add("recording");
+  status.classList.remove("hidden");
+  status.textContent="Listening… tell me everything in one go.";
+  beginAppActivity("dictation","Listening…","Tell me the whole brief naturally, then tap Stop.","listening");
+  timer=setTimeout(()=>{if(recorder.state==="recording")try{recorder.stop()}catch{}},90000);
+ };
+ recorder.onerror=()=>{
+  endAppActivity("dictation");
+  status.textContent="Recording stopped unexpectedly. Please try again.";
+ };
+ recorder.onstop=async()=>{
+  clearTimeout(timer);
+  stream.getTracks().forEach(t=>t.stop());
+  if(activeAiDictation?.recorder===recorder)activeAiDictation=null;
+  button.classList.remove("recording");
+  button.disabled=true;
+  button.textContent="Understanding…";
+  updateAppActivity("dictation","Transcribing…","Then I’ll organise the information into the form.","transcribing");
+
+  try{
+   const contentType=recorder.mimeType||mime||"audio/webm";
+   const blob=new Blob(chunks,{type:contentType});
+   if(!blob.size)throw new Error("No speech was recorded.");
+   const fd=new FormData();
+   fd.append("file",blob,dictationFilename(contentType));
+   const x=await api("/api/transcribe-audio",{method:"POST",body:fd});
+   await applySmartTranscript(mode,x.text,status);
+  }catch(err){
+   endAppActivity("dictation");
+   status.textContent=`Dictation couldn't be processed: ${err.message}`;
+  }finally{
+   button.disabled=false;
+   button.textContent=button.dataset.smartLabel||"🎙️ Dictate everything";
+  }
+ };
+ button.dataset.smartLabel=button.textContent;
+ try{recorder.start(300)}
+ catch{
+  stream.getTracks().forEach(t=>t.stop());
+  activeAiDictation=null;
+  endAppActivity("dictation");
+  status.textContent="I couldn't start recording. Please try again.";
+ }
+}
+
+function setupSmartDictation(buttonId,statusId,mode){
+ const button=$(buttonId),status=$(statusId);
+ if(!button||!status)return;
+ button.addEventListener("click",()=>toggleSmartDictation(button,status,mode));
+}
+
 function go(id){
  document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
  $(id).classList.add("active");
@@ -2112,12 +2301,41 @@ if(runStylistV4Btn){
 setupV4Dictation();
 setupAiDictation("buildLookDictate","buildLookContext","buildLookDictationStatus");
 setupAiDictation("productLookDictate","productLookOccasion","productLookDictationStatus");
-setupAiDictation("packActivitiesDictate","pack_activities","packActivitiesDictationStatus");
-setupAiDictation("packDressDictate","pack_dress_needs","packDressDictationStatus");
-setupAiDictation("packNotesDictate","pack_notes","packNotesDictationStatus");
+
+setupSmartDictation("packSmartDictate","packSmartDictationStatus","packing");
+setupSmartDictation("stylistSmartDictate","stylistSmartDictationStatus","stylist");
+setupSmartDictation("outfitSmartDictate","outfitSmartDictationStatus","outfit");
+setupSmartDictation("shoppingSmartDictate","shoppingSmartDictationStatus","shopping");
+setupSmartDictation("profileSmartDictate","profileSmartDictationStatus","profile");
+setupSmartDictation("garmentSmartDictate","garmentSmartDictationStatus","garment");
 
 init();
 
+
+async function organisePackingBrief(){
+ const brief=($("pack_brief")?.value||"").trim();
+ if(!brief)return null;
+
+ updateAppActivity("packing-brief","Understanding your trip…","Pulling out destination, dates, activities and dress needs.","working");
+ try{
+  const parsed=await api("/api/voice-form/parse",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({mode:"packing",transcript:brief})
+  });
+  const map=SMART_DICTATION_MAPS.packing||{};
+  for(const item of parsed.fields||[]){
+   const id=map[item.field];
+   if(id)setFieldValue(id,normaliseSmartValue("packing",item.field,item.value));
+  }
+  packingDateSync();
+  return parsed;
+ }catch(err){
+  // Keep the free-text brief usable even if structured extraction temporarily fails.
+  return null;
+ }finally{
+  endAppActivity("packing-brief");
+ }
+}
 
 function packingDateSync(){
  const start=$("pack_start_date")?.value;
@@ -2367,13 +2585,19 @@ async function packingMoreLike(index,button){
 
 $("makePackingPlan")?.addEventListener("click",async()=>{
  const box=$("packingResults");
- const destination=$("pack_destination").value.trim();
- if(!destination){alert("Add your destination first.");return;}
+ const tripBrief=($("pack_brief")?.value||"").trim();
+ if(!tripBrief && !$("pack_destination").value.trim()){
+  alert("Tell me about your trip first.");
+  return;
+ }
 
+ await organisePackingBrief();
  packingDateSync();
 
+ const destination=$("pack_destination").value.trim();
  const payload={
   destination,
+  trip_brief:tripBrief,
   start_date:$("pack_start_date").value||"",
   end_date:$("pack_end_date").value||"",
   days:Number($("pack_days").value||5),
@@ -2402,7 +2626,7 @@ $("makePackingPlan")?.addEventListener("click",async()=>{
    method:"POST",headers:{"Content-Type":"application/json"},
    body:JSON.stringify({...payload,trip_context:currentTripContext})
   });
-  x.destination=destination;
+  x.destination=destination||tripBrief;
   renderPackingPlan(x);
  }catch(err){
   box.innerHTML=`<div class="notice"><b>I couldn't complete the packing plan.</b><br>${esc(err.message)}</div>`;

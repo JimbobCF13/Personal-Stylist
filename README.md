@@ -641,3 +641,49 @@ No database migration. Existing wardrobe records and images are untouched.
 - A new packing plan clears the prior packing image cache so visuals cannot bleed across separate trips/plans.
 
 No database migration. Existing wardrobe records and images are untouched.
+
+
+## V5.4 — One-tap smart dictation
+
+The app now supports a much smoother voice-first workflow.
+
+### One paragraph → populated form
+A new prominent smart-dictation control is available on the main multi-field workflows:
+- Help Me Pack
+- Ask My Stylist
+- What Should I Wear?
+- Wardrobe Gaps & Shopping
+- My Profile & Fit
+- Add Garment details
+
+The user can speak naturally in one paragraph. The app:
+1. records and transcribes the speech,
+2. uses AI to identify only explicitly supplied facts,
+3. fills the relevant structured fields,
+4. leaves anything unstated untouched,
+5. lets the user review/edit before running or saving.
+
+Examples:
+- Packing: “I’m going to San Francisco from 3 to 10 October for lectures, dinners and lots of walking. Smart casual most days, one smart dinner, hand luggage only.”
+- Shopping: “I want a lightweight navy jacket for smart-casual dinners, ideally under £250.”
+- Profile: “I’m 183 cm, 102 chest, usually prefer a tailored regular fit; Ralph Lauren Custom Slim Fit large works well.”
+
+Existing field-by-field dictation remains available, so users can choose either workflow.
+
+No database migration. Existing wardrobe data and images are untouched.
+
+
+## V5.4.1 — Simplified Help Me Pack
+
+Help Me Pack is now brief-first rather than form-first.
+
+- The top of the screen is one large **Your Trip** box.
+- The user can either type the whole trip naturally or tap **Dictate trip** and say everything in one go.
+- The raw trip description is always preserved.
+- Before building the plan, AI automatically extracts destination, dates, duration, activities, dress needs, trip type and useful notes from that single brief.
+- Depart / Return / Days remain visible as optional quick controls.
+- Laundry and permission to suggest missing items remain visible.
+- Destination, trip type, known weather, activities, dress needs and extra notes move into a collapsed **Optional trip details** section for users who want to review or fine-tune them.
+- The packing/research backend now also receives the original free-text `trip_brief`, so the plan does not depend entirely on field extraction succeeding.
+
+No database migration. Existing wardrobe and image data are untouched.

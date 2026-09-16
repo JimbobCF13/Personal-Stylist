@@ -1585,7 +1585,8 @@ def fallback_outfits(garments, req):
 
 
 class TripContextRequest(BaseModel):
-    destination: str
+    destination: str = ""
+    trip_brief: str = ""
     start_date: str = ""
     end_date: str = ""
     days: int = 5
@@ -1621,10 +1622,147 @@ TRIP_CONTEXT_SCHEMA = {
  "additionalProperties":False
 }
 
+
+
+class VoiceFormRequest(BaseModel):
+    mode: str
+    transcript: str
+
+VOICE_FORM_SCHEMA = {
+ "type":"object",
+ "properties":{
+  "summary":{"type":"string"},
+  "fields":{"type":"array","maxItems":24,"items":{
+   "type":"object",
+   "properties":{
+    "field":{"type":"string"},
+    "value":{"type":"string"}
+   },
+   "required":["field","value"],
+   "additionalProperties":False
+  }}
+ },
+ "required":["summary","fields"],
+ "additionalProperties":False
+}
+
+@app.post("/api/voice-form/parse")
+def parse_voice_form(req: VoiceFormRequest):
+    mode=(req.mode or "").strip().lower()
+    transcript=(req.transcript or "").strip()
+    if not transcript:
+        raise HTTPException(400,"No dictated text was supplied.")
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(503,"Smart dictation needs the AI connection.")
+
+    allowed={
+      "packing":{
+        "destination","start_date","end_date","days","trip_type","weather",
+        "activities","dress_needs","laundry","shopping_allowed","notes"
+      },
+      "stylist":{
+        "request_text","location","when","shopping"
+      },
+      "outfit":{
+        "occasion","dress_code","smartness","season","temperature","weather",
+        "location","wardrobe_mode","context_notes"
+      },
+      "shopping":{
+        "goal","budget","season","occasion"
+      },
+      "profile":{
+        "name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm",
+        "sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes"
+      },
+      "garment":{
+        "category","garment_type","brand","model_line","labelled_size","colour",
+        "material","pattern","fit_cut","fit_feedback","season","formality","notes"
+      }
+    }
+    if mode not in allowed:
+        raise HTTPException(400,"That part of the app does not support smart dictation yet.")
+
+    today=date.today().isoformat()
+    mode_guidance={
+      "packing":"""Extract a complete trip brief.
+- Normalize dates to YYYY-MM-DD when the user gives enough information.
+- If the user gives a date range, populate both start_date and end_date.
+- Calculate days inclusively when both dates are known.
+- trip_type should be one of: Mixed, Business, City break, Holiday / resort, Wedding / event, Weekend.
+- laundry should be No, Yes, or Possibly.
+- shopping_allowed should be Yes or No.
+- Put activities, dinners, meetings, venues, walking, flights etc. into activities.
+- Put desired smartness/dress requirements into dress_needs.
+- Put useful leftovers or constraints into notes.""",
+      "stylist":"""Extract the styling request.
+- request_text should preserve the user's full styling intent in natural language.
+- location is the place relevant to the outfit/weather if clearly stated.
+- when is the date/day/time phrase, normalized clearly where possible.
+- shopping should be "owned" if they explicitly want wardrobe only, otherwise "open" when they allow suggestions.""",
+      "outfit":"""Extract the structured outfit request.
+- occasion should be one of: Casual daytime, Smart casual, Dinner, Date night, Business meeting, Business casual, Wedding / event, Holiday / resort, Travel day.
+- dress_code: Use your judgement, Casual, Smart casual, Business casual, Business, Cocktail, Formal.
+- smartness: Balanced, Relaxed, Polished but not overdressed, Smart, Very smart.
+- season: Auto / current, Spring, Summer, Autumn, Winter, Transitional.
+- weather: Dry, Sunny, Cloudy, Rain likely, Windy, Cold / crisp, Hot / humid.
+- wardrobe_mode: Wardrobe first; suggest gaps only when useful, My wardrobe only, Open to one new piece, Open to new pieces / a new outfit.
+- Keep unstructured preferences in context_notes.""",
+      "shopping":"""Extract a shopping brief.
+- goal is the main requested item/problem in natural language.
+- budget should be exactly one of: No fixed budget, Under £100, £100–£250, £250–£500, £500+, Show me different budgets.
+- season should be: Any season, Spring/Summer, Autumn/Winter, All-season.
+- occasion should capture intended use.""",
+      "profile":"""Extract only explicitly stated personal fit/profile information.
+- Measurement fields are numbers in centimetres only. Do not invent or convert unless units are clear.
+- preferred_fit should be one of: Tailored / regular, Slim, Relaxed, Mixed by garment.
+- General style preferences go in style_notes.
+- Brand-specific sizes/fit observations go in brand_notes.""",
+      "garment":"""Extract only garment facts the user actually states.
+- Do not invent brand, material, size or model.
+- fit_feedback should be one of: Unknown, Perfect fit, Slightly tight, Slightly loose, Too tight, Too loose.
+- Category should use the app's established wardrobe categories when clear.
+- Put any residual factual detail in notes."""
+    }[mode]
+
+    prompt=f"""Turn this spoken dictation into fields for a personal stylist app.
+
+TODAY: {today}
+MODE: {mode}
+ALLOWED FIELD NAMES: {', '.join(sorted(allowed[mode]))}
+
+DICTATION:
+{transcript}
+
+Rules:
+- Return only fields supported by what the user actually said.
+- Never invent missing facts.
+- Ignore filler speech.
+- Preserve important nuance.
+- Use only ALLOWED FIELD NAMES.
+- Omit a field instead of returning an empty value.
+{mode_guidance}
+"""
+    try:
+        response=OpenAI().responses.create(
+            model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+            reasoning={"effort":"low"},
+            input=prompt,
+            text={"format":{"type":"json_schema","name":"voice_form","schema":VOICE_FORM_SCHEMA,"strict":True}}
+        )
+        result=json.loads(response.output_text)
+    except Exception as exc:
+        raise HTTPException(502,f"I couldn't understand that dictation: {str(exc)[:180]}")
+
+    result["fields"]=[
+        f for f in result.get("fields",[])
+        if f.get("field") in allowed[mode] and str(f.get("value","")).strip()
+    ]
+    return result
+
 @app.post("/api/trip-context")
 def trip_context(req: TripContextRequest):
-    if not (req.destination or "").strip():
-        raise HTTPException(400,"Add a destination first.")
+    if not (req.destination or "").strip() and not (req.trip_brief or "").strip():
+        raise HTTPException(400,"Tell me about the trip first.")
     if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
         raise HTTPException(503,"Trip research needs the AI connection.")
 
@@ -1655,7 +1793,8 @@ def trip_context(req: TripContextRequest):
     prompt=f"""Research this trip for a personal menswear packing assistant.
 
 TODAY: {today.isoformat()}
-DESTINATION: {req.destination}
+DESTINATION: {req.destination or 'extract from trip brief if clearly stated'}
+FULL TRIP BRIEF: {req.trip_brief or 'none'}
 TRIP DATES: {req.start_date or 'not supplied'} to {req.end_date or 'not supplied'}
 TRIP LENGTH: {days} days
 TRIP TYPE: {req.trip_type}
@@ -1709,7 +1848,8 @@ Rules:
 
 
 class PackingRequest(BaseModel):
-    destination: str
+    destination: str = ""
+    trip_brief: str = ""
     start_date: str = ""
     end_date: str = ""
     days: int = 5
@@ -1788,7 +1928,7 @@ Rules:
 """
     context={
      "trip":{
-      "destination":req.destination,"start_date":req.start_date,"end_date":req.end_date,
+      "destination":req.destination,"trip_brief":req.trip_brief,"start_date":req.start_date,"end_date":req.end_date,
       "days":req.days,"trip_type":req.trip_type,"user_weather":req.weather,
       "activities":req.activities,"dress_needs":req.dress_needs,"laundry":req.laundry,
       "shopping_allowed":req.shopping_allowed,"notes":req.notes

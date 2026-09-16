@@ -747,3 +747,70 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .pack-look-actions{grid-template-columns:1fr!important}
  .pack-look-actions .primary{grid-column:auto!important}
 }
+
+
+/* V5.4 — one-tap smart dictation */
+.smart-dictation-card{
+ display:flex;align-items:center;justify-content:space-between;gap:14px;
+ padding:14px;border:1px solid #d7d7d0;border-radius:16px;
+ background:linear-gradient(180deg,#fbfbf8,#f4f4ef);margin:2px 0 12px
+}
+.smart-dictation-card>div{display:grid;gap:2px;min-width:0}
+.smart-dictation-card small{
+ font-size:8px;font-weight:850;letter-spacing:.11em;color:#888
+}
+.smart-dictation-card b{font-size:13px}
+.smart-dictation-card span{font-size:10px;line-height:1.4;color:#6f6f6a}
+.smart-dictate-btn{
+ flex:0 0 auto;min-width:145px;min-height:44px;padding:9px 12px
+}
+.smart-dictate-btn.recording{
+ background:#7e342d;border-color:#7e342d;color:#fff;
+ animation:smartDictatePulse 1.15s ease-in-out infinite
+}
+@keyframes smartDictatePulse{50%{transform:scale(1.025);box-shadow:0 0 0 7px rgba(126,52,45,.09)}}
+
+@media(max-width:700px){
+ .smart-dictation-card{align-items:stretch;flex-direction:column;padding:13px}
+ .smart-dictate-btn{width:100%;min-width:0}
+}
+
+
+/* V5.4.1 — simplified Help Me Pack */
+.pack-simple-form{gap:15px}
+.pack-brief-wrap{position:relative}
+.pack-brief-wrap textarea{
+ min-height:170px;padding:16px 16px 66px;font-size:15px;line-height:1.5;
+ border-radius:16px;background:#fff
+}
+.pack-brief-dictate{
+ position:absolute;right:12px;bottom:12px;min-width:142px;z-index:2
+}
+.pack-essentials{
+ display:grid;gap:12px;padding-top:2px
+}
+.pack-essentials label>small{
+ font-size:8px;color:#999;text-transform:none;letter-spacing:0;font-weight:500
+}
+.pack-more-details{
+ border:1px solid var(--line);border-radius:14px;background:#fafaf8;overflow:hidden
+}
+.pack-more-details summary{
+ cursor:pointer;padding:13px 14px;font-size:11px;font-weight:800;
+ display:flex;align-items:center;justify-content:space-between;gap:12px
+}
+.pack-more-details summary span{
+ font-size:9px;font-weight:500;color:#999
+}
+.pack-more-grid{
+ border-top:1px solid var(--line);padding:13px;display:grid;gap:12px
+}
+.pack-simple-form .trip-research-note{margin-top:0}
+
+@media(max-width:700px){
+ .pack-brief-wrap textarea{min-height:190px;padding-bottom:70px}
+ .pack-brief-dictate{left:12px;right:12px;width:auto}
+ .pack-essentials .three{grid-template-columns:1fr 1fr}
+ .pack-essentials .three label:last-child{grid-column:1/-1}
+ .pack-more-details summary{align-items:flex-start;flex-direction:column;gap:3px}
+}

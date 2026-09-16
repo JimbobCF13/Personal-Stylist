@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist</title>
-<link rel="stylesheet" href="/static/style.css?v=5.3.1">
+<link rel="stylesheet" href="/static/style.css?v=5.4.1">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.3.1</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.4.1</span></header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
@@ -105,6 +105,11 @@
  <div class="section">
   <div class="row between"><h3>Add to Wardrobe</h3><button id="cancelAdd" class="ghost" data-go="wardrobe">Cancel</button></div>
   <div class="card form">
+   <div class="smart-dictation-card compact">
+    <div><small>OPTIONAL VOICE DETAILS</small><b>Describe the garment</b><span>Useful if you already know the brand, size, colour, material or fit.</span></div>
+    <button id="garmentSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate garment</button>
+   </div>
+   <div id="garmentSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <div class="photo-actions"><label class="upload"><input id="cameraPhoto" type="file" accept="image/*" capture="environment"><span>📷 Take Photo</span></label><label class="upload"><input id="libraryPhoto" type="file" accept="image/*" multiple><span>🖼️ Choose Photo(s)</span></label></div><div class="add-divider"><span>or</span></div><div id="urlDropZone" class="url-import-card"><div><small>ADD FROM A PRODUCT PAGE</small><b>Paste or drag in a retailer link</b><p>I’ll pull in the product details. You can then keep the retailer image or add your own photo without losing the web information.</p></div><div class="url-import-row"><input id="productUrl" type="url" placeholder="https://brand.com/product/…"><button id="importProductUrl" class="secondary" type="button">Import</button></div><small id="urlImportStatus" class="url-import-status"></small><small class="combine-source-note">Start either way: photo first or web link first. The app will combine both into the same garment before you save.</small></div>
    <img id="preview" class="preview hidden">
    <div id="batchStatus" class="batch-status hidden"></div>
@@ -200,7 +205,11 @@
  <div class="section">
   <div class="row between"><h3>Ask My Stylist</h3><button class="ghost" data-go="savedlooks" type="button">★ Saved Looks</button></div>
   <div class="card form">
-   <div class="stylist-intro"><span class="eyebrow">PERSONAL STYLIST</span><p>Tell me what you're dressing for in your own words. I’ll combine the request with your wardrobe, fit profile and what I’ve learned about your style.</p></div>
+   <div class="stylist-intro"><span class="eyebrow">PERSONAL STYLIST</span><p>Tell me what you're dressing for in your own words. I’ll combine the request with your wardrobe, fit profile and what I’ve learned about your style.</p></div><div class="smart-dictation-card compact">
+    <div><small>ONE-TAP BRIEF</small><b>Just tell me everything</b><span>Mention where, when, what you’re doing and how you want to look. I’ll sort the fields out.</span></div>
+    <button id="stylistSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate brief</button>
+   </div>
+   <div id="stylistSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <label>WHAT DO YOU NEED?
     <div class="dictation-wrap">
      <textarea id="v4Request" rows="4" placeholder="e.g. I have a business dinner tomorrow. Smart but not too formal. I'd like to wear my grey Hackett trousers if possible."></textarea>
@@ -247,7 +256,11 @@
 <section id="outfits" class="screen">
  <div class="section"><h3>What should I wear?</h3>
   <div class="card form">
-   <div class="stylist-intro"><span class="eyebrow">STYLIST CONTEXT</span><p>Tell me where you're going and how you want to feel. I'll balance that against your wardrobe, fit history and style feedback.</p></div>
+   <div class="stylist-intro"><span class="eyebrow">STYLIST CONTEXT</span><p>Tell me where you're going and how you want to feel. I'll balance that against your wardrobe, fit history and style feedback.</p></div><div class="smart-dictation-card compact">
+    <div><small>FASTEST WAY</small><b>Describe the whole occasion</b><span>I’ll populate occasion, smartness, weather, location and notes from one dictation.</span></div>
+    <button id="outfitSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate everything</button>
+   </div>
+   <div id="outfitSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <div class="two"><label>OCCASION<select id="occasion"><option>Casual daytime</option><option>Smart casual</option><option>Dinner</option><option>Date night</option><option>Business meeting</option><option>Business casual</option><option>Wedding / event</option><option>Holiday / resort</option><option>Travel day</option></select></label><label>DRESS CODE<select id="dress_code"><option>Use your judgement</option><option>Casual</option><option>Smart casual</option><option>Business casual</option><option>Business</option><option>Cocktail</option><option>Formal</option></select></label></div>
    <div class="two"><label>HOW SMART?<select id="smartness"><option>Balanced</option><option>Relaxed</option><option>Polished but not overdressed</option><option>Smart</option><option>Very smart</option></select></label><label>SEASON<select id="outfit_season"><option>Auto / current</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>Transitional</option></select></label></div>
    <div class="two"><label>TEMPERATURE °C<input id="temperature" type="number" value="22"></label><label>WEATHER<select id="weather"><option>Dry</option><option>Sunny</option><option>Cloudy</option><option>Rain likely</option><option>Windy</option><option>Cold / crisp</option><option>Hot / humid</option></select></label></div>
@@ -265,40 +278,48 @@
 
 <section id="packing" class="screen">
  <div class="section"><h3>Help Me Pack</h3>
-  <div class="card form">
-   <div class="stylist-intro"><span class="eyebrow">TRAVEL STYLIST</span><p>Tell me about the trip. I'll reuse versatile pieces from your wardrobe to create a compact packing list and outfit plan.</p></div>
-   <label>DESTINATION<input id="pack_destination" placeholder="e.g. San Francisco, Grand Hyatt San Francisco"></label>
-   <div class="two">
-    <label>DEPART<input id="pack_start_date" type="date"></label>
-    <label>RETURN<input id="pack_end_date" type="date"></label>
+  <div class="card form pack-simple-form">
+   <div class="stylist-intro">
+    <span class="eyebrow">TRAVEL STYLIST</span>
+    <p>Tell me the whole trip in one go. I’ll work out the destination, dates, activities, dress level and weather research from what you say.</p>
    </div>
-   <div class="two"><label>DAYS<input id="pack_days" type="number" min="1" max="60" value="5"></label><label>TRIP TYPE<select id="pack_trip_type"><option>Mixed</option><option>Business</option><option>City break</option><option>Holiday / resort</option><option>Wedding / event</option><option>Weekend</option></select></label></div>
-   <label>WEATHER YOU ALREADY KNOW <small class="field-hint">optional — I'll research this automatically when possible</small><input id="pack_weather" placeholder="e.g. I know evenings are likely to be cool"></label>
-   <div class="trip-research-note"><b>Automatic trip research</b><span>I'll check forecast or seasonal weather for your dates and look up named hotels, restaurants, venues or events to help judge what to wear.</span></div>
-   <label>ACTIVITIES
-    <div class="dictation-wrap">
-     <textarea id="pack_activities" rows="2" placeholder="e.g. lectures, walking around the city, drinks, dinners"></textarea>
-     <button id="packActivitiesDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+
+   <label>YOUR TRIP
+    <div class="dictation-wrap pack-brief-wrap">
+     <textarea id="pack_brief" rows="6" placeholder="e.g. I’m going to San Francisco from 3–10 October for lectures, business lunches and dinners, some sightseeing and one smarter evening. I’ll be walking a lot and I want to pack fairly light."></textarea>
+     <button id="packSmartDictate" class="primary smart-dictate-btn pack-brief-dictate" type="button">🎙️ Dictate trip</button>
     </div>
    </label>
-   <div id="packActivitiesDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
-   <label>DRESS NEEDS
-    <div class="dictation-wrap">
-     <textarea id="pack_dress_needs" rows="2" placeholder="e.g. smart casual daytime, two business meetings, one smarter dinner"></textarea>
-     <button id="packDressDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+   <div id="packSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+
+   <div class="pack-essentials">
+    <div class="three">
+     <label>DEPART <small>optional</small><input id="pack_start_date" type="date"></label>
+     <label>RETURN <small>optional</small><input id="pack_end_date" type="date"></label>
+     <label>DAYS <small>optional</small><input id="pack_days" type="number" min="1" max="60" value="5"></label>
     </div>
-   </label>
-   <div id="packDressDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
-   <div class="two"><label>LAUNDRY<select id="pack_laundry"><option>No</option><option>Yes</option><option>Possibly</option></select></label><label>CAN SUGGEST MISSING ITEMS?<select id="pack_shopping"><option>Yes</option><option>No</option></select></label></div>
-   <label>ANYTHING ELSE?
-    <div class="dictation-wrap">
-     <textarea id="pack_notes" rows="2" placeholder="e.g. hand luggage only; comfortable shoes are important"></textarea>
-     <button id="packNotesDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+    <div class="two">
+     <label>LAUNDRY<select id="pack_laundry"><option>No</option><option>Yes</option><option>Possibly</option></select></label>
+     <label>CAN SUGGEST MISSING ITEMS?<select id="pack_shopping"><option>Yes</option><option>No</option></select></label>
     </div>
-   </label>
-   <div id="packNotesDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+   </div>
+
+   <details class="pack-more-details">
+    <summary>Optional trip details <span>Review or fine-tune what I understood</span></summary>
+    <div class="pack-more-grid">
+     <label>DESTINATION<input id="pack_destination" placeholder="I’ll usually extract this from your trip description"></label>
+     <label>TRIP TYPE<select id="pack_trip_type"><option>Mixed</option><option>Business</option><option>City break</option><option>Holiday / resort</option><option>Wedding / event</option><option>Weekend</option></select></label>
+     <label>WEATHER YOU ALREADY KNOW<input id="pack_weather" placeholder="Optional — I’ll research weather automatically"></label>
+     <label>ACTIVITIES<textarea id="pack_activities" rows="2" placeholder="Usually filled from your trip description"></textarea></label>
+     <label>DRESS NEEDS<textarea id="pack_dress_needs" rows="2" placeholder="Usually filled from your trip description"></textarea></label>
+     <label>ANYTHING ELSE?<textarea id="pack_notes" rows="2" placeholder="Hand luggage only, comfortable shoes, etc."></textarea></label>
+    </div>
+   </details>
+
+   <div class="trip-research-note"><b>Automatic trip research</b><span>I’ll check forecast or seasonal weather for your dates and research named hotels, restaurants, venues or events where useful.</span></div>
    <button id="makePackingPlan" class="primary full" type="button">Build my packing plan</button>
-  </div><div id="packingResults"></div>
+  </div>
+  <div id="packingResults"></div>
  </div>
 </section>
 
@@ -306,6 +327,11 @@
  <div class="section">
   <h3>Wardrobe Gaps & Shopping</h3>
   <div class="card form">
+   <div class="smart-dictation-card compact">
+    <div><small>ONE-TAP SEARCH BRIEF</small><b>Tell me what you want to buy</b><span>Mention the item, budget, season and what you need it for.</span></div>
+    <button id="shoppingSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate brief</button>
+   </div>
+   <div id="shoppingSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <label>WHAT ARE YOU LOOKING FOR?
     <textarea id="shopGoal" rows="3" placeholder="e.g. I want a new blazer that adds something different to my grey and navy blazers"></textarea>
    </label>
@@ -348,6 +374,11 @@
 <section id="profile" class="screen">
  <div class="section"><h3>My Profile & Fit</h3>
   <div class="card form">
+   <div class="smart-dictation-card compact">
+    <div><small>PROFILE BY VOICE</small><b>Tell me measurements and fit preferences</b><span>I’ll fill only the details you actually say. You can review everything before saving.</span></div>
+    <button id="profileSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate profile</button>
+   </div>
+   <div id="profileSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <div class="two"><label>NAME<input id="name"></label><label>HEIGHT (cm)<input id="height_cm" type="number"></label></div>
    <div class="three"><label>CHEST (cm)<input id="chest_cm" type="number"></label><label>WAIST (cm)<input id="waist_cm" type="number"></label><label>HIPS / SEAT (cm)<input id="hips_cm" type="number"></label></div>
    <div class="three"><label>THIGH (cm)<input id="thigh_cm" type="number"></label><label>INSIDE LEG (cm)<input id="inseam_cm" type="number"></label><label>SLEEVE (cm)<input id="sleeve_cm" type="number"></label></div>
@@ -387,5 +418,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=5.3.1"></script>
+<script src="/static/app.js?v=5.4.1"></script>
 </body></html>
