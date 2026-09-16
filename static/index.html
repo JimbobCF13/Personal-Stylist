@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=6.5">
+<link rel="stylesheet" href="/static/style.css?v=6.7">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V6.5</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V6.7</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -395,6 +395,12 @@
       <label>SEASON<select id="shopSeason"><option value="">Any season</option><option>Spring/Summer</option><option>Autumn/Winter</option><option>All-season</option></select></label>
      </div>
      <label>OCCASION / USE<input id="shopOccasion" placeholder="Optional"></label>
+     <label>SHOPPING MODE<select id="shopMode">
+      <option value="best_addition">Best additions to my wardrobe</option>
+      <option value="strict_gap">Only genuine wardrobe gaps</option>
+      <option value="complete_outfit">Help me complete an outfit</option>
+      <option value="upgrade_existing">Upgrade something I already own</option>
+     </select></label>
     </div>
    </details>
    <button id="analyseGaps" class="primary full" type="button">Analyse my wardrobe</button>
@@ -463,7 +469,7 @@
    <div><small class="eyebrow">FIT & SIZING</small><h3>Know My Size</h3></div>
    <button id="refreshFitIntel" class="ghost" type="button">Refresh</button>
   </div>
-  <p class="fit-intel-intro">Review how your real clothes fit. Get Him Dressed will learn brand, size and cut patterns and use them when it recommends things to buy.</p>
+  <p class="fit-intel-intro" id="fitIntelIntro">Review how your real clothes fit. Your stylist will learn brand, size and cut patterns and use them when it recommends things to buy.</p>
   <div id="fitIntelResults">
    <div class="card v4-thinking"><span class="spinner"></span><div><b>Learning your fit…</b><small>Looking at confirmed garment reviews and measurements.</small></div></div>
   </div>
@@ -483,9 +489,14 @@
     <summary>Profile details <span>Review or edit measurements</span></summary>
     <div class="brief-more-grid">
    <div class="two"><label>NAME<input id="name"></label><label>HEIGHT (cm)<input id="height_cm" type="number"></label></div>
-   <div class="three"><label>CHEST (cm)<input id="chest_cm" type="number"></label><label>WAIST (cm)<input id="waist_cm" type="number"></label><label>HIPS / SEAT (cm)<input id="hips_cm" type="number"></label></div>
+   <div class="three"><label><span id="profileChestLabel">CHEST (cm)</span><input id="chest_cm" type="number"></label><label>WAIST (cm)<input id="waist_cm" type="number"></label><label><span id="profileHipsLabel">HIPS / SEAT (cm)</span><input id="hips_cm" type="number"></label></div>
    <div class="three"><label>THIGH (cm)<input id="thigh_cm" type="number"></label><label>INSIDE LEG (cm)<input id="inseam_cm" type="number"></label><label>SLEEVE (cm)<input id="sleeve_cm" type="number"></label></div>
-   <div class="two"><label>NECK (cm)<input id="neck_cm" type="number"></label><label>PREFERRED FIT<select id="preferred_fit"><option>Tailored / regular</option><option>Slim</option><option>Relaxed</option><option>Mixed by garment</option></select></label></div>
+   <div class="two"><label id="profileNeckField">NECK (cm)<input id="neck_cm" type="number"></label><label>PREFERRED FIT<select id="preferred_fit"><option>Tailored / regular</option><option>Slim</option><option>Relaxed</option><option>Mixed by garment</option></select></label></div>
+   <div id="womenswearSizeFields" class="womenswear-size-fields hidden">
+    <small class="eyebrow">USUAL SIZES — OPTIONAL</small>
+    <div class="three"><label>TOP SIZE<input id="usual_top_size" placeholder="e.g. UK 10 / S"></label><label>BOTTOM SIZE<input id="usual_bottom_size" placeholder="e.g. UK 12"></label><label>DRESS SIZE<input id="usual_dress_size" placeholder="e.g. UK 10"></label></div>
+    <div class="two"><label>SHOE SIZE<input id="usual_shoe_size" placeholder="e.g. UK 5"></label><label>BRA SIZE<input id="bra_size" placeholder="optional"></label></div>
+   </div>
    <label>STYLE NOTES<textarea id="style_notes" rows="3"></textarea></label>
    <label>BRAND / SIZE NOTES<textarea id="brand_notes" rows="3" placeholder="e.g. Ralph Lauren Custom Slim Fit L works well…"></textarea></label>
     </div>
@@ -524,5 +535,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=6.5"></script>
+<script src="/static/app.js?v=6.7"></script>
 </body></html>

@@ -958,3 +958,75 @@ menswear accounts remain **Get Him Dressed**.
 A persistent **Saved** tab has also been added to the bottom navigation.
 
 No destructive migration. Existing accounts, wardrobes, images, Saved Looks and learning remain unchanged.
+
+
+## V6.6 — Womenswear styling, sizing & fit intelligence
+
+This release deepens Get Her Dressed rather than treating womenswear as a renamed menswear experience.
+
+### Womenswear profile
+For womenswear accounts the profile now:
+- labels chest as Bust / Chest and hips appropriately,
+- keeps body measurements shared with the core fit engine,
+- adds optional usual Top, Bottom, Dress, Shoe and Bra sizes,
+- supports those fields through smart dictation when explicitly stated.
+
+Menswear profiles remain unchanged.
+
+### Fit reviews
+Fit reviews now include a separate hips/seat signal in addition to chest/bust, waist,
+length, sleeve and shoulders. Womenswear labels use Bust / Chest and Body / Hem Length.
+
+The extra fit evidence is used in Fit Intelligence and live shopping guidance.
+
+### Styling intelligence
+The main stylist and shopping-gap engine now receive profile-specific guidance.
+For womenswear, the engine explicitly considers:
+- dresses, skirts and jumpsuits as well as separates,
+- silhouette/proportion, neckline, rise and hem length,
+- waist/hip/bust fit,
+- footwear height and bag/accessory balance,
+- event/cocktail/formal/business distinctions,
+while avoiding stereotyped assumptions such as requiring heels or dresses.
+
+### Sizing
+Women's numeric and letter sizes are treated as highly brand/line specific.
+Real fit history remains stronger evidence than a generic brand-size assumption.
+
+No destructive migration. Existing menswear users, wardrobes, images, Saved Looks and fit history are preserved.
+
+
+## V6.7 — Shopping Intelligence
+
+### Smarter reasons to buy
+Shopping recommendations now explicitly assess:
+- wardrobe duplication risk,
+- the purchase's role in the wardrobe,
+- practical versatility,
+- overlap with the closest owned items,
+- synergy with existing clothes and Saved Looks.
+
+The stylist is instructed to reject weak additions rather than recommend something merely because it is fashionable.
+
+### Shopping modes
+Users can choose:
+- Best additions to my wardrobe
+- Only genuine wardrobe gaps
+- Help me complete an outfit
+- Upgrade something I already own
+
+### Live product intelligence
+Current retailer products are now assessed against the user's actual wardrobe as well as the requested specification.
+
+Each live product can return:
+- wardrobe utility,
+- duplicate risk,
+- personal fit confidence,
+- owned wardrobe pieces it should work especially well with.
+
+The UI displays those signals alongside the existing retailer, price, sizing and Try On Me workflow.
+
+### Fit & style evidence
+The live product search continues to use the user's real fit history, measurements and profile-specific menswear/womenswear guidance.
+
+No destructive migration. Accounts, wardrobes, images, Saved Looks, Fit Intelligence and prior shopping data are preserved.

@@ -266,6 +266,24 @@ def product_brand_name():
 def wardrobe_category_order():
     return WOMENSWEAR_CATEGORY_ORDER if is_womenswear() else MENSWEAR_CATEGORY_ORDER
 
+def styling_profile_guidance():
+    if is_womenswear():
+        return """
+WOMENSWEAR PROFILE:
+- Style as a contemporary women's personal stylist, without stereotypes or assumptions about age/body shape.
+- Consider dresses, skirts, jumpsuits, tailoring, trousers/jeans, knitwear, outerwear, footwear, bags and accessories where appropriate.
+- Pay attention to silhouette, proportion, hem/leg length, rise, waist/hip fit, neckline, sleeve length, layering, footwear height and bag/accessory balance.
+- For occasionwear, distinguish cocktail, formal, wedding/event, business and smart-casual needs without assuming heels or dresses are required.
+- Use the user's stated preferences and wardrobe evidence first. Do not prescribe traditionally feminine styling unless the user actually prefers it.
+- For shopping/sizing, women's numeric/letter sizes vary significantly by brand and line; treat exact fit history as higher-value evidence than generic size labels.
+"""
+    return """
+MENSWEAR PROFILE:
+- Style as a contemporary men's personal stylist.
+- Pay attention to shoulder/chest fit, trouser rise/leg, sleeve/body length, layering, footwear and level of tailoring.
+- Use the user's wardrobe and fit evidence rather than generic brand assumptions.
+"""
+
 
 def canonical_wardrobe_category(
     category: str = "",
@@ -460,7 +478,9 @@ def init_db():
       id INTEGER PRIMARY KEY CHECK(id=1),
       name TEXT, height_cm REAL, chest_cm REAL, waist_cm REAL, hips_cm REAL,
       thigh_cm REAL, inseam_cm REAL, sleeve_cm REAL, neck_cm REAL,
-      preferred_fit TEXT, style_notes TEXT, brand_notes TEXT
+      preferred_fit TEXT, style_notes TEXT, brand_notes TEXT,
+      usual_top_size TEXT, usual_bottom_size TEXT, usual_dress_size TEXT,
+      usual_shoe_size TEXT, bra_size TEXT
     );
     INSERT OR IGNORE INTO profile(id) VALUES (1);
 
@@ -516,8 +536,14 @@ def init_db():
         "ALTER TABLE garments ADD COLUMN fit_length TEXT DEFAULT ''",
         "ALTER TABLE garments ADD COLUMN fit_sleeve TEXT DEFAULT ''",
         "ALTER TABLE garments ADD COLUMN fit_shoulders TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN fit_hips TEXT DEFAULT ''",
         "ALTER TABLE garments ADD COLUMN fit_notes TEXT DEFAULT ''",
-        "ALTER TABLE garments ADD COLUMN fit_reviewed_at TEXT"
+        "ALTER TABLE garments ADD COLUMN fit_reviewed_at TEXT",
+        "ALTER TABLE profile ADD COLUMN usual_top_size TEXT DEFAULT ''",
+        "ALTER TABLE profile ADD COLUMN usual_bottom_size TEXT DEFAULT ''",
+        "ALTER TABLE profile ADD COLUMN usual_dress_size TEXT DEFAULT ''",
+        "ALTER TABLE profile ADD COLUMN usual_shoe_size TEXT DEFAULT ''",
+        "ALTER TABLE profile ADD COLUMN bra_size TEXT DEFAULT ''"
     ]:
         try:
             con.execute(sql)
@@ -890,13 +916,21 @@ class Profile(BaseModel):
     preferred_fit: Optional[str]=""
     style_notes: Optional[str]=""
     brand_notes: Optional[str]=""
+    usual_top_size: Optional[str]=""
+    usual_bottom_size: Optional[str]=""
+    usual_dress_size: Optional[str]=""
+    usual_shoe_size: Optional[str]=""
+    bra_size: Optional[str]=""
 
 @app.put("/api/profile")
 def save_profile(p: Profile):
     con = db()
     con.execute("""UPDATE profile SET name=?,height_cm=?,chest_cm=?,waist_cm=?,hips_cm=?,thigh_cm=?,
-        inseam_cm=?,sleeve_cm=?,neck_cm=?,preferred_fit=?,style_notes=?,brand_notes=? WHERE id=1""",
-        (p.name,p.height_cm,p.chest_cm,p.waist_cm,p.hips_cm,p.thigh_cm,p.inseam_cm,p.sleeve_cm,p.neck_cm,p.preferred_fit,p.style_notes,p.brand_notes))
+        inseam_cm=?,sleeve_cm=?,neck_cm=?,preferred_fit=?,style_notes=?,brand_notes=?,
+        usual_top_size=?,usual_bottom_size=?,usual_dress_size=?,usual_shoe_size=?,bra_size=? WHERE id=1""",
+        (p.name,p.height_cm,p.chest_cm,p.waist_cm,p.hips_cm,p.thigh_cm,p.inseam_cm,p.sleeve_cm,p.neck_cm,
+         p.preferred_fit,p.style_notes,p.brand_notes,p.usual_top_size,p.usual_bottom_size,p.usual_dress_size,
+         p.usual_shoe_size,p.bra_size))
     con.commit(); con.close()
     return {"ok": True}
 
@@ -2463,11 +2497,12 @@ def parse_voice_form(req: VoiceFormRequest):
         "location","wardrobe_mode","context_notes"
       },
       "shopping":{
-        "goal","budget","season","occasion"
+        "goal","budget","season","occasion","shopping_mode"
       },
       "profile":{
         "name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm",
-        "sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes"
+        "sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes",
+        "usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size"
       },
       "garment":{
         "category","garment_type","brand","model_line","labelled_size","colour",
@@ -2506,12 +2541,15 @@ def parse_voice_form(req: VoiceFormRequest):
 - goal is the main requested item/problem in natural language.
 - budget should be exactly one of: No fixed budget, Under £100, £100–£250, £250–£500, £500+, Show me different budgets.
 - season should be: Any season, Spring/Summer, Autumn/Winter, All-season.
-- occasion should capture intended use.""",
+- occasion should capture intended use.
+- shopping_mode should be one of: best_addition, strict_gap, complete_outfit, upgrade_existing.
+  Use best_addition unless the user explicitly asks for a strict gap, a whole/complete outfit, or to upgrade/replace something they own.""",
       "profile":"""Extract only explicitly stated personal fit/profile information.
 - Measurement fields are numbers in centimetres only. Do not invent or convert unless units are clear.
 - preferred_fit should be one of: Tailored / regular, Slim, Relaxed, Mixed by garment.
 - General style preferences go in style_notes.
-- Brand-specific sizes/fit observations go in brand_notes.""",
+- Brand-specific sizes/fit observations go in brand_notes.
+- usual_top_size, usual_bottom_size, usual_dress_size, usual_shoe_size and bra_size are strings; populate only when explicitly stated.""",
       "garment":"""Extract only garment facts the user actually states.
 - Do not invent brand, material, size or model.
 - fit_feedback should be one of: Unknown, Perfect fit, Slightly tight, Slightly loose, Too tight, Too loose.
@@ -3005,6 +3043,7 @@ class WardrobeGapRequest(BaseModel):
     budget: Optional[str] = ""
     occasion: Optional[str] = ""
     season: Optional[str] = ""
+    shopping_mode: Optional[str] = "best_addition"
     max_recommendations: Optional[int] = 4
 
 GAP_SCHEMA = {
@@ -3025,6 +3064,10 @@ GAP_SCHEMA = {
           "ideal_fit": {"type": "string"},
           "formality": {"type": "string"},
           "why_this_adds_value": {"type": "string"},
+          "purchase_role": {"type": "string", "enum": ["new capability","versatility boost","occasion gap","upgrade","complete outfit","replacement"]},
+          "duplicate_risk": {"type": "string", "enum": ["low","medium","high"]},
+          "duplicate_reason": {"type": "string"},
+          "versatility_note": {"type": "string"},
           "wardrobe_synergy_score": {"type": "integer", "minimum": 0, "maximum": 100},
           "owned_garment_ids": {"type": "array", "items": {"type": "integer"}},
           "outfit_ideas": {
@@ -3048,7 +3091,8 @@ GAP_SCHEMA = {
         },
         "required": [
           "title","category","ideal_colour","ideal_material","ideal_fit","formality",
-          "why_this_adds_value","wardrobe_synergy_score","owned_garment_ids",
+          "why_this_adds_value","purchase_role","duplicate_risk","duplicate_reason","versatility_note",
+          "wardrobe_synergy_score","owned_garment_ids",
           "outfit_ideas","size_fit_guidance","shopping_spec","search_phrase","priority"
         ],
         "additionalProperties": False
@@ -3066,6 +3110,10 @@ measurements, fit history, brand notes, and style feedback, then identify purcha
 
 PRINCIPLES:
 - Wardrobe first. Do not recommend replacing something the user already owns unless there is a clear reason.
+- Explicitly check for duplication. Compare category, colour, material, fit/cut, formality and use-case against owned pieces.
+- Maximise wardrobe utility, not novelty: favour purchases that solve a real gap or make many existing pieces easier to wear.
+- A low duplicate-risk item should add a genuinely new capability, useful contrast, fit solution, season, formality level or outfit role.
+- A medium/high duplicate-risk item can still be valid only when it is a purposeful upgrade/replacement or materially better for the user's stated use.
 - Maximise wardrobe synergy: favour a purchase that creates many strong outfits with existing pieces.
 - Respect the user's requested goal. If they ask for a blazer, recommend the best blazer specification rather than changing category.
 - Be specific about shade, fabric, texture, construction, seasonality, formality and fit.
@@ -3075,6 +3123,12 @@ PRINCIPLES:
 - Produce recommendations that are meaningfully different from one another.
 - The shopping_spec should be precise enough to search retailers later.
 - search_phrase should be concise and useful for a future live shopping search.
+- purchase_role must describe what job the purchase does in the wardrobe.
+- duplicate_reason must name the closest overlap or explain why overlap is low.
+- versatility_note should explain the practical breadth of use without inventing numeric outfit counts.
+- If the requested shopping mode is "complete_outfit", recommendations may form a coordinated small set but should still reuse owned wardrobe pieces wherever sensible.
+- If shopping mode is "upgrade_existing", only suggest upgrades where the existing wardrobe data gives a defensible reason.
+- If shopping mode is "strict_gap", reject weak additions rather than filling the list with low-value purchases.
 """
 
 @app.post("/api/wardrobe-gaps")
@@ -3083,7 +3137,10 @@ def wardrobe_gaps(req: WardrobeGapRequest):
     garment_rows = [dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
     profile_row = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     feedback_rows = [dict(r) for r in con.execute(
-        "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 12"
+        "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 20"
+    ).fetchall()]
+    favourite_rows = [dict(r) for r in con.execute(
+        "SELECT label,outfit_json FROM outfit_favourites ORDER BY id DESC LIMIT 20"
     ).fetchall()]
     con.close()
 
@@ -3105,7 +3162,9 @@ def wardrobe_gaps(req: WardrobeGapRequest):
         "season": g.get("season") or "",
         "formality": g.get("formality") or "",
         "fit_rating": g.get("fit_rating"),
-        "fit_notes": g.get("fit_notes") or ""
+        "fit_notes": g.get("fit_notes") or "",
+        "purchase_status": g.get("purchase_status") or "",
+        "purchase_price": g.get("purchase_price") or ""
     } for g in garment_rows]
 
     profile = {
@@ -3113,7 +3172,8 @@ def wardrobe_gaps(req: WardrobeGapRequest):
         for k in [
             "height_cm","chest_cm","waist_cm","hips_cm","thigh_cm",
             "inseam_cm","sleeve_cm","neck_cm","preferred_fit",
-            "style_notes","brand_notes"
+            "style_notes","brand_notes","usual_top_size","usual_bottom_size",
+            "usual_dress_size","usual_shoe_size","bra_size"
         ]
         if k in profile_row
     }
@@ -3131,6 +3191,17 @@ def wardrobe_gaps(req: WardrobeGapRequest):
             item["label"] = ""
         feedback.append(item)
 
+    saved_looks=[]
+    for row in favourite_rows:
+        try:
+            parsed=json.loads(row.get("outfit_json") or "{}")
+            saved_looks.append({
+              "label":row.get("label") or parsed.get("label") or "",
+              "garment_ids":parsed.get("owned_garment_ids") or parsed.get("garment_ids") or []
+            })
+        except Exception:
+            pass
+
     if not garments:
         raise HTTPException(400, "Add some wardrobe items first so I can identify useful gaps.")
 
@@ -3143,17 +3214,19 @@ def wardrobe_gaps(req: WardrobeGapRequest):
       "budget": req.budget or "not specified",
       "occasion": req.occasion or "not specified",
       "season": req.season or "not specified",
+      "shopping_mode": req.shopping_mode or "best_addition",
       "max_recommendations": max_recs,
       "profile": profile,
       "wardrobe": garments,
-      "recent_feedback": feedback
+      "recent_feedback": feedback,
+      "saved_looks": saved_looks
     }
 
     client = OpenAI()
     response = client.responses.create(
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
       reasoning={"effort":"low"},
-      instructions=SHOPPING_STYLIST_INSTRUCTIONS,
+      instructions=SHOPPING_STYLIST_INSTRUCTIONS + styling_profile_guidance(),
       input=json.dumps(context, ensure_ascii=False),
       text={"format":{
         "type":"json_schema",
@@ -3341,6 +3414,7 @@ class ProductSourceRequest(BaseModel):
     budget: Optional[str] = ""
     category: Optional[str] = ""
     size_fit_guidance: Optional[str] = ""
+    owned_garment_ids: Optional[list[int]] = []
 
 PRODUCT_SOURCE_SCHEMA = {
   "type": "object",
@@ -3362,9 +3436,14 @@ PRODUCT_SOURCE_SCHEMA = {
           "fit": {"type": "string"},
           "size_note": {"type": "string"},
           "why_it_matches": {"type": "string"},
+          "wardrobe_utility": {"type": "string"},
+          "duplicate_risk": {"type": "string", "enum": ["low","medium","high"]},
+          "fit_confidence": {"type": "string", "enum": ["high","medium","low"]},
+          "best_with_owned_ids": {"type": "array", "items": {"type": "integer"}, "maxItems": 6},
           "confidence": {"type": "string", "enum": ["high","medium","low"]}
         },
-        "required": ["name","brand","retailer","price","url","image_url","colour","material","fit","size_note","why_it_matches","confidence"],
+        "required": ["name","brand","retailer","price","url","image_url","colour","material","fit","size_note",
+                     "why_it_matches","wardrobe_utility","duplicate_risk","fit_confidence","best_with_owned_ids","confidence"],
         "additionalProperties": False
       }
     },
@@ -3381,17 +3460,30 @@ def source_products(req: ProductSourceRequest):
 
     fit_evidence=fit_evidence_snapshot(limit=80)
     fit_rows=fit_evidence["confirmed"]
+    shop_con=db()
+    wardrobe_rows=[dict(r) for r in shop_con.execute("""
+      SELECT id,category,garment_type,brand,model_line,colour,material,fit_cut,formality,season,labelled_size,fit_feedback
+      FROM garments ORDER BY id DESC LIMIT 180
+    """).fetchall()]
+    shop_con.close()
+    requested_owned={int(x) for x in (req.owned_garment_ids or []) if isinstance(x,int) or str(x).isdigit()}
+    compact_wardrobe=[
+      {k:g.get(k) for k in ["id","category","garment_type","brand","model_line","colour","material","fit_cut","formality","season","labelled_size","fit_feedback"]}
+      for g in wardrobe_rows
+    ]
+    preferred_owned=[g for g in compact_wardrobe if g.get("id") in requested_owned]
     fit_learning="\n".join([
       f"- {r.get('brand') or ''} {r.get('model_line') or r.get('garment_type') or r.get('category') or ''}, "
       f"size {r.get('labelled_size') or ''}: {r.get('fit_rating') or 'n/a'}/5; "
-      f"chest {r.get('fit_chest') or '—'}, waist {r.get('fit_waist') or '—'}, "
+      f"chest/bust {r.get('fit_chest') or '—'}, waist {r.get('fit_waist') or '—'}, hips {r.get('fit_hips') or '—'}, "
       f"length {r.get('fit_length') or '—'}, sleeve {r.get('fit_sleeve') or '—'}, "
       f"shoulders {r.get('fit_shoulders') or '—'}. {r.get('fit_notes') or ''}"
       for r in fit_rows[:40]
     ])
     brand_patterns=json.dumps(fit_evidence["brands"][:12],ensure_ascii=False)
     user_measurements=json.dumps({k:fit_evidence["profile"].get(k) for k in [
-      "height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit"
+      "height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit",
+      "usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size"
     ]},ensure_ascii=False)
 
     prompt = f"""
@@ -3412,6 +3504,12 @@ AGGREGATED BRAND PATTERNS:
 USER MEASUREMENTS / PREFERRED FIT:
 {user_measurements}
 
+FULL OWNED WARDROBE SUMMARY:
+{json.dumps(compact_wardrobe,ensure_ascii=False)}
+
+OWNED PIECES THIS RECOMMENDATION IS INTENDED TO WORK WITH:
+{json.dumps(preferred_owned,ensure_ascii=False)}
+
 The user is in the United Kingdom. Prefer UK retailer/product pages and GBP prices.
 Find up to 6 genuinely relevant products across useful price points where possible.
 
@@ -3424,6 +3522,11 @@ Rules:
 - size_note should give the most defensible starting size/fit guidance from the user's REAL fit history plus the current product/line evidence.
 - Never generalise one garment to an entire brand. If the exact line differs, explicitly say that.
 - When there is insufficient evidence, say sizing needs confirmation rather than guessing.
+- Compare every live product with the owned wardrobe before calling it useful.
+- duplicate_risk should reflect genuine similarity to what the user already owns, not just same broad category.
+- wardrobe_utility should explain what the product unlocks or improves with existing clothes.
+- best_with_owned_ids may contain only real IDs from FULL OWNED WARDROBE SUMMARY.
+- fit_confidence should reflect the user's personal fit history plus exact current product/line evidence, not general confidence in the web search.
 - Prefer official brand or retailer product pages over aggregators.
 """
 
@@ -3670,7 +3773,7 @@ def stylist_v4(req: StylistV4Request):
     response = client.responses.create(
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
       reasoning={"effort":"low"},
-      instructions=STYLIST_V4_INSTRUCTIONS,
+      instructions=STYLIST_V4_INSTRUCTIONS + styling_profile_guidance(),
       input=json.dumps(context, ensure_ascii=False),
       text={"format":{
         "type":"json_schema",
@@ -3725,7 +3828,7 @@ def stylist_v4_more_like_this(req: StylistMoreLikeRequest):
         for g in wardrobe
     ]
 
-    instructions="""You are extending an existing personal menswear styling result.
+    instructions="""You are extending an existing personal styling result.
 
 Create 2–3 strong variations that are recognisably 'more like' the supplied base outfit.
 Do not replace the whole idea just to be different.
@@ -3761,7 +3864,7 @@ Rules:
         response=OpenAI().responses.create(
             model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
             reasoning={"effort":"low"},
-            instructions=instructions,
+            instructions=instructions + styling_profile_guidance(),
             input=json.dumps(context,ensure_ascii=False),
             text={"format":{
                 "type":"json_schema",
@@ -3911,6 +4014,7 @@ class FitReviewRequest(BaseModel):
     fit_length: Optional[str] = ""
     fit_sleeve: Optional[str] = ""
     fit_shoulders: Optional[str] = ""
+    fit_hips: Optional[str] = ""
     fit_notes: Optional[str] = ""
 
 @app.post("/api/garments/{gid}/fit-review")
@@ -3926,7 +4030,7 @@ def save_fit_review(gid: int, req: FitReviewRequest):
     reviewed=datetime.now(timezone.utc).isoformat()
     feedback=(
         f"Fit review: {rating or 'unrated'}/5. "
-        f"Chest {req.fit_chest or '—'}; waist {req.fit_waist or '—'}; "
+        f"Chest/bust {req.fit_chest or '—'}; waist {req.fit_waist or '—'}; hips {req.fit_hips or '—'}; "
         f"length {req.fit_length or '—'}; sleeve {req.fit_sleeve or '—'}; "
         f"shoulders {req.fit_shoulders or '—'}. {req.fit_notes or ''}"
     ).strip()
@@ -3934,11 +4038,11 @@ def save_fit_review(gid: int, req: FitReviewRequest):
       UPDATE garments SET
         labelled_size=CASE WHEN ?<>'' THEN ? ELSE labelled_size END,
         fit_review_status='confirmed', fit_rating=?,
-        fit_chest=?,fit_waist=?,fit_length=?,fit_sleeve=?,fit_shoulders=?,
+        fit_chest=?,fit_waist=?,fit_hips=?,fit_length=?,fit_sleeve=?,fit_shoulders=?,
         fit_notes=?,fit_reviewed_at=?,fit_feedback=?
       WHERE id=?
     """,(req.labelled_size or "",req.labelled_size or "",rating,
-         req.fit_chest or "",req.fit_waist or "",req.fit_length or "",
+         req.fit_chest or "",req.fit_waist or "",req.fit_hips or "",req.fit_length or "",
          req.fit_sleeve or "",req.fit_shoulders or "",req.fit_notes or "",
          reviewed,feedback,gid))
     con.commit()
@@ -3950,7 +4054,7 @@ def save_fit_review(gid: int, req: FitReviewRequest):
 def get_fit_learning():
     con=db()
     rows=[dict(r) for r in con.execute("""
-      SELECT brand,labelled_size,fit_rating,fit_chest,fit_waist,fit_length,
+      SELECT brand,labelled_size,fit_rating,fit_chest,fit_waist,fit_hips,fit_length,
              fit_sleeve,fit_shoulders,fit_notes,fit_reviewed_at
       FROM garments
       WHERE fit_review_status='confirmed' AND brand<>''
@@ -3967,7 +4071,7 @@ def fit_evidence_snapshot(limit: int = 120):
     profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     rows=[dict(r) for r in con.execute("""
       SELECT id,brand,model_line,garment_type,category,labelled_size,fit_cut,
-             fit_review_status,fit_rating,fit_chest,fit_waist,fit_length,
+             fit_review_status,fit_rating,fit_chest,fit_waist,fit_hips,fit_length,
              fit_sleeve,fit_shoulders,fit_notes,fit_reviewed_at
       FROM garments
       ORDER BY COALESCE(fit_reviewed_at,created_at) DESC
@@ -3996,7 +4100,7 @@ def fit_evidence_snapshot(limit: int = 120):
                 if size:
                     sizes[size]=sizes.get(size,0)+1
             issues={}
-            for area in ["fit_chest","fit_waist","fit_length","fit_sleeve","fit_shoulders"]:
+            for area in ["fit_chest","fit_waist","fit_hips","fit_length","fit_sleeve","fit_shoulders"]:
                 values=[(x.get(area) or "").strip() for x in items if (x.get(area) or "").strip()]
                 for v in values:
                     if v!="Good":
@@ -4066,7 +4170,7 @@ def fit_intelligence():
           "confirmed_reviews":[{
             k:r.get(k) for k in [
               "id","brand","model_line","garment_type","category","labelled_size",
-              "fit_cut","fit_rating","fit_chest","fit_waist","fit_length",
+              "fit_cut","fit_rating","fit_chest","fit_waist","fit_hips","fit_length",
               "fit_sleeve","fit_shoulders","fit_notes"
             ]
           } for r in confirmed[:60]],
@@ -4074,10 +4178,13 @@ def fit_intelligence():
             k:r.get(k) for k in ["id","brand","model_line","garment_type","category","labelled_size"]
           } for r in unreviewed[:30]]
         }
-        instructions="""You are the fit-learning engine for a personal clothing stylist.
+        instructions=f"""You are the fit-learning engine for a personal clothing stylist.
 
 Use ONLY the supplied real-world fit reviews and measurements. Do not invent body characteristics,
 brand sizing rules or certainty that the evidence does not support.
+The current styling profile is: {styling_profile()}.
+For womenswear, treat bust/chest, waist, hips, hem/body length and shoe/dress/top/bottom sizing as distinct signals where available.
+For menswear, keep the existing chest/shoulder/waist/sleeve/trouser evidence model.
 
 Important:
 - One garment is anecdotal evidence. Multiple consistent reviews are stronger.

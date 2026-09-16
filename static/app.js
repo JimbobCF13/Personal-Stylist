@@ -310,12 +310,14 @@ const SMART_DICTATION_MAPS={
   wardrobe_mode:"wardrobe_mode",context_notes:"context_notes"
  },
  shopping:{
-  goal:"shopGoal",budget:"shopBudget",season:"shopSeason",occasion:"shopOccasion"
+  goal:"shopGoal",budget:"shopBudget",season:"shopSeason",occasion:"shopOccasion",shopping_mode:"shopMode"
  },
  profile:{
   name:"name",height_cm:"height_cm",chest_cm:"chest_cm",waist_cm:"waist_cm",
   hips_cm:"hips_cm",thigh_cm:"thigh_cm",inseam_cm:"inseam_cm",sleeve_cm:"sleeve_cm",
-  neck_cm:"neck_cm",preferred_fit:"preferred_fit",style_notes:"style_notes",brand_notes:"brand_notes"
+  neck_cm:"neck_cm",preferred_fit:"preferred_fit",style_notes:"style_notes",brand_notes:"brand_notes",
+  usual_top_size:"usual_top_size",usual_bottom_size:"usual_bottom_size",usual_dress_size:"usual_dress_size",
+  usual_shoe_size:"usual_shoe_size",bra_size:"bra_size"
  },
  garment:{
   category:"category",garment_type:"garment_type",brand:"brand",model_line:"model_line",
@@ -851,7 +853,14 @@ function applyStylingProfileUI(user){
  if($("appBrandName"))$("appBrandName").textContent=brand;
  if($("homeBrandKicker"))$("homeBrandKicker").textContent=`${brand.toUpperCase()} · PRIVATE AI WARDROBE`;
  if($("accountStylingProfile"))$("accountStylingProfile").textContent=women?"Womenswear":"Menswear";
+ if($("fitIntelIntro"))$("fitIntelIntro").textContent=women
+  ?"Review how your real clothes fit. Get Her Dressed will learn brand, numeric/letter size, proportion and cut patterns for future shopping."
+  :"Review how your real clothes fit. Get Him Dressed will learn brand, size and cut patterns for future shopping.";
  document.body.dataset.stylingProfile=women?"womenswear":"menswear";
+ if($("profileChestLabel"))$("profileChestLabel").textContent=women?"BUST / CHEST (cm)":"CHEST (cm)";
+ if($("profileHipsLabel"))$("profileHipsLabel").textContent=women?"HIPS (cm)":"HIPS / SEAT (cm)";
+ $("womenswearSizeFields")?.classList.toggle("hidden",!women);
+ $("profileNeckField")?.classList.toggle("profile-secondary-measurement",women);
 }
 document.querySelectorAll("[data-profile-choice]").forEach(btn=>{
  btn.addEventListener("click",()=>{
@@ -1168,8 +1177,8 @@ function renderFitReviewPanel(g){
    <div class="research-head"><div><small>FIT LEARNING</small><h4>Fit confirmed</h4></div><span class="fit-status-pill">Learned</span></div>
    <p><b>${esc(g.brand||"This garment")} ${esc(g.labelled_size||"")}</b>${g.fit_rating?` · ${esc(g.fit_rating)}/5`:""}</p>
    <div class="fit-summary-grid">
-    <span>Chest <b>${esc(g.fit_chest||"—")}</b></span><span>Waist <b>${esc(g.fit_waist||"—")}</b></span>
-    <span>Length <b>${esc(g.fit_length||"—")}</b></span><span>Sleeve <b>${esc(g.fit_sleeve||"—")}</b></span>
+    <span>${authState.user?.styling_profile==="womenswear"?"Bust / chest":"Chest"} <b>${esc(g.fit_chest||"—")}</b></span><span>Waist <b>${esc(g.fit_waist||"—")}</b></span>
+    <span>Hips <b>${esc(g.fit_hips||"—")}</b></span><span>Length <b>${esc(g.fit_length||"—")}</b></span><span>Sleeve <b>${esc(g.fit_sleeve||"—")}</b></span>
     <span>Shoulders <b>${esc(g.fit_shoulders||"—")}</b></span>
    </div>
    ${g.fit_notes?`<p>${esc(g.fit_notes)}</p>`:""}
@@ -1197,9 +1206,10 @@ function openFitReview(id){
   <div class="fit-form-grid">
    <label>Labelled size<input id="fit-size" value="${esc(g.labelled_size||"")}"></label>
    <label>Overall fit<select id="fit-rating"><option value="">Choose</option>${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(g.fit_rating)===n?"selected":""}>${n}/5</option>`).join("")}</select></label>
-   <label>Chest<select id="fit-chest">${fitOptions(g.fit_chest)}</select></label>
+   <label>${authState.user?.styling_profile==="womenswear"?"Bust / chest":"Chest"}<select id="fit-chest">${fitOptions(g.fit_chest)}</select></label>
    <label>Waist<select id="fit-waist">${fitOptions(g.fit_waist)}</select></label>
-   <label>Body / leg length<select id="fit-length">${fitOptions(g.fit_length)}</select></label>
+   <label>Hips / seat<select id="fit-hips">${fitOptions(g.fit_hips)}</select></label>
+   <label>${authState.user?.styling_profile==="womenswear"?"Body / hem length":"Body / leg length"}<select id="fit-length">${fitOptions(g.fit_length)}</select></label>
    <label>Sleeve<select id="fit-sleeve">${fitOptions(g.fit_sleeve)}</select></label>
    <label>Shoulders<select id="fit-shoulders">${fitOptions(g.fit_shoulders)}</select></label>
   </div>
@@ -1215,7 +1225,7 @@ async function saveFitReview(id){
    body:JSON.stringify({
     labelled_size:$("fit-size").value.trim(),
     fit_rating:$("fit-rating").value?Number($("fit-rating").value):null,
-    fit_chest:$("fit-chest").value,fit_waist:$("fit-waist").value,
+    fit_chest:$("fit-chest").value,fit_waist:$("fit-waist").value,fit_hips:$("fit-hips").value,
     fit_length:$("fit-length").value,fit_sleeve:$("fit-sleeve").value,
     fit_shoulders:$("fit-shoulders").value,fit_notes:$("fit-notes").value.trim()
    })
@@ -2116,7 +2126,7 @@ async function loadProfile(){
  const p=await api("/api/profile");Object.entries(p).forEach(([k,v])=>{if($(k)&&v!==null)$(k).value=v});if(p.name)$("greeting").textContent=`Good morning, ${p.name}`;
 }
 $("saveProfile").addEventListener("click",async()=>{
- const keys=["name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes"],p={};
+ const keys=["name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes","usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size"],p={};
  keys.forEach(k=>{let v=$(k).value;p[k]=["height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm"].includes(k)?(v?Number(v):null):v});
  await api("/api/profile",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});alert("Profile saved.");await loadProfile();
 });
@@ -2544,6 +2554,7 @@ async function v4FindPiece(encoded,index,button){
     <p>${esc(p.why_it_matches||"")}</p>
     <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
     <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
+  ${productWardrobeMatchStrip(p)}
     <div class="row between product-footer">
      <span class="confidence">${esc(p.confidence||"")} confidence</span>
      <div class="product-actions">
@@ -2569,6 +2580,14 @@ async function v4FindPiece(encoded,index,button){
 }
 
 
+
+function productWardrobeMatchStrip(p){
+ const ids=(p.best_with_owned_ids||[]).map(Number).filter(Boolean);
+ const pieces=ids.map(id=>garments.find(g=>g.id===id)).filter(Boolean).slice(0,5);
+ if(!pieces.length)return "";
+ return `<div class="product-owned-match"><small>WORKS WITH YOUR WARDROBE</small><div>${pieces.map(g=>`<img src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" alt="${esc(g.garment_type||g.category||"Garment")}">`).join("")}</div></div>`;
+}
+
 function safeProductUrl(url){
  try{
   const u=new URL(url);
@@ -2582,8 +2601,14 @@ function renderLiveProduct(p){
  return `<div class="live-product-card">${image}<div class="live-product-body">
   <div class="row between"><div><small>${esc(p.brand||p.retailer||"")}</small><h4>${esc(p.name||"Product")}</h4></div><b>${esc(p.price||"Price check")}</b></div>
   <p>${esc(p.why_it_matches||"")}</p>
+  ${p.wardrobe_utility?`<div class="shopping-intel-note"><b>Wardrobe value:</b> ${esc(p.wardrobe_utility)}</div>`:""}
+  <div class="shopping-intel-strip">
+   <span class="duplicate-risk duplicate-${esc(p.duplicate_risk||"low")}">Duplicate risk: ${esc(p.duplicate_risk||"low")}</span>
+   <span class="fit-confidence">Fit confidence: ${esc(p.fit_confidence||"low")}</span>
+  </div>
   <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
   <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
+  ${productWardrobeMatchStrip(p)}
   <div class="product-footer"><a class="ghost product-link" href="${url}" target="_blank" rel="noopener">View retailer</a></div>
  </div></div>`;
 }
@@ -2595,8 +2620,14 @@ function renderLiveProductWithTryOn(p,contextIndex,productIndex){
  return `<div class="live-product-card selectable-product">${image}<div class="live-product-body">
   <div class="row between"><div><small>${esc(p.brand||p.retailer||"")}</small><h4>${esc(p.name||"Product")}</h4></div><b>${esc(p.price||"Price check")}</b></div>
   <p>${esc(p.why_it_matches||"")}</p>
+  ${p.wardrobe_utility?`<div class="shopping-intel-note"><b>Wardrobe value:</b> ${esc(p.wardrobe_utility)}</div>`:""}
+  <div class="shopping-intel-strip">
+   <span class="duplicate-risk duplicate-${esc(p.duplicate_risk||"low")}">Duplicate risk: ${esc(p.duplicate_risk||"low")}</span>
+   <span class="fit-confidence">Fit confidence: ${esc(p.fit_confidence||"low")}</span>
+  </div>
   <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
   <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
+  ${productWardrobeMatchStrip(p)}
   <div class="row between product-footer"><span class="confidence">${esc(p.confidence||"")} confidence</span><div class="product-actions">
    <button class="primary try-product-btn" type="button" onclick="tryProductOnMe('${payload}',${contextIndex},${productIndex})">Try on me</button>
    <a class="ghost product-link" href="${url}" target="_blank" rel="noopener">View retailer</a>
@@ -2732,6 +2763,12 @@ function renderGapRecommendation(rec,index){
    <div class="gap-score"><b>${esc(rec.wardrobe_synergy_score??"")}</b><small>/100 synergy</small></div></div>
   <p>${esc(rec.why_this_adds_value||"")}</p>
   ${specs.length?`<div class="gap-specs">${specs.map(s=>`<span>${esc(s)}</span>`).join("")}</div>`:""}
+  <div class="shopping-intel-strip">
+   <span class="purchase-role">${esc((rec.purchase_role||"new capability").replace(/_/g," "))}</span>
+   <span class="duplicate-risk duplicate-${esc(rec.duplicate_risk||"low")}">Duplicate risk: ${esc(rec.duplicate_risk||"low")}</span>
+  </div>
+  ${rec.duplicate_reason?`<div class="shopping-intel-note"><b>Overlap check:</b> ${esc(rec.duplicate_reason)}</div>`:""}
+  ${rec.versatility_note?`<div class="shopping-intel-note"><b>Versatility:</b> ${esc(rec.versatility_note)}</div>`:""}
   ${wardrobeStrip}
   ${(rec.outfit_ideas||[]).length?`<div class="gap-outfit-ideas"><small>HOW IT WORKS WITH YOUR WARDROBE</small>${rec.outfit_ideas.slice(0,3).map(x=>`<p>${esc(x.description||"")}</p>`).join("")}</div>`:""}
   ${rec.size_fit_guidance?`<div class="notice"><b>Fit guidance:</b> ${esc(rec.size_fit_guidance)}</div>`:""}
@@ -2771,6 +2808,7 @@ async function analyseWardrobeGaps(){
     budget:$("shopBudget").value||"",
     season:$("shopSeason").value||"",
     occasion:$("shopOccasion").value.trim(),
+    shopping_mode:$("shopMode")?.value||"best_addition",
     max_recommendations:4
    }),
    signal:controller.signal
@@ -2812,7 +2850,8 @@ async function searchGapProducts(rec,index,button){
     shopping_spec:rec.shopping_spec||[rec.title,rec.ideal_colour,rec.ideal_material,rec.ideal_fit,rec.formality].filter(Boolean).join(". "),
     budget:$("shopBudget").value||"",
     category:rec.category||"",
-    size_fit_guidance:rec.size_fit_guidance||"Use my saved profile and fit history where relevant."
+    size_fit_guidance:rec.size_fit_guidance||"Use my saved profile and fit history where relevant.",
+    owned_garment_ids:rec.owned_garment_ids||[]
    })
   });
   const products=x.products||[];

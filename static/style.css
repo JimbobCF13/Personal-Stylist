@@ -1364,3 +1364,37 @@ body[data-styling-profile="womenswear"] .home-primary{background:linear-gradient
  nav button{min-width:62px;flex:0 0 62px}
  nav button span{font-size:8px}
 }
+
+/* V6.6 — womenswear fit/profile intelligence */
+.womenswear-size-fields{
+ border-top:1px solid var(--line);padding-top:12px;margin-top:2px;display:grid;gap:9px
+}
+.womenswear-size-fields label{font-size:10px}
+body[data-styling-profile="womenswear"] .profile-secondary-measurement{opacity:.72}
+body[data-styling-profile="womenswear"] .fit-intel-summary,
+body[data-styling-profile="womenswear"] .fit-awaiting{
+ background:linear-gradient(145deg,#f4eff2,#fbf9fa)
+}
+
+
+/* V6.7 — Shopping Intelligence */
+.shopping-intel-strip{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0}
+.shopping-intel-strip span{
+ font-size:8px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;
+ border-radius:999px;border:1px solid var(--line);background:#f5f3ef;color:#625b55
+}
+.duplicate-low{background:#edf3ea!important;color:#4d6849!important;border-color:#d4e2cf!important}
+.duplicate-medium{background:#f6f0e4!important;color:#826b3e!important;border-color:#eadbb8!important}
+.duplicate-high{background:#f5e9e7!important;color:#8b514b!important;border-color:#e7cfcb!important}
+.purchase-role{background:#eee9e3!important;color:#5d5148!important}
+.shopping-intel-note{
+ font-size:10px;line-height:1.45;padding:8px 10px;border-left:2px solid #b7a391;
+ background:#faf8f5;margin:7px 0;color:#5e5a55
+}
+.product-owned-match{margin:9px 0}
+.product-owned-match>small{font-size:8px;letter-spacing:.07em;color:#887a6d}
+.product-owned-match>div{display:flex;gap:5px;margin-top:5px}
+.product-owned-match img{
+ width:38px;height:45px;object-fit:contain;border:1px solid var(--line);
+ border-radius:7px;background:#fff
+}
