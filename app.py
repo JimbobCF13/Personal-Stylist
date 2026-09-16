@@ -3440,10 +3440,13 @@ PRODUCT_SOURCE_SCHEMA = {
           "duplicate_risk": {"type": "string", "enum": ["low","medium","high"]},
           "fit_confidence": {"type": "string", "enum": ["high","medium","low"]},
           "best_with_owned_ids": {"type": "array", "items": {"type": "integer"}, "maxItems": 6},
+          "audience": {"type": "string", "enum": ["menswear","womenswear","unisex","uncertain"]},
+          "audience_evidence": {"type": "string"},
           "confidence": {"type": "string", "enum": ["high","medium","low"]}
         },
         "required": ["name","brand","retailer","price","url","image_url","colour","material","fit","size_note",
-                     "why_it_matches","wardrobe_utility","duplicate_risk","fit_confidence","best_with_owned_ids","confidence"],
+                     "why_it_matches","wardrobe_utility","duplicate_risk","fit_confidence","best_with_owned_ids",
+                     "audience","audience_evidence","confidence"],
         "additionalProperties": False
       }
     },
@@ -3515,6 +3518,14 @@ Find up to 6 genuinely relevant products across useful price points where possib
 
 Rules:
 - Only return a product if you found a real product or retailer page for it on the live web.
+- AUDIENCE IS A HARD REQUIREMENT. The signed-in account is {styling_profile()}.
+- audience must be one of menswear, womenswear, unisex, uncertain.
+- For a menswear account, only menswear or genuinely unisex products are acceptable.
+- For a womenswear account, only womenswear or genuinely unisex products are acceptable.
+- Do NOT infer audience just from a generic garment noun such as cardigan, coat, knitwear, trousers or trainers.
+- Determine audience from explicit retailer navigation/category, product title/copy, breadcrumb, brand product section, model context or other source evidence.
+- If source evidence is mixed or insufficient, set audience to uncertain. The server will discard it.
+- audience_evidence must briefly state the source signal used, e.g. "retailer WOMEN category", "Men > Knitwear breadcrumb", or "explicitly unisex product".
 - URL must be the actual source/product URL you found; never invent a URL.
 - Never invent price, stock, material, fit or sizing. If not found, return an empty string for that field.
 - image_url is optional in practice: only return it when a direct usable product image URL is explicitly available in the search result/source; otherwise return an empty string.
@@ -3546,7 +3557,27 @@ Rules:
                 "strict":True
             }}
         )
-        return json.loads(response.output_text)
+        result=json.loads(response.output_text)
+        expected="womenswear" if is_womenswear() else "menswear"
+        products=result.get("products") or []
+        kept=[]
+        filtered=[]
+        for product in products:
+            audience=(product.get("audience") or "uncertain").strip().lower()
+            if audience in {expected,"unisex"}:
+                kept.append(product)
+            else:
+                filtered.append({
+                    "name":product.get("name") or "Product",
+                    "audience":audience,
+                    "audience_evidence":product.get("audience_evidence") or ""
+                })
+        result["products"]=kept
+        if filtered:
+            count=len(filtered)
+            suffix=f" {count} product{'s' if count!=1 else ''} removed because the retailer evidence did not match this account's {expected} profile."
+            result["search_note"]=((result.get("search_note") or "").strip()+suffix).strip()
+        return result
     except Exception as exc:
         raise HTTPException(502, f"Live product search failed: {str(exc)[:350]}")
 

@@ -1463,3 +1463,8 @@ body[data-styling-profile="womenswear"] .onboarding-icon{
  .onboarding-actions #onboardingBack{grid-row:2}
  .onboarding-actions #onboardingGo{grid-row:2}
 }
+
+/* V6.8.1 — hard audience guard */
+.audience-verified{
+ background:#edf3ea!important;color:#4d6849!important;border-color:#d4e2cf!important
+}

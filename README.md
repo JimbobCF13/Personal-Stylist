@@ -1055,3 +1055,35 @@ The walkthrough adapts to the signed-in Get Him Dressed / Get Her Dressed profil
 The tour is stored per account in browser storage. Existing owner accounts with established wardrobes are not forced through it.
 
 No database migration and no destructive changes to wardrobes, images, Saved Looks or learning data.
+
+
+## V6.8.1 — Shopping Audience Guard
+
+This hotfix closes the cross-profile shopping leak found during live testing.
+
+### Hard audience verification
+Every live retailer product now returns an explicit audience classification:
+- menswear
+- womenswear
+- unisex
+- uncertain
+
+The shopping model must justify that classification from retailer/source evidence such as:
+- WOMEN / MEN navigation,
+- breadcrumb/category,
+- explicit product copy,
+- brand product section,
+- model context,
+- explicit unisex designation.
+
+Generic garment names such as cardigan, coat or trainers are not sufficient evidence.
+
+### Server-side enforcement
+The server now performs a second, deterministic check after the live web search:
+- Get Him Dressed accepts only menswear or genuinely unisex products.
+- Get Her Dressed accepts only womenswear or genuinely unisex products.
+- Opposite-profile and uncertain products are discarded before reaching the UI.
+
+The search note reports when mismatched products were filtered out.
+
+This is a sourcing-only hotfix. It does not alter accounts, wardrobes, images, Saved Looks, fit history or onboarding data.

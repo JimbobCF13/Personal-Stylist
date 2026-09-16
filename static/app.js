@@ -2758,6 +2758,7 @@ function renderLiveProduct(p){
   <div class="shopping-intel-strip">
    <span class="duplicate-risk duplicate-${esc(p.duplicate_risk||"low")}">Duplicate risk: ${esc(p.duplicate_risk||"low")}</span>
    <span class="fit-confidence">Fit confidence: ${esc(p.fit_confidence||"low")}</span>
+   <span class="audience-verified">${esc(p.audience==="unisex"?"Unisex":"Audience verified")}</span>
   </div>
   <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
   <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
@@ -2777,6 +2778,7 @@ function renderLiveProductWithTryOn(p,contextIndex,productIndex){
   <div class="shopping-intel-strip">
    <span class="duplicate-risk duplicate-${esc(p.duplicate_risk||"low")}">Duplicate risk: ${esc(p.duplicate_risk||"low")}</span>
    <span class="fit-confidence">Fit confidence: ${esc(p.fit_confidence||"low")}</span>
+   <span class="audience-verified">${esc(p.audience==="unisex"?"Unisex":"Audience verified")}</span>
   </div>
   <div class="product-meta">${[p.colour,p.material,p.fit].filter(Boolean).map(esc).join(" · ")}</div>
   <small><b>Size:</b> ${esc(p.size_note||"Confirm sizing with retailer.")}</small>
