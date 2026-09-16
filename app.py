@@ -58,6 +58,7 @@ def init_auth_db():
       role TEXT NOT NULL DEFAULT 'tester',
       styling_profile TEXT NOT NULL DEFAULT 'menswear',
       storage_scope TEXT NOT NULL DEFAULT 'isolated',
+      active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS sessions (
@@ -77,7 +78,20 @@ def init_auth_db():
       created_at TEXT NOT NULL,
       FOREIGN KEY(created_by) REFERENCES users(id)
     );
+    CREATE TABLE IF NOT EXISTS tester_feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      rating INTEGER,
+      category TEXT NOT NULL DEFAULT 'general',
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
     """)
+    try:
+        con.execute("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass
     con.commit(); con.close()
 
 def password_hash(password: str) -> str:
@@ -100,7 +114,7 @@ def password_ok(password: str, stored: str) -> bool:
 def public_user(row):
     if not row: return None
     d=dict(row)
-    return {k:d.get(k) for k in ["id","email","display_name","role","styling_profile","storage_scope","created_at"]}
+    return {k:d.get(k) for k in ["id","email","display_name","role","styling_profile","storage_scope","active","created_at"]}
 
 def get_user_by_id(uid: int):
     con=auth_db()
@@ -164,7 +178,7 @@ def user_from_session(token: str):
     con=auth_db()
     row=con.execute("""
       SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id
-      WHERE s.token_hash=? AND s.expires_at>?
+      WHERE s.token_hash=? AND s.expires_at>? AND COALESCE(u.active,1)=1
     """,(session_hash(token),now)).fetchone()
     con.close()
     return public_user(row)
@@ -634,6 +648,122 @@ def logout_account(request: Request):
     response.delete_cookie(SESSION_COOKIE,path="/")
     return response
 
+
+def user_storage_root_for(row):
+    d=dict(row)
+    return DATA_DIR if d.get("storage_scope")=="legacy" else USERS_DIR/str(d["id"])
+
+def user_store_counts(row):
+    path=user_storage_root_for(row)/"stylist.db"
+    counts={"wardrobe_items":0,"saved_looks":0,"fit_reviews":0}
+    if not path.exists():
+        return counts
+    try:
+        con=sqlite3.connect(path)
+        counts["wardrobe_items"]=con.execute("SELECT COUNT(*) FROM garments").fetchone()[0]
+        counts["saved_looks"]=con.execute("SELECT COUNT(*) FROM outfit_favourites").fetchone()[0]
+        try:
+            counts["fit_reviews"]=con.execute("SELECT COUNT(*) FROM garments WHERE fit_review_status='confirmed'").fetchone()[0]
+        except Exception:
+            pass
+        con.close()
+    except Exception:
+        pass
+    return counts
+
+@app.get("/api/admin/users")
+def admin_users():
+    require_admin()
+    con=auth_db()
+    rows=con.execute("""
+      SELECT u.*,
+             (SELECT MAX(created_at) FROM sessions s WHERE s.user_id=u.id) AS last_session_at,
+             (SELECT COUNT(*) FROM tester_feedback f WHERE f.user_id=u.id) AS feedback_count
+      FROM users u ORDER BY u.created_at ASC
+    """).fetchall()
+    con.close()
+    result=[]
+    for row in rows:
+        u=public_user(row)
+        u["last_session_at"]=row["last_session_at"]
+        u["feedback_count"]=row["feedback_count"]
+        u.update(user_store_counts(row))
+        result.append(u)
+    return result
+
+@app.post("/api/admin/users/{uid}/disable")
+def disable_user(uid:int):
+    admin=require_admin()
+    if uid==admin["id"]:
+        raise HTTPException(400,"You cannot disable your own owner account.")
+    con=auth_db()
+    row=con.execute("SELECT role FROM users WHERE id=?",(uid,)).fetchone()
+    if not row:
+        con.close(); raise HTTPException(404,"User not found.")
+    if row["role"]=="admin":
+        con.close(); raise HTTPException(400,"Admin accounts cannot be disabled here.")
+    con.execute("UPDATE users SET active=0 WHERE id=?",(uid,))
+    con.execute("DELETE FROM sessions WHERE user_id=?",(uid,))
+    con.commit(); con.close()
+    return {"ok":True}
+
+@app.post("/api/admin/users/{uid}/enable")
+def enable_user(uid:int):
+    require_admin()
+    con=auth_db()
+    row=con.execute("SELECT id FROM users WHERE id=?",(uid,)).fetchone()
+    if not row:
+        con.close(); raise HTTPException(404,"User not found.")
+    con.execute("UPDATE users SET active=1 WHERE id=?",(uid,))
+    con.commit(); con.close()
+    return {"ok":True}
+
+@app.delete("/api/account/invites/{code}")
+def revoke_invite(code:str):
+    u=require_admin()
+    con=auth_db()
+    row=con.execute("SELECT id,uses FROM invites WHERE code=? AND created_by=?",(code,u["id"])).fetchone()
+    if not row:
+        con.close(); raise HTTPException(404,"Invite not found.")
+    if row["uses"]>0:
+        con.close(); raise HTTPException(400,"Used invites are kept for history.")
+    con.execute("DELETE FROM invites WHERE id=?",(row["id"],))
+    con.commit(); con.close()
+    return {"ok":True}
+
+class TesterFeedbackRequest(BaseModel):
+    rating: Optional[int]=None
+    category: str="general"
+    message: str
+
+@app.post("/api/tester-feedback")
+def tester_feedback(req: TesterFeedbackRequest):
+    u=current_user()
+    message=(req.message or "").strip()
+    if not message:
+        raise HTTPException(400,"Add a short feedback note first.")
+    rating=req.rating
+    if rating is not None:
+        rating=max(1,min(5,int(rating)))
+    con=auth_db()
+    con.execute("""INSERT INTO tester_feedback(user_id,rating,category,message,created_at)
+                   VALUES (?,?,?,?,?)""",
+                (u["id"],rating,(req.category or "general")[:50],message,utc_now().isoformat()))
+    con.commit(); con.close()
+    return {"ok":True}
+
+@app.get("/api/admin/feedback")
+def admin_feedback():
+    require_admin()
+    con=auth_db()
+    rows=[dict(r) for r in con.execute("""
+      SELECT f.id,f.rating,f.category,f.message,f.created_at,u.display_name,u.email
+      FROM tester_feedback f JOIN users u ON u.id=f.user_id
+      ORDER BY f.id DESC LIMIT 100
+    """).fetchall()]
+    con.close()
+    return rows
+
 @app.get("/api/account")
 def account_details():
     u=current_user()
@@ -669,6 +799,19 @@ def home():
 @app.get("/api/health")
 def health():
     return {"ok": True, "ai_enabled": bool(os.getenv("OPENAI_API_KEY")) and OpenAI is not None, "data_dir": str(DATA_DIR), "database": str(current_db_path())}
+
+@app.get("/api/bootstrap")
+def app_bootstrap():
+    con=db()
+    profile=con.execute("SELECT name FROM profile WHERE id=1").fetchone()
+    wardrobe_count=con.execute("SELECT COUNT(*) AS n FROM garments").fetchone()["n"]
+    saved_count=con.execute("SELECT COUNT(*) AS n FROM outfit_favourites").fetchone()["n"]
+    con.close()
+    return {
+      "name":(profile["name"] if profile else "") or "",
+      "wardrobe_count":wardrobe_count,
+      "saved_look_count":saved_count
+    }
 
 @app.get("/api/profile")
 def get_profile():
@@ -757,35 +900,100 @@ def garment_image(gid: int):
 
 @app.get("/api/garments")
 def garments():
-    con = db()
-    rows = [dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    """
+    Fast wardrobe index.
+
+    The previous implementation opened/verified every image file with Pillow on
+    every wardrobe request. That becomes expensive as the wardrobe grows.
+    Here we only do a cheap filesystem existence/size check. Full image
+    validation still happens when an individual garment/detail image is used.
+    """
+    con=db()
+    rows=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
     changed=False
 
     for row in rows:
         display=row.get("image_path") or ""
         original=row.get("original_image_path") or ""
 
-        # Older records sometimes legitimately used an upload as the display image.
-        if not original and display.startswith("/uploads/") and saved_image_is_usable(display):
-            original=display
-            row["original_image_path"]=display
-            con.execute("UPDATE garments SET original_image_path=? WHERE id=?",(display,row["id"]))
-            changed=True
+        if not original and display.startswith("/uploads/"):
+            p=resolve_saved_image_path(display)
+            if p.exists() and p.is_file() and p.stat().st_size>0:
+                original=display
+                row["original_image_path"]=display
+                con.execute("UPDATE garments SET original_image_path=? WHERE id=?",(display,row["id"]))
+                changed=True
 
-        best,source=best_garment_image(row)
-        row["image_status"]=source
-        row["image_available"]=bool(best)
+        def cheap_ok(rel):
+            if not rel:return False
+            try:
+                p=resolve_saved_image_path(rel)
+                return p.exists() and p.is_file() and p.stat().st_size>0
+            except Exception:
+                return False
 
-        if best and best != display:
-            row["image_path"]=best
-            con.execute("UPDATE garments SET image_path=? WHERE id=?",(best,row["id"]))
-            changed=True
+        if cheap_ok(display):
+            row["image_status"]="display"
+            row["image_available"]=True
+        elif cheap_ok(original):
+            row["image_status"]="original"
+            row["image_available"]=True
+            if original!=display:
+                row["image_path"]=original
+                con.execute("UPDATE garments SET image_path=? WHERE id=?",(original,row["id"]))
+                changed=True
+        else:
+            row["image_status"]="missing"
+            row["image_available"]=False
 
-    if changed:
-        con.commit()
+    if changed: con.commit()
     con.close()
     return rows
 
+
+@app.get("/api/garments/{gid}/thumbnail")
+def garment_thumbnail(gid:int):
+    """Return a small cached catalogue thumbnail for grid/list views."""
+    con=db()
+    row=con.execute("SELECT id,image_path,original_image_path FROM garments WHERE id=?",(gid,)).fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(404,"Garment not found.")
+
+    data=dict(row)
+    rel=data.get("image_path") or data.get("original_image_path") or ""
+    source=resolve_saved_image_path(rel) if rel else None
+    if not source or not source.exists():
+        raise HTTPException(404,"Garment photo unavailable.")
+
+    thumbs=active_user_root()/"thumbs"
+    thumbs.mkdir(parents=True,exist_ok=True)
+    # Include source filename + mtime so replacing a garment photo creates a new cache file.
+    stamp=int(source.stat().st_mtime)
+    safe_stem=re.sub(r"[^A-Za-z0-9_-]+","_",source.stem)[:48]
+    out=thumbs/f"g{gid}_{safe_stem}_{stamp}.jpg"
+
+    if not out.exists():
+        try:
+            with Image.open(source) as opened:
+                im=ImageOps.exif_transpose(opened)
+                if im.mode!="RGB":
+                    if im.mode in ("RGBA","LA"):
+                        bg=Image.new("RGB",im.size,"white")
+                        bg.paste(im,mask=im.getchannel("A"))
+                        im=bg
+                    else:
+                        im=im.convert("RGB")
+                im.thumbnail((420,520),Image.Resampling.LANCZOS)
+                canvas=Image.new("RGB",(420,520),(248,248,247))
+                x=(420-im.width)//2
+                y=(520-im.height)//2
+                canvas.paste(im,(x,y))
+                canvas.save(out,"JPEG",quality=82,optimize=True)
+        except Exception:
+            return FileResponse(source,headers={"Cache-Control":"private, max-age=86400"})
+
+    return FileResponse(out,headers={"Cache-Control":"private, max-age=604800, immutable"})
 
 
 GARMENT_ENRICHMENT_SCHEMA = {
@@ -3110,21 +3318,20 @@ def source_products(req: ProductSourceRequest):
     if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
         raise HTTPException(400, "OpenAI is not connected.")
 
-    fit_con=db()
-    fit_rows=[dict(r) for r in fit_con.execute("""
-      SELECT brand,labelled_size,fit_rating,fit_chest,fit_waist,fit_length,fit_sleeve,fit_shoulders,fit_notes
-      FROM garments
-      WHERE fit_review_status='confirmed' AND brand<>''
-      ORDER BY fit_reviewed_at DESC LIMIT 30
-    """).fetchall()]
-    fit_con.close()
+    fit_evidence=fit_evidence_snapshot(limit=80)
+    fit_rows=fit_evidence["confirmed"]
     fit_learning="\n".join([
-      f"- {r.get('brand') or ''} size {r.get('labelled_size') or ''}: {r.get('fit_rating') or 'n/a'}/5; "
+      f"- {r.get('brand') or ''} {r.get('model_line') or r.get('garment_type') or r.get('category') or ''}, "
+      f"size {r.get('labelled_size') or ''}: {r.get('fit_rating') or 'n/a'}/5; "
       f"chest {r.get('fit_chest') or '—'}, waist {r.get('fit_waist') or '—'}, "
       f"length {r.get('fit_length') or '—'}, sleeve {r.get('fit_sleeve') or '—'}, "
       f"shoulders {r.get('fit_shoulders') or '—'}. {r.get('fit_notes') or ''}"
-      for r in fit_rows
+      for r in fit_rows[:40]
     ])
+    brand_patterns=json.dumps(fit_evidence["brands"][:12],ensure_ascii=False)
+    user_measurements=json.dumps({k:fit_evidence["profile"].get(k) for k in [
+      "height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit"
+    ]},ensure_ascii=False)
 
     prompt = f"""
 Search the live web for men's clothing products currently offered by reputable retailers that match this specification.
@@ -3138,6 +3345,12 @@ SIZE/FIT GUIDANCE: {req.size_fit_guidance or 'not specified'}
 CONFIRMED REAL-WORLD FIT HISTORY:
 {fit_learning or 'No confirmed fit reviews yet.'}
 
+AGGREGATED BRAND PATTERNS:
+{brand_patterns}
+
+USER MEASUREMENTS / PREFERRED FIT:
+{user_measurements}
+
 The user is in the United Kingdom. Prefer UK retailer/product pages and GBP prices.
 Find up to 6 genuinely relevant products across useful price points where possible.
 
@@ -3147,7 +3360,9 @@ Rules:
 - Never invent price, stock, material, fit or sizing. If not found, return an empty string for that field.
 - image_url is optional in practice: only return it when a direct usable product image URL is explicitly available in the search result/source; otherwise return an empty string.
 - Do not claim a size is in stock unless the source explicitly establishes it.
-- size_note should explain how the known product/brand fit relates to the supplied fit guidance; if evidence is insufficient, say sizing needs confirmation.
+- size_note should give the most defensible starting size/fit guidance from the user's REAL fit history plus the current product/line evidence.
+- Never generalise one garment to an entire brand. If the exact line differs, explicitly say that.
+- When there is insufficient evidence, say sizing needs confirmation rather than guessing.
 - Prefer official brand or retailer product pages over aggregators.
 """
 
@@ -3683,6 +3898,159 @@ def get_fit_learning():
     con.close()
     return rows
 
+
+
+
+def fit_evidence_snapshot(limit: int = 120):
+    con=db()
+    profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    rows=[dict(r) for r in con.execute("""
+      SELECT id,brand,model_line,garment_type,category,labelled_size,fit_cut,
+             fit_review_status,fit_rating,fit_chest,fit_waist,fit_length,
+             fit_sleeve,fit_shoulders,fit_notes,fit_reviewed_at
+      FROM garments
+      ORDER BY COALESCE(fit_reviewed_at,created_at) DESC
+      LIMIT ?
+    """,(limit,)).fetchall()]
+    con.close()
+
+    confirmed=[r for r in rows if r.get("fit_review_status")=="confirmed"]
+    by_brand={}
+    by_category={}
+    for r in confirmed:
+        brand=(r.get("brand") or "").strip()
+        cat=(r.get("garment_type") or r.get("category") or "Garment").strip()
+        if brand:
+            by_brand.setdefault(brand,[]).append(r)
+        if cat:
+            by_category.setdefault(cat,[]).append(r)
+
+    def summarise(group):
+        out=[]
+        for name,items in group.items():
+            ratings=[int(x["fit_rating"]) for x in items if x.get("fit_rating")]
+            sizes={}
+            for x in items:
+                size=(x.get("labelled_size") or "").strip()
+                if size:
+                    sizes[size]=sizes.get(size,0)+1
+            issues={}
+            for area in ["fit_chest","fit_waist","fit_length","fit_sleeve","fit_shoulders"]:
+                values=[(x.get(area) or "").strip() for x in items if (x.get(area) or "").strip()]
+                for v in values:
+                    if v!="Good":
+                        label=f"{area.replace('fit_','').replace('_',' ')}: {v}"
+                        issues[label]=issues.get(label,0)+1
+            out.append({
+              "name":name,
+              "reviews":len(items),
+              "average_rating":round(sum(ratings)/len(ratings),1) if ratings else None,
+              "sizes":sorted([{"size":k,"count":v} for k,v in sizes.items()],key=lambda z:(-z["count"],z["size"])),
+              "issues":sorted([{"issue":k,"count":v} for k,v in issues.items()],key=lambda z:(-z["count"],z["issue"]))[:5]
+            })
+        return sorted(out,key=lambda z:(-z["reviews"],z["name"].lower()))
+
+    return {
+      "profile":profile,
+      "confirmed":confirmed,
+      "unreviewed":[r for r in rows if r.get("fit_review_status")!="confirmed"],
+      "brands":summarise(by_brand),
+      "categories":summarise(by_category)
+    }
+
+
+FIT_INTELLIGENCE_SCHEMA={
+ "type":"object",
+ "properties":{
+  "summary":{"type":"string"},
+  "confidence":{"type":"string","enum":["low","medium","high"]},
+  "what_fits_best":{"type":"array","maxItems":6,"items":{"type":"string"}},
+  "watch_out_for":{"type":"array","maxItems":6,"items":{"type":"string"}},
+  "brand_lessons":{"type":"array","maxItems":8,"items":{"type":"object","properties":{
+    "brand":{"type":"string"},"lesson":{"type":"string"},"confidence":{"type":"string","enum":["low","medium","high"]}
+  },"required":["brand","lesson","confidence"],"additionalProperties":False}},
+  "shopping_rules":{"type":"array","maxItems":6,"items":{"type":"string"}},
+  "next_reviews":{"type":"array","maxItems":6,"items":{"type":"integer"}}
+ },
+ "required":["summary","confidence","what_fits_best","watch_out_for","brand_lessons","shopping_rules","next_reviews"],
+ "additionalProperties":False
+}
+
+@app.get("/api/fit-intelligence")
+def fit_intelligence():
+    evidence=fit_evidence_snapshot()
+    confirmed=evidence["confirmed"]
+    unreviewed=evidence["unreviewed"]
+
+    fallback={
+      "summary":(
+        "Fit intelligence gets stronger as you review how individual garments actually fit."
+        if not confirmed else
+        f"Built from {len(confirmed)} confirmed fit review{'s' if len(confirmed)!=1 else ''}."
+      ),
+      "confidence":"low" if len(confirmed)<3 else "medium" if len(confirmed)<8 else "high",
+      "what_fits_best":[],
+      "watch_out_for":[],
+      "brand_lessons":[],
+      "shopping_rules":[],
+      "next_reviews":[int(r["id"]) for r in unreviewed[:6]]
+    }
+
+    analysis=fallback
+    if confirmed and os.getenv("OPENAI_API_KEY") and OpenAI is not None:
+        compact={
+          "profile":evidence["profile"],
+          "brand_patterns":evidence["brands"][:15],
+          "category_patterns":evidence["categories"][:15],
+          "confirmed_reviews":[{
+            k:r.get(k) for k in [
+              "id","brand","model_line","garment_type","category","labelled_size",
+              "fit_cut","fit_rating","fit_chest","fit_waist","fit_length",
+              "fit_sleeve","fit_shoulders","fit_notes"
+            ]
+          } for r in confirmed[:60]],
+          "unreviewed_items":[{
+            k:r.get(k) for k in ["id","brand","model_line","garment_type","category","labelled_size"]
+          } for r in unreviewed[:30]]
+        }
+        instructions="""You are the fit-learning engine for a personal clothing stylist.
+
+Use ONLY the supplied real-world fit reviews and measurements. Do not invent body characteristics,
+brand sizing rules or certainty that the evidence does not support.
+
+Important:
+- One garment is anecdotal evidence. Multiple consistent reviews are stronger.
+- Brand fit is line/item specific; never claim all garments from a brand fit identically.
+- Separate labelled size from actual fit.
+- Identify useful repeated tendencies in chest, waist, shoulders, sleeve/body length and overall rating.
+- Shopping rules should be practical and conservative, e.g. "Start with L in this brand's similar slim-cut tops, but verify the exact line."
+- If evidence is weak, say so.
+- next_reviews should contain IDs of unreviewed items that would add the most useful evidence: favour repeated brands, common categories, or items with a labelled size.
+- Keep this concise and useful.
+"""
+        try:
+            response=OpenAI().responses.create(
+              model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+              reasoning={"effort":"low"},
+              instructions=instructions,
+              input=json.dumps(compact,ensure_ascii=False),
+              text={"format":{"type":"json_schema","name":"fit_intelligence","schema":FIT_INTELLIGENCE_SCHEMA,"strict":True}}
+            )
+            analysis=json.loads(response.output_text)
+        except Exception:
+            analysis=fallback
+
+    return {
+      "metrics":{
+        "confirmed_reviews":len(confirmed),
+        "brands_learned":len(evidence["brands"]),
+        "categories_learned":len(evidence["categories"]),
+        "unreviewed_items":len(unreviewed)
+      },
+      "brand_patterns":evidence["brands"][:12],
+      "category_patterns":evidence["categories"][:12],
+      "analysis":analysis
+    }
 
 LOOK_CRITIQUE_SCHEMA={
  "type":"object",

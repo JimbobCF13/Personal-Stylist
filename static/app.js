@@ -13,6 +13,20 @@ let quickWardrobeRecognition=null;
 let buildLookSelected=new Set();
 let productLookContext=null;
 let authState={user:null,bootstrap_available:false};
+let garmentsLoadedAt=0;
+const DATA_FRESH_MS=30000;
+function userCacheKey(name){return `ghd.${authState.user?.id||"anon"}.${name}`;}
+function readUserCache(name){
+ try{return JSON.parse(localStorage.getItem(userCacheKey(name))||"null")}catch{return null}
+}
+function writeUserCache(name,value){
+ try{localStorage.setItem(userCacheKey(name),JSON.stringify(value))}catch{}
+}
+function garmentThumbUrl(g){
+ const version=encodeURIComponent(g?.image_path||g?.original_image_path||"");
+ return `/api/garments/${g.id}/thumbnail?v=${version}`;
+}
+
 
 
 
@@ -526,12 +540,67 @@ async function loadAccount(){
  $("accountStylingProfile").textContent=(u.styling_profile||"menswear")==="womenswear"?"Womenswear":"Menswear";
  $("accountInitial").textContent=(u.display_name||"G").trim().charAt(0).toUpperCase();
  $("adminInviteCard").classList.toggle("hidden",u.role!=="admin");
- if(u.role==="admin")await loadInvites();
+ $("adminUsersCard").classList.toggle("hidden",u.role!=="admin");
+ $("adminFeedbackCard").classList.toggle("hidden",u.role!=="admin");
+ if(u.role==="admin")await Promise.all([loadInvites(),loadAdminUsers(),loadAdminFeedback()]);
 }
+
+function formatLastActive(value){
+ if(!value)return "Never";
+ try{return new Date(value).toLocaleString()}catch{return value}
+}
+async function loadAdminUsers(){
+ const box=$("adminUsersResults"); if(!box)return;
+ box.innerHTML='<div class="visual-loading">Loading testers…</div>';
+ try{
+  const rows=await api("/api/admin/users");
+  box.innerHTML=rows.map(u=>`<div class="admin-user-row ${u.active===0?"disabled-user":""}">
+   <div class="admin-user-main"><div class="admin-user-avatar">${esc((u.display_name||"U").charAt(0).toUpperCase())}</div><div><b>${esc(u.display_name||"User")}</b><small>${esc(u.email||"")}</small><span>${u.role==="admin"?"Owner / Admin":"Tester"} · ${u.active===0?"Disabled":"Active"}</span></div></div>
+   <div class="admin-user-stats"><span><b>${u.wardrobe_items||0}</b> wardrobe</span><span><b>${u.saved_looks||0}</b> saved looks</span><span><b>${u.fit_reviews||0}</b> fit reviews</span><span><b>${u.feedback_count||0}</b> feedback</span></div>
+   <div class="admin-user-meta"><small>Joined ${formatLastActive(u.created_at)}</small><small>Last session ${formatLastActive(u.last_session_at)}</small></div>
+   ${u.role!=="admin"?`<button class="${u.active===0?"primary":"ghost"} admin-user-toggle" type="button" onclick="toggleTesterAccess(${u.id},${u.active===0?"true":"false"},this)">${u.active===0?"Re-enable tester":"Disable access"}</button>`:""}
+  </div>`).join("");
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+}
+async function toggleTesterAccess(id,enable,button){
+ if(!enable && !confirm("Disable this tester's access? Their wardrobe and data will be kept."))return;
+ button.disabled=true;
+ try{await api(`/api/admin/users/${id}/${enable?"enable":"disable"}`,{method:"POST"});await loadAdminUsers()}
+ catch(err){alert(err.message);button.disabled=false}
+}
+$("refreshAdminUsers")?.addEventListener("click",loadAdminUsers);
+
+async function loadAdminFeedback(){
+ const box=$("adminFeedbackResults"); if(!box)return;
+ box.innerHTML='<div class="visual-loading">Loading feedback…</div>';
+ try{
+  const rows=await api("/api/admin/feedback");
+  box.innerHTML=rows.length?rows.map(f=>`<div class="admin-feedback-row"><div class="row between"><b>${esc(f.display_name||"Tester")}</b><span>${f.rating?`${f.rating}/5`:"No rating"}</span></div><small>${esc(f.category||"general")} · ${formatLastActive(f.created_at)}</small><p>${esc(f.message||"")}</p></div>`).join(""):'<p class="muted-copy">No tester feedback yet.</p>';
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+}
+$("refreshAdminFeedback")?.addEventListener("click",loadAdminFeedback);
+
+$("sendTesterFeedback")?.addEventListener("click",async()=>{
+ const btn=$("sendTesterFeedback"),status=$("testerFeedbackStatus"),message=$("testerFeedbackMessage").value.trim();
+ if(!message){status.textContent="Add a feedback note first.";return}
+ btn.disabled=true;btn.textContent="Sending…";status.textContent="";
+ try{
+  await api("/api/tester-feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category:$("testerFeedbackCategory").value,rating:$("testerFeedbackRating").value?Number($("testerFeedbackRating").value):null,message})});
+  $("testerFeedbackMessage").value="";$("testerFeedbackRating").value="";status.textContent="Thanks — feedback sent.";
+  if(authState.user?.role==="admin")await loadAdminFeedback();
+ }catch(err){status.textContent=err.message}
+ finally{btn.disabled=false;btn.textContent="Send feedback"}
+});
+async function revokeInvite(code){
+ if(!confirm(`Revoke invite ${code}?`))return;
+ try{await api(`/api/account/invites/${encodeURIComponent(code)}`,{method:"DELETE"});await loadInvites()}
+ catch(err){alert(err.message)}
+}
+
 async function loadInvites(){
  try{
   const rows=await api("/api/account/invites");
-  $("inviteResults").innerHTML=rows.length?rows.map(r=>`<div class="invite-row"><code>${esc(r.code)}</code><span>${r.uses}/${r.max_uses} used</span><small>Expires ${new Date(r.expires_at).toLocaleDateString()}</small></div>`).join(""):'<p class="muted-copy">No active invites yet.</p>';
+  $("inviteResults").innerHTML=rows.length?rows.map(r=>`<div class="invite-row"><code>${esc(r.code)}</code><span>${r.uses}/${r.max_uses} used</span><small>Expires ${new Date(r.expires_at).toLocaleDateString()}</small>${r.uses===0?`<button class="text-button danger-text" type="button" onclick="revokeInvite('${esc(r.code)}')">Revoke</button>`:""}</div>`).join(""):'<p class="muted-copy">No active invites yet.</p>';
  }catch(err){$("inviteResults").innerHTML=`<small>${esc(err.message)}</small>`}
 }
 $("createInviteBtn")?.addEventListener("click",async()=>{
@@ -552,7 +621,7 @@ function go(id){
  document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
  $(id).classList.add("active");
  if(id!=="wardrobe" || !wardrobeRestorePending)scrollTo(0,0);
- if(id==="wardrobe")loadGarments();
+ if(id==="wardrobe")loadGarments(false);
  if(id==="shortlist")loadShortlist();
  if(id==="savedlooks")loadSavedLooks();
  if(id==="stylistv4"&&latestStylistSession)requestAnimationFrame(renderLatestStylistSession);
@@ -562,6 +631,7 @@ function go(id){
  if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}
  if(id==="account")loadAccount();
  if(id==="intelligence")loadWardrobeIntelligence();
+ if(id==="fitintel")loadFitIntelligence();
  if(id==="quickwardrobe")renderQuickWardrobeResults();
  if(id==="buildlook")renderBuildLookPicker();
 }
@@ -727,7 +797,7 @@ function productLookCard(o,index,product){
  const payload=encodeURIComponent(JSON.stringify({o,product}));
  const owned=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
  return `<article class="card product-wardrobe-look"><div class="row between"><div><small>OPTION ${index+1}</small><h3>${esc(o.label)}</h3></div><span class="score">${o.score}/100</span></div>
-  <p>${esc(o.why_it_works)}</p><div class="build-selected-strip">${owned.map(g=>`<div>${g.image_path?`<img src="/api/garments/${g.id}/image" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="">`:""}<span>${esc(g.garment_type||g.category)}</span></div>`).join("")}</div>
+  <p>${esc(o.why_it_works)}</p><div class="build-selected-strip">${owned.map(g=>`<div>${g.image_path?`<img src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" onload="stabiliseImagePaint(this)" alt="">`:""}<span>${esc(g.garment_type||g.category)}</span></div>`).join("")}</div>
   <p class="style-note">${esc(o.style_note||"")}</p>
   <button class="primary" data-product-look-try="${payload}" data-product-look-index="${index}">Show this on me</button>
   <div id="productLookVisual-${index}"></div></article>`;
@@ -789,7 +859,6 @@ async function init(){
  authState.user=status.user;
  hideAuthGate();
 
- // Keep browser-side stylist cache isolated between users on a shared device.
  const cacheOwner=localStorage.getItem("ghd.cacheOwner");
  if(cacheOwner!==String(authState.user.id)){
   localStorage.removeItem("personalStylist.latestStylistSession.v1");
@@ -798,13 +867,32 @@ async function init(){
  }
  loadPersistentStylistState();
 
- try{
-  const h=await api("/api/health");
+ // Paint cached wardrobe metadata immediately. A fresh server copy follows quietly.
+ const cachedWardrobe=readUserCache("wardrobe");
+ if(Array.isArray(cachedWardrobe) && cachedWardrobe.length){
+  garments=cachedWardrobe;
+  garments.forEach(g=>g.category=normalisedCategory(g.category));
+  $("count").textContent=`${garments.length} saved item${garments.length===1?"":"s"}`;
+  renderWardrobeCategoryNav();
+  renderGarments();
+  populateV4Anchor();
+ }
+
+ // Home is interactive now; these requests no longer block one another.
+ const healthPromise=api("/api/health").then(h=>{
   $("status").textContent=`${authState.user.display_name} · ${h.ai_enabled?"AI stylist connected":"AI key not connected"}`;
- }catch{$("status").textContent="App offline"}
- await loadGarments();
- await loadProfile();
- if(latestStylistSession)renderLatestStylistSession();
+ }).catch(()=>{$("status").textContent=`${authState.user.display_name} · Connected`});
+
+ const bootPromise=api("/api/bootstrap").then(b=>{
+  if(b.name)$("greeting").textContent=`Good morning, ${b.name}`;
+  if(!garments.length)$("count").textContent=`${b.wardrobe_count||0} saved item${Number(b.wardrobe_count)===1?"":"s"}`;
+ }).catch(()=>{});
+
+ const wardrobePromise=loadGarments(true).catch(()=>{});
+ const profilePromise=loadProfile().catch(()=>{});
+
+ if(latestStylistSession)requestAnimationFrame(renderLatestStylistSession);
+ Promise.allSettled([healthPromise,bootPromise,wardrobePromise,profilePromise]);
 }
 const WARDROBE_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
 let selectedWardrobeCategory="";
@@ -837,23 +925,31 @@ function renderWardrobeCategoryNav(){
  }).join("");
 }
 
-async function loadGarments(){
- garments=await api("/api/garments");
+async function loadGarments(force=true){
+ if(!force && garments.length && (Date.now()-garmentsLoadedAt)<DATA_FRESH_MS){
+  renderWardrobeCategoryNav();
+  renderGarments();
+  return garments;
+ }
+ const fresh=await api("/api/garments");
+ garments=fresh;
  garments.forEach(g=>g.category=normalisedCategory(g.category));
+ garmentsLoadedAt=Date.now();
+ writeUserCache("wardrobe",garments);
  $("count").textContent=`${garments.length} saved item${garments.length===1?"":"s"}`;
 
- // If a category disappeared after an edit, return safely to All.
  if(selectedWardrobeCategory && !garments.some(g=>g.category===selectedWardrobeCategory)){
   selectedWardrobeCategory="";
  }
  renderWardrobeCategoryNav();
  renderGarments();
+ populateV4Anchor();
 
  if(wardrobeRestorePending){
   requestAnimationFrame(()=>requestAnimationFrame(()=>restoreWardrobePosition()));
  }
+ return garments;
 }
-
 
 
 function stabiliseImagePaint(img){
@@ -955,7 +1051,7 @@ function handleWardrobeImageError(img){
  }
 }
 
-function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=(g.image_path && g.image_available!==false)?`<img class="garment-photo" src="/api/garments/${g.id}/image" data-base-src="/api/garments/${g.id}/image" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="handleWardrobeImageError(this)">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}" data-garment-id="${g.id}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
+function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=(g.image_path && g.image_available!==false)?`<img class="garment-photo" src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" data-base-src="${garmentThumbUrl(g)}" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="handleWardrobeImageError(this)">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}" data-garment-id="${g.id}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
 function categorySlug(cat){
  return String(cat||"other").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 }
@@ -1043,7 +1139,6 @@ function enrichmentSources(sources){
 
 function renderFitReviewPanel(g){
  const status=g.fit_review_status||"";
- if(!status && g.purchase_status!=="bought")return "";
  if(status==="confirmed"){
   return `<div class="detail-research fit-confirmed">
    <div class="research-head"><div><small>FIT LEARNING</small><h4>Fit confirmed</h4></div><span class="fit-status-pill">Learned</span></div>
@@ -1058,9 +1153,9 @@ function renderFitReviewPanel(g){
   </div>`;
  }
  return `<div class="detail-research fit-awaiting">
-  <div class="research-head"><div><small>FIT LEARNING</small><h4>How does it actually fit?</h4></div><span class="fit-status-pill awaiting">Awaiting review</span></div>
-  <p>This purchase is saved in your wardrobe. Once it arrives, review the real fit and I’ll use that experience in future shopping recommendations.</p>
-  <button class="primary" onclick="openFitReview(${g.id})">Review the fit</button>
+  <div class="research-head"><div><small>FIT LEARNING</small><h4>Teach me how this fits</h4></div><span class="fit-status-pill awaiting">Not reviewed</span></div>
+  <p>Confirm the labelled size and how this garment fits you. I’ll use it as real-world evidence for future size and shopping recommendations.</p>
+  <button class="primary" onclick="openFitReview(${g.id})">Review this fit</button>
  </div>`;
 }
 
@@ -1101,6 +1196,7 @@ async function saveFitReview(id){
     fit_shoulders:$("fit-shoulders").value,fit_notes:$("fit-notes").value.trim()
    })
   });
+  await loadGarments();
   await loadGarmentDetail(id);
  }catch(err){alert(err.message)}
 }
@@ -1822,6 +1918,97 @@ async function loadWardrobeIntelligence(){
 
 $("refreshWardrobeIntelligence")?.addEventListener("click",loadWardrobeIntelligence);
 
+
+function fitConfidenceLabel(c){
+ return c==="high"?"Strong evidence":c==="medium"?"Building confidence":"Early learning";
+}
+
+function renderFitPattern(pattern){
+ const sizes=(pattern.sizes||[]).slice(0,4).map(s=>`${esc(s.size)} (${s.count})`).join(" · ");
+ const issues=(pattern.issues||[]).slice(0,3).map(x=>esc(x.issue)).join(" · ");
+ return `<div class="fit-pattern-row">
+  <div><b>${esc(pattern.name)}</b><small>${pattern.reviews} review${pattern.reviews===1?"":"s"}${pattern.average_rating?` · ${pattern.average_rating}/5 avg`:""}</small></div>
+  <div>${sizes?`<span>${sizes}</span>`:""}${issues?`<small>${issues}</small>`:""}</div>
+ </div>`;
+}
+
+function renderFitIntelligence(x){
+ const box=$("fitIntelResults");
+ if(!box)return;
+ const m=x.metrics||{},a=x.analysis||{};
+ const nextIds=a.next_reviews||[];
+ const nextItems=nextIds.map(id=>garments.find(g=>g.id===id)).filter(Boolean);
+
+ const lessons=(a.brand_lessons||[]).map(b=>`<div class="fit-brand-lesson">
+  <div class="row between"><b>${esc(b.brand)}</b><span>${esc(fitConfidenceLabel(b.confidence))}</span></div>
+  <p>${esc(b.lesson)}</p>
+ </div>`).join("")||'<p class="muted-copy">Review a few branded items and brand-specific lessons will appear here.</p>';
+
+ const reviewCards=nextItems.length?nextItems.map(g=>`<button class="fit-review-item" type="button" onclick="openFitItem(${g.id})">
+  <img src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" alt="">
+  <span><b>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</b><small>${esc([g.labelled_size,g.fit_cut].filter(Boolean).join(" · ")||"Tap to review fit")}</small></span>
+  <i>Review →</i>
+ </button>`).join(""):'<p class="muted-copy">No priority reviews right now.</p>';
+
+ box.innerHTML=`
+  <div class="fit-intel-metrics">
+   <div><strong>${m.confirmed_reviews||0}</strong><span>Fit reviews</span></div>
+   <div><strong>${m.brands_learned||0}</strong><span>Brands learned</span></div>
+   <div><strong>${m.categories_learned||0}</strong><span>Categories</span></div>
+   <div><strong>${m.unreviewed_items||0}</strong><span>Still to review</span></div>
+  </div>
+
+  <div class="card fit-intel-summary">
+   <div class="row between"><small class="eyebrow">YOUR FIT MODEL</small><span class="fit-confidence">${esc(fitConfidenceLabel(a.confidence||"low"))}</span></div>
+   <h4>${esc(a.summary||"Fit learning is getting started.")}</h4>
+  </div>
+
+  <div class="fit-intel-grid">
+   <div class="card fit-intel-panel"><small class="eyebrow">WHAT WORKS</small><h4>Best fit signals</h4>${intelList(a.what_fits_best||[],"Add fit reviews to learn what consistently works.")}</div>
+   <div class="card fit-intel-panel"><small class="eyebrow">WATCH FOR</small><h4>Recurring issues</h4>${intelList(a.watch_out_for||[],"No repeated fit problem identified yet.")}</div>
+  </div>
+
+  <div class="card fit-intel-panel"><small class="eyebrow">BRAND LESSONS</small><h4>What your wardrobe is teaching me</h4><div class="fit-brand-lessons">${lessons}</div></div>
+
+  <div class="card fit-intel-panel"><small class="eyebrow">SHOPPING RULES</small><h4>How I'll use this when you buy</h4>${intelList(a.shopping_rules||[],"As you review garments, buying guidance will become more specific.")}</div>
+
+  ${(x.brand_patterns||[]).length?`<details class="card fit-patterns"><summary><b>Fit history by brand</b><span>View evidence</span></summary><div>${x.brand_patterns.map(renderFitPattern).join("")}</div></details>`:""}
+
+  <div class="card fit-intel-panel">
+   <small class="eyebrow">TEACH THE STYLIST</small><h4>Useful items to review next</h4>
+   <p class="fit-review-explainer">It only takes a few seconds per item. Prioritising repeated brands and common categories makes the sizing model useful faster.</p>
+   <div class="fit-review-list">${reviewCards}</div>
+  </div>`;
+}
+
+async function loadFitIntelligence(){
+ const box=$("fitIntelResults");
+ if(!box)return;
+ box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Learning your fit…</b><small>Looking at confirmed garment reviews and measurements.</small></div></div>';
+ beginAppActivity("fit-intel","Learning your fit…","Building brand, size and cut patterns from your wardrobe.","working");
+ try{
+  const x=await api("/api/fit-intelligence");
+  renderFitIntelligence(x);
+ }catch(err){
+  box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }finally{
+  endAppActivity("fit-intel");
+ }
+}
+
+function openFitItem(id){
+ detailGarmentId=id;
+ go("garmentdetail");
+ loadGarmentDetail(id).then(()=>{
+  setTimeout(()=>{
+   const panel=$("fitReviewPanel");
+   if(panel)panel.scrollIntoView({behavior:"smooth",block:"center"});
+  },150);
+ });
+}
+
+$("refreshFitIntel")?.addEventListener("click",loadFitIntelligence);
+
 async function loadStyleLearning(){
  try{
   const x=await api("/api/style-learning");
@@ -2044,23 +2231,38 @@ async function saveFavouriteOutfit(encoded,index,button){
 async function loadSavedLooks(){
  const box=$("savedLooksResults");
  if(!box)return;
- box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Loading saved looks…</b></div></div>';
+
+ const cached=readUserCache("savedLooks");
+ if(Array.isArray(cached)){
+  if(cached.length){
+   box.innerHTML=cached.map(renderSavedLook).join("");
+   requestAnimationFrame(()=>stabiliseDynamicImages(box));
+  }else{
+   box.innerHTML='<div class="notice">No saved looks yet. Favourite an outfit from Ask My Stylist and it will appear here.</div>';
+  }
+ }else{
+  box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Loading saved looks…</b></div></div>';
+ }
+
  try{
   const rows=await api("/api/outfit-favourites");
+  writeUserCache("savedLooks",rows);
   if(!rows.length){
    box.innerHTML='<div class="notice">No saved looks yet. Favourite an outfit from Ask My Stylist and it will appear here.</div>';
    return;
   }
   box.innerHTML=rows.map(renderSavedLook).join("");
   requestAnimationFrame(()=>stabiliseDynamicImages(box));
- }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+ }catch(err){
+  if(!Array.isArray(cached))box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }
 }
 
 function renderSavedLook(row){
  const o=row.outfit||{};
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
- const strip=pieces.map(g=>g.image_path?`<div class="saved-piece"><img class="saved-piece-image" src="/api/garments/${g.id}/image" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`:"").join("");
- const visual=row.visual_path?`<img class="saved-look-visual dynamic-ai-image" src="${row.visual_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="Saved outfit visualisation">`:"";
+ const strip=pieces.map(g=>g.image_path?`<div class="saved-piece"><img class="saved-piece-image" src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" onload="stabiliseImagePaint(this)" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`:"").join("");
+ const visual=row.visual_path?`<img class="saved-look-visual dynamic-ai-image" src="${row.visual_path}" loading="lazy" decoding="async" onload="stabiliseImagePaint(this)" alt="Saved outfit visualisation">`:"";
  const payload=encodeURIComponent(JSON.stringify({outfit:o,request_text:row.request_text||"",weather_context:row.weather_context||""}));
  return `<article class="card saved-look-card">
   <div class="row between"><div><small>SAVED LOOK</small><h3>${esc(row.label||o.label||"Outfit")}</h3></div><button class="text-button danger-text" onclick="deleteSavedLook(${row.id})">Remove</button></div>
@@ -2115,6 +2317,7 @@ async function savedLookVariations(encoded,rowId,mode,button){
 async function deleteSavedLook(id){
  if(!confirm("Remove this saved look?"))return;
  await api(`/api/outfit-favourites/${id}`,{method:"DELETE"});
+ localStorage.removeItem(userCacheKey("savedLooks"));
  loadSavedLooks();
 }
 
@@ -2128,7 +2331,7 @@ function renderStoredMoreLike(baseIndex){
 function renderV4Outfit(o,index,isVariant=false,baseIndex=null){
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
  const pieceHtml=pieces.map(g=>`<div class="v4-piece">
-  <img src="/api/garments/${g.id}/image" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="">
+  <img src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" onload="stabiliseImagePaint(this)" alt="">
   <div><b>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small></div>
  </div>`).join("");
 

@@ -1261,3 +1261,89 @@ nav button span{font-size:9px}
  .auth-monogram{width:52px;height:52px;border-radius:16px;margin-bottom:18px}
  .auth-proof{margin-top:14px}
 }
+
+
+/* V6.2 — Fit & sizing intelligence */
+.fit-intel-section{max-width:900px}
+.fit-intel-title{align-items:flex-end}
+.fit-intel-intro{font-size:12px;line-height:1.55;color:var(--muted);max-width:700px}
+.fit-intel-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:15px 0}
+.fit-intel-metrics>div{
+ background:#fff;border:1px solid rgba(111,102,90,.14);border-radius:16px;
+ padding:14px;display:grid;gap:4px;box-shadow:var(--shadow)
+}
+.fit-intel-metrics strong{font-size:26px;letter-spacing:-.04em}
+.fit-intel-metrics span{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#777}
+.fit-intel-summary h4{font-size:19px;line-height:1.35;margin:10px 0 2px}
+.fit-confidence{
+ font-size:9px;padding:6px 8px;border:1px solid var(--line);border-radius:999px;
+ background:#f5f2ed;color:#6d6259
+}
+.fit-intel-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin:11px 0}
+.fit-intel-panel h4{font-size:17px;margin:5px 0 10px}
+.fit-intel-panel ul{margin:0;padding-left:18px}
+.fit-intel-panel li{font-size:11px;line-height:1.5;margin:6px 0;color:#555}
+.fit-brand-lessons{display:grid;gap:8px}
+.fit-brand-lesson{padding:10px;border:1px solid var(--line);border-radius:12px;background:#faf9f6}
+.fit-brand-lesson b{font-size:11px}
+.fit-brand-lesson span{font-size:8px;color:#817366}
+.fit-brand-lesson p{font-size:10px;line-height:1.45;margin:5px 0 0;color:#666}
+.fit-patterns summary{cursor:pointer;display:flex;justify-content:space-between;font-size:11px}
+.fit-patterns summary span{font-size:9px;color:#888}
+.fit-pattern-row{
+ display:grid;grid-template-columns:minmax(130px,.8fr) 1.2fr;gap:12px;
+ padding:10px 0;border-bottom:1px solid var(--line)
+}
+.fit-pattern-row:last-child{border-bottom:0}
+.fit-pattern-row>div{display:grid;gap:3px}
+.fit-pattern-row b{font-size:10px}
+.fit-pattern-row small{font-size:8px;color:#888}
+.fit-pattern-row span{font-size:9px}
+.fit-review-explainer{font-size:10px;color:#777;line-height:1.45}
+.fit-review-list{display:grid;gap:7px}
+.fit-review-item{
+ width:100%;display:grid;grid-template-columns:50px 1fr auto;gap:9px;align-items:center;
+ border:1px solid var(--line);border-radius:12px;background:#faf9f6;padding:7px;text-align:left
+}
+.fit-review-item img{width:50px;height:58px;object-fit:contain;background:#fff;border-radius:8px}
+.fit-review-item span{display:grid;gap:2px}
+.fit-review-item b{font-size:10px}
+.fit-review-item small{font-size:8px;color:#888}
+.fit-review-item i{font-size:9px;font-style:normal;color:#75685f}
+.fit-awaiting{background:linear-gradient(145deg,#f6f2ed,#fbfaf8)}
+.fit-confirmed{background:linear-gradient(145deg,#eff2eb,#fafbf8)}
+
+@media(max-width:700px){
+ .fit-intel-metrics{grid-template-columns:1fr 1fr}
+ .fit-intel-grid{grid-template-columns:1fr}
+ .fit-pattern-row{grid-template-columns:1fr}
+ .fit-review-item{grid-template-columns:46px 1fr}
+ .fit-review-item i{grid-column:2}
+}
+
+/* V6.3 tester/admin tools */
+#adminUsersCard,#adminFeedbackCard,.tester-feedback-card{margin-top:12px}
+.admin-user-row{border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:9px;display:grid;gap:10px;background:#faf9f6}
+.admin-user-row.disabled-user{opacity:.58}.admin-user-main{display:flex;gap:10px;align-items:center}
+.admin-user-avatar{width:42px;height:42px;border-radius:50%;background:#171717;color:#fff;display:grid;place-items:center;font-weight:850}
+.admin-user-main>div:last-child{display:grid;gap:2px}.admin-user-main b{font-size:12px}.admin-user-main small{font-size:9px;color:#777}.admin-user-main span{font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:#8a786b}
+.admin-user-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.admin-user-stats span{border:1px solid var(--line);border-radius:9px;padding:7px;background:#fff;font-size:8px;color:#777;display:grid;gap:2px}.admin-user-stats b{font-size:13px;color:#222}
+.admin-user-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.admin-user-meta small{font-size:8px;color:#999}.admin-user-toggle{justify-self:start}
+.admin-feedback-row{padding:10px 0;border-bottom:1px solid var(--line)}.admin-feedback-row:last-child{border-bottom:0}.admin-feedback-row b{font-size:11px}.admin-feedback-row span,.admin-feedback-row small{font-size:8px;color:#888}.admin-feedback-row p{font-size:10px;line-height:1.5;margin:5px 0 0;color:#555}
+@media(max-width:700px){.admin-user-stats{grid-template-columns:1fr 1fr}.admin-user-meta{display:grid}}
+
+
+/* V6.4 — performance polish */
+.garment-photo,.saved-piece-image,.v4-piece img,.fit-review-item img{
+ content-visibility:auto;
+}
+.garment-photo[loading="lazy"],.saved-piece-image[loading="lazy"]{
+ background:linear-gradient(100deg,#f2f0eb 20%,#f8f7f4 38%,#f2f0eb 56%);
+ background-size:200% 100%;
+ animation:imagePlaceholder 1.4s linear infinite;
+}
+.garment-photo.image-paint-ready,.saved-piece-image.image-paint-ready{
+ animation:none;
+}
+@keyframes imagePlaceholder{to{background-position:-200% 0}}
+.home-card,.garment,.saved-look-card{contain:layout paint style}

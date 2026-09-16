@@ -858,3 +858,84 @@ This release deliberately focuses on perceived product quality before broader te
 - Wardrobe Intelligence and Account styling aligned to the new visual system.
 
 No database migration. No account, wardrobe, image, learning or authentication behaviour is changed by this release.
+
+
+## V6.2 — Fit & Sizing Intelligence
+
+### Know My Size
+Adds a new **Know My Size** area from the home screen.
+
+It learns from actual garment fit reviews:
+- labelled size,
+- overall fit rating,
+- chest,
+- waist,
+- shoulders,
+- sleeve length,
+- body / leg length,
+- free-text fit notes,
+- brand, model/line, garment type and cut.
+
+The dashboard shows:
+- fit-review count and evidence confidence,
+- strongest fit signals,
+- recurring fit problems,
+- brand-specific lessons,
+- conservative shopping rules,
+- brand fit history,
+- the most useful unreviewed garments to review next.
+
+### Fit reviews
+Fit review is now available on **every wardrobe garment**, not only items bought through the shopping workflow.
+This means an existing wardrobe can immediately become training data for sizing intelligence.
+
+### Shopping
+Live product sourcing now receives:
+- the user's confirmed garment-by-garment fit history,
+- aggregated brand patterns,
+- body measurements and preferred fit.
+
+Size guidance is instructed to remain line/item-specific. One successful size in a brand must never be treated as proof that every garment from that brand fits the same way.
+
+### Evidence standard
+The system deliberately distinguishes:
+- one-item anecdotal evidence,
+- repeated brand/category fit evidence,
+- exact-line evidence,
+- user body measurements,
+- live retailer/brand sizing information.
+
+When evidence is insufficient, it says sizing needs confirmation rather than inventing certainty.
+
+No destructive migration. Existing user accounts, wardrobes, images and fit fields are preserved.
+
+
+## V6.3 — Tester / Admin Tools
+Owner/Admin can view tester activity, revoke unused invites, disable/re-enable tester access without deleting data, and collect beta feedback from every account.
+
+
+## V6.4 — Performance Pass
+
+### Faster login/home
+- Home no longer waits for wardrobe + profile + health requests sequentially.
+- Cached wardrobe metadata paints immediately for returning users.
+- Fresh server data refreshes in parallel and silently replaces the cache.
+- Added a tiny `/api/bootstrap` request for greeting and top-level counts.
+
+### Faster wardrobe
+- The wardrobe index no longer opens and verifies every image with Pillow on every request.
+- It now uses cheap filesystem checks for the list view; full validation remains available at garment/detail use.
+- Returning to Wardrobe within 30 seconds reuses the fresh in-memory index rather than re-requesting it.
+- Wardrobe metadata is cached per signed-in user on that device.
+
+### Smaller images
+- Added cached 420×520 JPEG garment thumbnails for grids, strips and supporting outfit views.
+- Full-resolution garment images remain available for garment detail/editing.
+- Thumbnail files are isolated per user and cache for up to seven days.
+- Replacing a garment photo naturally changes the thumbnail cache key.
+
+### Saved Looks
+- Saved Looks are cached per user so repeat visits paint immediately.
+- Garment strip images and saved visuals lazy-load rather than all decoding at once.
+
+No destructive migration. Existing accounts, wardrobe images, Saved Looks and generated visuals are unchanged.
