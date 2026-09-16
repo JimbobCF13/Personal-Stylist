@@ -687,3 +687,31 @@ Help Me Pack is now brief-first rather than form-first.
 - The packing/research backend now also receives the original free-text `trip_brief`, so the plan does not depend entirely on field extraction succeeding.
 
 No database migration. Existing wardrobe and image data are untouched.
+
+
+## V5.5 — Brief-first app + background outfit visuals
+
+### Simpler input across the app
+The successful Help Me Pack workflow is now the design pattern for the main input-heavy areas:
+- **Ask My Stylist** — one large natural-language brief; build-around, shopping, location and timing are optional details.
+- **What Should I Wear?** — one large brief; structured occasion/weather/formality controls are tucked under Optional details and the result runs through the current Ask My Stylist engine.
+- **Wardrobe Gaps & Shopping** — one shopping brief; budget, season and use are optional filters.
+- **Build My Own Look** — the context input is now a larger natural-language brief with dictation.
+- **Style an Online Item** — the styling context is a natural-language brief with dictation.
+- **Profile** keeps voice-first entry with manual measurements available for review/editing.
+- Quick Add Wardrobe and Help Me Pack were already brief-first.
+
+### Speed improvements
+- Help Me Pack no longer re-parses an unchanged dictated brief when Build is pressed.
+- Packing-plan reasoning defaults to `low` for faster structured planning while keeping the same model. Set `OPENAI_PACK_REASONING=medium` in Render if you prefer the old slower reasoning level.
+- Existing outfit-image quality remains unchanged.
+- Background visual work is limited to two concurrent jobs to reduce rate-limit/server pressure.
+
+### Automatic visuals
+- Help Me Pack now starts generating **all Show on me images automatically in the background** as soon as the text plan appears.
+- The user can read the packing plan immediately while the personalised visuals complete underneath each separate look.
+- Style an Online Item also starts its personalised product/wardrobe try-ons automatically after the outfit suggestions appear.
+- Ask My Stylist already auto-generates personalised visuals, so that behaviour is retained.
+- Manual Regenerate remains available for any visual the user wants changed.
+
+No database migration. Existing wardrobe and image data are untouched.

@@ -814,3 +814,31 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .pack-essentials .three label:last-child{grid-column:1/-1}
  .pack-more-details summary{align-items:flex-start;flex-direction:column;gap:3px}
 }
+
+
+/* V5.5 — brief-first workflows */
+.brief-first-form{gap:14px}
+.brief-first-wrap{position:relative}
+.brief-first-wrap textarea{
+ min-height:145px;padding:15px 15px 64px;font-size:14px;line-height:1.5;border-radius:15px
+}
+.brief-first-wrap.compact-brief textarea{min-height:110px}
+.brief-dictate-btn{
+ position:absolute;right:11px;bottom:11px;min-width:126px;z-index:2
+}
+.brief-more-details{
+ border:1px solid var(--line);border-radius:14px;background:#fafaf8;overflow:hidden
+}
+.brief-more-details summary{
+ cursor:pointer;padding:12px 14px;font-size:11px;font-weight:800;
+ display:flex;justify-content:space-between;gap:12px
+}
+.brief-more-details summary span{font-size:9px;font-weight:500;color:#999}
+.brief-more-grid{padding:13px;border-top:1px solid var(--line);display:grid;gap:12px}
+#packingVisualPrep{transition:opacity .2s ease}
+@media(max-width:700px){
+ .brief-first-wrap textarea{min-height:165px;padding-bottom:70px}
+ .brief-first-wrap.compact-brief textarea{min-height:125px}
+ .brief-dictate-btn{left:11px;right:11px;width:auto}
+ .brief-more-details summary{flex-direction:column;align-items:flex-start;gap:3px}
+}

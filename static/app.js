@@ -36,6 +36,29 @@ let currentPackingPlan=null;
 let currentTripContext=null;
 const appActivities=new Map();
 const packingVisualCache=new Map();
+let lastPackingBriefParsed="";
+const backgroundVisualQueue=[];
+const backgroundVisualKeys=new Set();
+let backgroundVisualActive=0;
+const BACKGROUND_VISUAL_CONCURRENCY=2;
+
+function enqueueBackgroundVisual(key,task){
+ if(backgroundVisualKeys.has(key))return;
+ backgroundVisualKeys.add(key);
+ backgroundVisualQueue.push({key,task});
+ runBackgroundVisualQueue();
+}
+function runBackgroundVisualQueue(){
+ while(backgroundVisualActive<BACKGROUND_VISUAL_CONCURRENCY && backgroundVisualQueue.length){
+  const item=backgroundVisualQueue.shift();
+  backgroundVisualActive++;
+  Promise.resolve().then(item.task).catch(()=>{}).finally(()=>{
+   backgroundVisualActive--;
+   backgroundVisualKeys.delete(item.key);
+   runBackgroundVisualQueue();
+  });
+ }
+}
 
 function renderAppActivity(){
  const overlay=$("appActivityOverlay");
@@ -286,6 +309,10 @@ async function applySmartTranscript(mode,transcript,status){
    $("pack_brief").value=String(transcript||"").trim();
    $("pack_brief").dispatchEvent(new Event("input",{bubbles:true}));
   }
+  if(mode==="outfit" && $("outfit_brief")){
+   $("outfit_brief").value=String(transcript||"").trim();
+   $("outfit_brief").dispatchEvent(new Event("input",{bubbles:true}));
+  }
   const parsed=await api("/api/voice-form/parse",{
    method:"POST",headers:{"Content-Type":"application/json"},
    body:JSON.stringify({mode,transcript})
@@ -296,7 +323,10 @@ async function applySmartTranscript(mode,transcript,status){
    const id=map[item.field];
    if(id && setFieldValue(id,normaliseSmartValue(mode,item.field,item.value)))applied++;
   }
-  if(mode==="packing" && typeof packingDateSync==="function")packingDateSync();
+  if(mode==="packing" && typeof packingDateSync==="function"){
+   packingDateSync();
+   lastPackingBriefParsed=($("pack_brief")?.value||"").trim();
+  }
 
   status.classList.remove("hidden");
   status.innerHTML=`<b>Voice brief added.</b> ${esc(parsed.summary||"")} <small>${applied} field${applied===1?"":"s"} filled — check anything you want before continuing.</small>`;
@@ -598,15 +628,23 @@ async function buildProductWardrobeLooks(){
   productLookContext=x;
   const p=x.product||{},r=x.result||{};
   box.innerHTML=`<div class="card product-found"><small class="eyebrow">PRODUCT FOUND</small><h3>${esc([p.brand,p.model_line||p.garment_type].filter(Boolean).join(" ")||"Retailer item")}</h3><p>${esc([p.colour,p.material,p.fit_cut].filter(Boolean).join(" · "))}</p></div>
-   <div class="notice"><b>Stylist view:</b> ${esc(r.summary||"")}</div>${(r.outfits||[]).map((o,i)=>productLookCard(o,i,p)).join("")}`;
+   <div class="notice"><b>Stylist view:</b> ${esc(r.summary||"")} <small>Personalised visuals are preparing in the background.</small></div>${(r.outfits||[]).map((o,i)=>productLookCard(o,i,p)).join("")}`;
+  setTimeout(()=>{
+   box.querySelectorAll("[data-product-look-try]").forEach((b,i)=>{
+    const encoded=b.dataset.productLookTry;
+    const idx=Number(b.dataset.productLookIndex);
+    enqueueBackgroundVisual(`product-look-${idx}-${encoded.slice(0,30)}`,()=>tryProductWardrobeLook(encoded,idx,null,true));
+   });
+  },120);
  }catch(err){box.innerHTML=`<div class="notice"><b>I couldn't build looks from that product.</b><br>${esc(err.message)}</div>`}
  finally{btn.disabled=false;btn.textContent=original}
 }
 
-async function tryProductWardrobeLook(encoded,index,button){
+async function tryProductWardrobeLook(encoded,index,button=null,silent=false){
  const data=JSON.parse(decodeURIComponent(encoded)),o=data.o,p=data.product,box=$(`productLookVisual-${index}`);
- const original=button.textContent;button.disabled=true;button.textContent="Creating…";
- box.innerHTML='<div class="shopping-working"><span class="retailer-search-spinner"></span><div><b>Showing this on you…</b></div></div>';
+ const original=button?.textContent||"Show on me";
+ if(button){button.disabled=true;button.textContent="Creating…";}
+ box.innerHTML=`<div class="shopping-working"><span class="retailer-search-spinner"></span><div><b>${silent?"Preparing this look…":"Showing this on you…"}</b></div></div>`;
  try{
   const x=await api("/api/product-tryon",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
    garment_ids:o.owned_garment_ids||[],product_name:p.model_line||p.garment_type||"Retailer product",product_brand:p.brand||"",
@@ -615,7 +653,7 @@ async function tryProductWardrobeLook(encoded,index,button){
   })});
   box.innerHTML=`<div class="built-look-result"><img src="${x.image_path}" alt=""><button class="ghost" data-product-look-try="${encoded}" data-product-look-index="${index}">Regenerate image</button><small>${esc(x.notice||"")}</small></div>`;
  }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
- finally{button.disabled=false;button.textContent=original}
+ finally{if(button){button.disabled=false;button.textContent=original}}
 }
 
 async function init(){
@@ -2180,6 +2218,26 @@ async function searchGapProducts(rec,index,button){
  }
 }
 
+
+$("makeOutfits")?.addEventListener("click",()=>{
+ const brief=($("outfit_brief")?.value||"").trim();
+ const structured=[
+  $("occasion")?.value,
+  $("dress_code")?.value && `Dress code: ${$("dress_code").value}`,
+  $("smartness")?.value && `Smartness: ${$("smartness").value}`,
+  $("outfit_season")?.value && $("outfit_season").value!=="Auto / current" ? `Season: ${$("outfit_season").value}` : "",
+  $("location")?.value ? `Location: ${$("location").value}` : "",
+  $("context_notes")?.value
+ ].filter(Boolean).join(". ");
+ const request=brief || structured;
+ if(!request){alert("Tell me what you're dressing for.");return;}
+ $("v4Request").value=request;
+ if($("location")?.value)$("v4Location").value=$("location").value;
+ if($("wardrobe_mode")?.value==="My wardrobe only")$("v4Shopping").value="owned";
+ go("stylistv4");
+ setTimeout(()=>$("runStylistV4")?.click(),60);
+});
+
 const analyseGapsBtn=$("analyseGaps");
 if(analyseGapsBtn)analyseGapsBtn.addEventListener("click",analyseWardrobeGaps);
 
@@ -2315,6 +2373,7 @@ init();
 async function organisePackingBrief(){
  const brief=($("pack_brief")?.value||"").trim();
  if(!brief)return null;
+ if(brief===lastPackingBriefParsed)return {cached:true};
 
  updateAppActivity("packing-brief","Understanding your trip…","Pulling out destination, dates, activities and dress needs.","working");
  try{
@@ -2328,6 +2387,7 @@ async function organisePackingBrief(){
    if(id)setFieldValue(id,normaliseSmartValue("packing",item.field,item.value));
   }
   packingDateSync();
+  lastPackingBriefParsed=brief;
   return parsed;
  }catch(err){
   // Keep the free-text brief usable even if structured extraction temporarily fails.
@@ -2346,6 +2406,7 @@ function packingDateSync(){
  if(Number.isNaN(a.getTime())||Number.isNaN(b.getTime())||b<a)return;
  $("pack_days").value=String(Math.round((b-a)/86400000)+1);
 }
+$("pack_brief")?.addEventListener("input",()=>{lastPackingBriefParsed=""});
 $("pack_start_date")?.addEventListener("change",packingDateSync);
 $("pack_end_date")?.addEventListener("change",packingDateSync);
 
@@ -2484,14 +2545,34 @@ function renderPackingPlan(x){
   `<div class="notice packing-summary"><b>Your capsule</b><p>${esc(x.summary||"")}</p>${x.capsule_strategy?`<small>${esc(x.capsule_strategy)}</small>`:""}</div>
    <div class="card"><h3>Pack these</h3>${packed}</div>
    <div class="card pack-plan-card">
-    <div class="row between"><h3>Outfit plan</h3><span class="pill">Each look is separate</span></div>
+    <div class="row between"><h3>Outfit plan</h3><span id="packingVisualPrep" class="pill">Preparing visuals…</span></div>
     ${planHtml}
    </div>
    ${missing}
    <div class="card"><b>Packing tip</b><p>${esc(x.packing_tip||"")}</p></div>`;
+ setTimeout(preGeneratePackingVisuals,120);
 }
 
-async function packingVisualise(index,force=false,button=null){
+function preGeneratePackingVisuals(){
+ const outfits=currentPackingPlan?.outfit_plan||[];
+ const status=$("packingVisualPrep");
+ if(status && outfits.length)status.textContent=`Preparing ${outfits.length} outfit visual${outfits.length===1?"":"s"} in the background…`;
+ let completed=0;
+ outfits.forEach((d,index)=>{
+  const key=`packing-auto-${d.look_id||index}-${(d.garment_ids||[]).join("-")}`;
+  enqueueBackgroundVisual(key,async()=>{
+   await packingVisualise(index,false,null,true);
+   completed++;
+   if(status){
+    status.textContent=completed>=outfits.length
+     ? "Outfit visuals ready"
+     : `Preparing visuals… ${completed}/${outfits.length}`;
+   }
+  });
+ });
+}
+
+async function packingVisualise(index,force=false,button=null,silent=false){
  const d=currentPackingPlan?.outfit_plan?.[index];
  if(!d)return;
  const box=$(`packingVisual-${index}`);
@@ -2514,8 +2595,8 @@ async function packingVisualise(index,force=false,button=null){
 
  if(button){button.disabled=true;button.textContent=force?"Regenerating…":"Creating…";}
  const activityKey=`packing-image-${index}`;
- beginAppActivity(activityKey,"Creating your trip outfit…",`${d.day||"Trip look"} · ${d.occasion||""}`,"image");
- box.innerHTML='<div class="visual-loading">Creating your personalised outfit visual…</div>';
+ if(!silent)beginAppActivity(activityKey,"Creating your trip outfit…",`${d.day||"Trip look"} · ${d.occasion||""}`,"image");
+ box.innerHTML=`<div class="visual-loading">${silent?"Preparing this look in the background…":"Creating your personalised outfit visual…"}</div>`;
 
  try{
   const x=await api("/api/outfit-visualisation",{
@@ -2535,7 +2616,7 @@ async function packingVisualise(index,force=false,button=null){
  }catch(err){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
  }finally{
-  endAppActivity(activityKey);
+  if(!silent)endAppActivity(activityKey);
   if(button){button.disabled=false;button.textContent=original;}
  }
 }

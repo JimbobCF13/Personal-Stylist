@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Personal Stylist</title>
-<link rel="stylesheet" href="/static/style.css?v=5.4.1">
+<link rel="stylesheet" href="/static/style.css?v=5.5">
 </head>
 <body>
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.4.1</span></header>
+<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.5</span></header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
@@ -166,10 +166,10 @@
  <div class="section build-look-section">
   <div class="row between"><div><small class="eyebrow">YOUR WARDROBE</small><h3>Build My Own Look</h3></div><button class="ghost" data-go="wardrobe">Wardrobe</button></div>
   <div class="card form">
-   <label>OPTIONAL CONTEXT
-    <div class="dictation-wrap single-line">
-     <input id="buildLookContext" placeholder="e.g. Dinner in London, smart casual">
-     <button id="buildLookDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+   <label>OPTIONAL BRIEF
+    <div class="dictation-wrap brief-first-wrap compact-brief">
+     <textarea id="buildLookContext" rows="3" placeholder="e.g. Dinner in London tomorrow, smart casual and polished but relaxed."></textarea>
+     <button id="buildLookDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate</button>
     </div>
    </label>
    <div id="buildLookDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
@@ -188,10 +188,10 @@
   <div class="card form">
    <p>Paste a retailer product page. I’ll identify the item and build outfits around it using clothes you already own.</p>
    <label>PRODUCT URL<input id="productLookUrl" type="url" placeholder="https://retailer.com/product/..."></label>
-   <label>OPTIONAL OCCASION
-    <div class="dictation-wrap single-line">
-     <input id="productLookOccasion" placeholder="e.g. Smart dinner, work, weekend">
-     <button id="productLookDictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+   <label>OPTIONAL BRIEF
+    <div class="dictation-wrap brief-first-wrap compact-brief">
+     <textarea id="productLookOccasion" rows="3" placeholder="e.g. I want to wear this for smart dinners and weekends, mostly with pieces I already own."></textarea>
+     <button id="productLookDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate</button>
     </div>
    </label>
    <div id="productLookDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
@@ -204,38 +204,29 @@
 <section id="stylistv4" class="screen">
  <div class="section">
   <div class="row between"><h3>Ask My Stylist</h3><button class="ghost" data-go="savedlooks" type="button">★ Saved Looks</button></div>
-  <div class="card form">
-   <div class="stylist-intro"><span class="eyebrow">PERSONAL STYLIST</span><p>Tell me what you're dressing for in your own words. I’ll combine the request with your wardrobe, fit profile and what I’ve learned about your style.</p></div><div class="smart-dictation-card compact">
-    <div><small>ONE-TAP BRIEF</small><b>Just tell me everything</b><span>Mention where, when, what you’re doing and how you want to look. I’ll sort the fields out.</span></div>
-    <button id="stylistSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate brief</button>
-   </div>
-   <div id="stylistSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
-   <label>WHAT DO YOU NEED?
-    <div class="dictation-wrap">
-     <textarea id="v4Request" rows="4" placeholder="e.g. I have a business dinner tomorrow. Smart but not too formal. I'd like to wear my grey Hackett trousers if possible."></textarea>
-     <button id="v4Dictate" class="ghost dictate-btn" type="button">🎙️ Dictate</button>
+  <div class="card form brief-first-form">
+   <div class="stylist-intro"><span class="eyebrow">PERSONAL STYLIST</span><p>Tell me the whole situation in one go — where you're going, when, what you're doing and how you want to look.</p></div>
+   <label>YOUR BRIEF
+    <div class="dictation-wrap brief-first-wrap">
+     <textarea id="v4Request" rows="6" placeholder="e.g. I’m going to dinner in London tomorrow night. Smart casual, polished but not overdressed, and I’d like to wear my grey trousers if they work."></textarea>
+     <button id="stylistSmartDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate brief</button>
     </div>
    </label>
-   <div id="dictationStatus" class="dictation-status hidden" aria-live="polite"></div>
-   <div class="two">
-    <label>BUILD AROUND
-     <select id="v4Anchor"><option value="">Let the stylist choose</option></select>
-    </label>
-    <label>SHOPPING
-     <select id="v4Shopping">
-      <option value="open">Can suggest one useful missing piece</option>
-      <option value="owned">My wardrobe only</option>
-     </select>
-    </label>
-   </div>
-   <div class="two stylist-weather-fields">
-    <label>LOCATION
-     <input id="v4Location" placeholder="e.g. London, Chelmsford">
-    </label>
-    <label>WHEN
-     <input id="v4When" placeholder="e.g. tonight, tomorrow, 5 October">
-    </label>
-   </div>
+   <div id="stylistSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+
+   <details class="brief-more-details">
+    <summary>Optional details <span>Only if you want to fine-tune the brief</span></summary>
+    <div class="brief-more-grid">
+     <div class="two">
+      <label>BUILD AROUND<select id="v4Anchor"><option value="">Let the stylist choose</option></select></label>
+      <label>SHOPPING<select id="v4Shopping"><option value="open">Can suggest one useful missing piece</option><option value="owned">My wardrobe only</option></select></label>
+     </div>
+     <div class="two">
+      <label>LOCATION<input id="v4Location" placeholder="Optional"></label>
+      <label>WHEN<input id="v4When" placeholder="Optional"></label>
+     </div>
+    </div>
+   </details>
    <div id="v4WeatherStatus" class="stylist-weather-status hidden"></div>
    <button id="runStylistV4" class="primary full" type="button">Style me</button>
   </div>
@@ -255,19 +246,27 @@
 
 <section id="outfits" class="screen">
  <div class="section"><h3>What should I wear?</h3>
-  <div class="card form">
-   <div class="stylist-intro"><span class="eyebrow">STYLIST CONTEXT</span><p>Tell me where you're going and how you want to feel. I'll balance that against your wardrobe, fit history and style feedback.</p></div><div class="smart-dictation-card compact">
-    <div><small>FASTEST WAY</small><b>Describe the whole occasion</b><span>I’ll populate occasion, smartness, weather, location and notes from one dictation.</span></div>
-    <button id="outfitSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate everything</button>
-   </div>
+  <div class="card form brief-first-form">
+   <div class="stylist-intro"><span class="eyebrow">OUTFIT BRIEF</span><p>Describe the whole occasion naturally. I’ll fill the supporting details for you.</p></div>
+   <label>YOUR BRIEF
+    <div class="dictation-wrap brief-first-wrap">
+     <textarea id="outfit_brief" rows="5" placeholder="e.g. Client meeting in London tomorrow followed by a relaxed dinner. I want to look polished and contemporary but not too formal."></textarea>
+     <button id="outfitSmartDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate brief</button>
+    </div>
+   </label>
    <div id="outfitSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
-   <div class="two"><label>OCCASION<select id="occasion"><option>Casual daytime</option><option>Smart casual</option><option>Dinner</option><option>Date night</option><option>Business meeting</option><option>Business casual</option><option>Wedding / event</option><option>Holiday / resort</option><option>Travel day</option></select></label><label>DRESS CODE<select id="dress_code"><option>Use your judgement</option><option>Casual</option><option>Smart casual</option><option>Business casual</option><option>Business</option><option>Cocktail</option><option>Formal</option></select></label></div>
-   <div class="two"><label>HOW SMART?<select id="smartness"><option>Balanced</option><option>Relaxed</option><option>Polished but not overdressed</option><option>Smart</option><option>Very smart</option></select></label><label>SEASON<select id="outfit_season"><option>Auto / current</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>Transitional</option></select></label></div>
-   <div class="two"><label>TEMPERATURE °C<input id="temperature" type="number" value="22"></label><label>WEATHER<select id="weather"><option>Dry</option><option>Sunny</option><option>Cloudy</option><option>Rain likely</option><option>Windy</option><option>Cold / crisp</option><option>Hot / humid</option></select></label></div>
-   <label>LOCATION<input id="location" placeholder="e.g. San Francisco"></label>
-   <label>USE MY WARDROBE / SHOPPING<select id="wardrobe_mode"><option>Wardrobe first; suggest gaps only when useful</option><option>My wardrobe only</option><option>Open to one new piece</option><option>Open to new pieces / a new outfit</option></select></label>
-   <label>ANYTHING ELSE?<textarea id="context_notes" rows="3" placeholder="e.g. Client meeting followed by a relaxed dinner; I want to look polished but contemporary"></textarea></label>
-   <label>BUILD AROUND<select id="anchor"><option value="">Let the stylist choose</option></select></label>
+   <details class="brief-more-details">
+    <summary>Optional details <span>Review or fine-tune what I understood</span></summary>
+    <div class="brief-more-grid">
+     <div class="two"><label>OCCASION<select id="occasion"><option>Casual daytime</option><option>Smart casual</option><option>Dinner</option><option>Date night</option><option>Business meeting</option><option>Business casual</option><option>Wedding / event</option><option>Holiday / resort</option><option>Travel day</option></select></label><label>DRESS CODE<select id="dress_code"><option>Use your judgement</option><option>Casual</option><option>Smart casual</option><option>Business casual</option><option>Business</option><option>Cocktail</option><option>Formal</option></select></label></div>
+     <div class="two"><label>HOW SMART?<select id="smartness"><option>Balanced</option><option>Relaxed</option><option>Polished but not overdressed</option><option>Smart</option><option>Very smart</option></select></label><label>SEASON<select id="outfit_season"><option>Auto / current</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>Transitional</option></select></label></div>
+     <div class="two"><label>TEMPERATURE °C<input id="temperature" type="number" value="22"></label><label>WEATHER<select id="weather"><option>Dry</option><option>Sunny</option><option>Cloudy</option><option>Rain likely</option><option>Windy</option><option>Cold / crisp</option><option>Hot / humid</option></select></label></div>
+     <label>LOCATION<input id="location" placeholder="Optional"></label>
+     <label>USE MY WARDROBE / SHOPPING<select id="wardrobe_mode"><option>Wardrobe first; suggest gaps only when useful</option><option>My wardrobe only</option><option>Open to one new piece</option><option>Open to new pieces / a new outfit</option></select></label>
+     <label>NOTES<textarea id="context_notes" rows="2"></textarea></label>
+     <label>BUILD AROUND<select id="anchor"><option value="">Let the stylist choose</option></select></label>
+    </div>
+   </details>
    <button id="makeOutfits" class="primary full">Ask my stylist</button>
   </div>
   <div id="results"></div>
@@ -326,38 +325,25 @@
 <section id="shopping" class="screen">
  <div class="section">
   <h3>Wardrobe Gaps & Shopping</h3>
-  <div class="card form">
-   <div class="smart-dictation-card compact">
-    <div><small>ONE-TAP SEARCH BRIEF</small><b>Tell me what you want to buy</b><span>Mention the item, budget, season and what you need it for.</span></div>
-    <button id="shoppingSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate brief</button>
-   </div>
-   <div id="shoppingSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+  <div class="card form brief-first-form">
+   <div class="stylist-intro"><span class="eyebrow">SHOPPING STYLIST</span><p>Describe what you want in one go. Mention the item, budget, season or occasion only if they matter.</p></div>
    <label>WHAT ARE YOU LOOKING FOR?
-    <textarea id="shopGoal" rows="3" placeholder="e.g. I want a new blazer that adds something different to my grey and navy blazers"></textarea>
+    <div class="dictation-wrap brief-first-wrap">
+     <textarea id="shopGoal" rows="5" placeholder="e.g. I want a lightweight navy jacket for smart-casual dinners and travel, ideally under £250, that adds something different to what I already own."></textarea>
+     <button id="shoppingSmartDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate brief</button>
+    </div>
    </label>
-   <div class="two">
-    <label>BUDGET
-     <select id="shopBudget">
-      <option value="">No fixed budget</option>
-      <option>Under £100</option>
-      <option>£100–£250</option>
-      <option>£250–£500</option>
-      <option>£500+</option>
-      <option>Show me different budgets</option>
-     </select>
-    </label>
-    <label>SEASON
-     <select id="shopSeason">
-      <option value="">Any season</option>
-      <option>Spring/Summer</option>
-      <option>Autumn/Winter</option>
-      <option>All-season</option>
-     </select>
-    </label>
-   </div>
-   <label>OCCASION / USE
-    <input id="shopOccasion" placeholder="e.g. smart casual dinners, work, holiday">
-   </label>
+   <div id="shoppingSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+   <details class="brief-more-details">
+    <summary>Optional filters <span>Budget, season and use</span></summary>
+    <div class="brief-more-grid">
+     <div class="two">
+      <label>BUDGET<select id="shopBudget"><option value="">No fixed budget</option><option>Under £100</option><option>£100–£250</option><option>£250–£500</option><option>£500+</option><option>Show me different budgets</option></select></label>
+      <label>SEASON<select id="shopSeason"><option value="">Any season</option><option>Spring/Summer</option><option>Autumn/Winter</option><option>All-season</option></select></label>
+     </div>
+     <label>OCCASION / USE<input id="shopOccasion" placeholder="Optional"></label>
+    </div>
+   </details>
    <button id="analyseGaps" class="primary full" type="button">Analyse my wardrobe</button>
   </div>
   <div id="gapResults"></div>
@@ -373,18 +359,24 @@
 
 <section id="profile" class="screen">
  <div class="section"><h3>My Profile & Fit</h3>
-  <div class="card form">
+  <div class="card form brief-first-form">
+   <div class="stylist-intro"><span class="eyebrow">FIT PROFILE</span><p>Tell me your measurements, preferred fit and brand sizing in one go, or open the manual fields below.</p></div>
    <div class="smart-dictation-card compact">
-    <div><small>PROFILE BY VOICE</small><b>Tell me measurements and fit preferences</b><span>I’ll fill only the details you actually say. You can review everything before saving.</span></div>
+    <div><small>VOICE FIRST</small><b>Tell me your fit profile</b><span>I’ll only fill measurements and preferences you actually say.</span></div>
     <button id="profileSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate profile</button>
    </div>
    <div id="profileSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+   <details class="brief-more-details profile-manual-details" open>
+    <summary>Profile details <span>Review or edit measurements</span></summary>
+    <div class="brief-more-grid">
    <div class="two"><label>NAME<input id="name"></label><label>HEIGHT (cm)<input id="height_cm" type="number"></label></div>
    <div class="three"><label>CHEST (cm)<input id="chest_cm" type="number"></label><label>WAIST (cm)<input id="waist_cm" type="number"></label><label>HIPS / SEAT (cm)<input id="hips_cm" type="number"></label></div>
    <div class="three"><label>THIGH (cm)<input id="thigh_cm" type="number"></label><label>INSIDE LEG (cm)<input id="inseam_cm" type="number"></label><label>SLEEVE (cm)<input id="sleeve_cm" type="number"></label></div>
    <div class="two"><label>NECK (cm)<input id="neck_cm" type="number"></label><label>PREFERRED FIT<select id="preferred_fit"><option>Tailored / regular</option><option>Slim</option><option>Relaxed</option><option>Mixed by garment</option></select></label></div>
    <label>STYLE NOTES<textarea id="style_notes" rows="3"></textarea></label>
    <label>BRAND / SIZE NOTES<textarea id="brand_notes" rows="3" placeholder="e.g. Ralph Lauren Custom Slim Fit L works well…"></textarea></label>
+    </div>
+   </details>
    <button id="saveProfile" class="primary full">Save profile</button>
    <div class="model-profile-card">
     <div class="row between"><h4>My Model</h4><span class="pill">View on me</span></div>
@@ -418,5 +410,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
 </div></nav>
-<script src="/static/app.js?v=5.4.1"></script>
+<script src="/static/app.js?v=5.5"></script>
 </body></html>

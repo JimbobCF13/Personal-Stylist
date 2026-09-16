@@ -1940,7 +1940,7 @@ Rules:
     try:
         response=OpenAI().responses.create(
             model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
-            reasoning={"effort":"medium"},
+            reasoning={"effort":os.getenv("OPENAI_PACK_REASONING","low")},
             instructions=instructions,
             input=json.dumps(context,ensure_ascii=False),
             text={"format":{"type":"json_schema","name":"packing_plan","schema":PACKING_SCHEMA,"strict":True}}
