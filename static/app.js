@@ -88,11 +88,11 @@ function renderAppActivity(){
  $("activityTitle").textContent=item.title||"Working…";
  $("activityDetail").textContent=item.detail||"Please wait a moment.";
  $("activityVisual").className=`activity-visual ${item.mode||"working"}`;
- const stop=$("activityStopDictation");
- if(stop){
+ const actions=$("activityDictationActions");
+ if(actions){
   const listening=item.mode==="listening";
-  stop.classList.toggle("hidden",!listening);
-  stop.setAttribute("aria-hidden",listening?"false":"true");
+  actions.classList.toggle("hidden",!listening);
+  actions.setAttribute("aria-hidden",listening?"false":"true");
  }
 }
 function beginAppActivity(key,title,detail="",mode="working"){
@@ -114,9 +114,26 @@ function endAppActivity(key){
 $("activityStopDictation")?.addEventListener("click",()=>{
  const rec=activeAiDictation?.recorder;
  if(rec?.state==="recording"){
+  activeAiDictation.cancelled=false;
   try{rec.stop()}catch{}
  }
 });
+
+function cancelActiveDictation(){
+ const active=activeAiDictation;
+ if(!active)return;
+ active.cancelled=true;
+ const rec=active.recorder;
+ if(rec?.state==="recording"){
+  try{rec.stop()}catch{}
+ }else{
+  try{active.stream?.getTracks()?.forEach(t=>t.stop())}catch{}
+  activeAiDictation=null;
+  endAppActivity("dictation");
+ }
+}
+
+$("activityCancelDictation")?.addEventListener("click",cancelActiveDictation);
 
 function dictationMimeType(){
  const candidates=[
@@ -194,7 +211,7 @@ async function toggleAiDictation(button,field,status){
 
  const chunks=[];
  let safetyTimer=null;
- activeAiDictation={button,field,status,recorder,stream};
+ activeAiDictation={button,field,status,recorder,stream,cancelled:false,kind:"plain"};
 
  recorder.ondataavailable=e=>{
   if(e.data && e.data.size)chunks.push(e.data);
@@ -212,7 +229,7 @@ async function toggleAiDictation(button,field,status){
   status.classList.remove("hidden");
   status.textContent="Listening… tap Stop when you've finished.";
   beginAppActivity("dictation","Listening…","Speak naturally, then press the large Stop dictation button below.","listening");
-  $("activityStopDictation")?.classList.remove("hidden");
+  
   safetyTimer=setTimeout(()=>{
    if(recorder.state==="recording"){
     try{recorder.stop()}catch{}
@@ -223,14 +240,24 @@ async function toggleAiDictation(button,field,status){
  recorder.onstop=async()=>{
   clearTimeout(safetyTimer);
   stream.getTracks().forEach(t=>t.stop());
-  updateAppActivity("dictation","Transcribing…","Turning your recording into text.","transcribing");
-  const wasActive=activeAiDictation?.recorder===recorder;
-  if(wasActive)activeAiDictation=null;
+  const active=activeAiDictation?.recorder===recorder?activeAiDictation:null;
+  const cancelled=Boolean(active?.cancelled);
+  if(active)activeAiDictation=null;
 
   button.classList.remove("recording");
+  status.classList.remove("hidden");
+
+  if(cancelled){
+   endAppActivity("dictation");
+   button.disabled=false;
+   button.textContent="🎙️ Dictate";
+   status.textContent="Dictation cancelled — nothing was added.";
+   return;
+  }
+
+  updateAppActivity("dictation","Transcribing…","Turning your recording into text.","transcribing");
   button.disabled=true;
   button.textContent="Transcribing…";
-  status.classList.remove("hidden");
   status.textContent="Turning your recording into text…";
 
   try{
@@ -413,7 +440,7 @@ async function toggleSmartDictation(button,status,mode){
 
  const chunks=[];
  let timer=null;
- activeAiDictation={button,status,recorder,stream};
+ activeAiDictation={button,status,recorder,stream,cancelled:false,kind:"smart"};
 
  recorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
  recorder.onstart=()=>{
@@ -422,7 +449,7 @@ async function toggleSmartDictation(button,status,mode){
   status.classList.remove("hidden");
   status.textContent="Listening… tell me everything in one go.";
   beginAppActivity("dictation","Listening…","Tell me the whole brief naturally, then press Stop dictation below.","listening");
-  $("activityStopDictation")?.classList.remove("hidden");
+  
   timer=setTimeout(()=>{if(recorder.state==="recording")try{recorder.stop()}catch{}},90000);
  };
  recorder.onerror=()=>{
@@ -432,8 +459,20 @@ async function toggleSmartDictation(button,status,mode){
  recorder.onstop=async()=>{
   clearTimeout(timer);
   stream.getTracks().forEach(t=>t.stop());
-  if(activeAiDictation?.recorder===recorder)activeAiDictation=null;
+  const active=activeAiDictation?.recorder===recorder?activeAiDictation:null;
+  const cancelled=Boolean(active?.cancelled);
+  if(active)activeAiDictation=null;
   button.classList.remove("recording");
+  status.classList.remove("hidden");
+
+  if(cancelled){
+   endAppActivity("dictation");
+   button.disabled=false;
+   button.textContent=button.dataset.smartLabel||"🎙️ Dictate everything";
+   status.textContent="Dictation cancelled — nothing was added.";
+   return;
+  }
+
   button.disabled=true;
   button.textContent="Understanding…";
   updateAppActivity("dictation","Transcribing…","Then I’ll organise the information into the form.","transcribing");
@@ -527,6 +566,7 @@ async function registerAccount(){
    styling_profile:$("authStylingProfile").value||"menswear"
   })});
   authState.user=x.user;
+  try{localStorage.setItem(`ghd.${x.user.id}.onboarding.pending`,"1")}catch{}
   location.reload();
  }catch(err){setAuthMessage(err.message)}
  finally{btn.disabled=false;btn.textContent="Create account"}
@@ -869,6 +909,118 @@ document.querySelectorAll("[data-profile-choice]").forEach(btn=>{
  });
 });
 
+
+const ONBOARDING_STEPS=[
+ {
+  icon:"✦",eyebrow:"WELCOME",title:"Your wardrobe becomes the intelligence.",screen:"home",
+  body:"The more the app knows about what you own, how things fit and which looks you like, the more personal every recommendation becomes.",
+  tips:["Start with the clothes you genuinely wear.","You do not need to set everything up in one sitting."]
+ },
+ {
+  icon:"◎",eyebrow:"STEP 1 · YOU",title:"Set up your fit & preferences.",screen:"profile",
+  body:"Add your measurements, preferred fit, brand-size notes and a couple of clear model photos. This improves sizing advice and lets you see outfits on yourself.",
+  tips:["Dictate the profile if that is quicker.","A front-facing portrait plus a full-body photo works well."]
+ },
+ {
+  icon:"▦",eyebrow:"STEP 2 · YOUR CLOTHES",title:"Build enough wardrobe to be useful.",screen:"quickwardrobe",
+  body:"Quick Add is the fastest start: describe or dictate several items at once. You can add photos and refine individual garments afterwards.",
+  tips:["Brand, colour and garment type are the most useful early details.","Add favourites and frequently worn pieces first."]
+ },
+ {
+  icon:"✦",eyebrow:"STEP 3 · GET DRESSED",title:"Ask the stylist naturally.",screen:"stylistv4",
+  body:"Tell the stylist where you are going, how smart you want to be, the weather or any piece you want to wear. It builds around your actual wardrobe.",
+  tips:["You can say “my wardrobe only” or allow one useful new piece.","Save strong looks so the app learns your taste."]
+ },
+ {
+  icon:"⌁",eyebrow:"STEP 4 · FIT LEARNING",title:"Teach it what actually fits.",screen:"fitintel",
+  body:"Review the fit of real garments. The app learns your size by brand, line and cut instead of assuming one size always works.",
+  tips:["A few honest reviews are more useful than generic brand sizing.","Update a review whenever you learn something new."]
+ },
+ {
+  icon:"◇",eyebrow:"YOU'RE READY",title:"Use the whole wardrobe, not isolated features.",screen:"home",
+  body:"Shop only for useful gaps, build packing capsules, save repeatable looks and use Wardrobe Insights to see what your collection is actually doing.",
+  tips:["Saved Looks are available from the bottom bar.","You can restart this walkthrough anytime from My Account."]
+ }
+];
+
+let onboardingIndex=0;
+
+function onboardingSeenKey(){
+ return `ghd.${authState.user?.id||"anon"}.onboarding.v1`;
+}
+function onboardingPendingKey(){
+ return `ghd.${authState.user?.id||"anon"}.onboarding.pending`;
+}
+function markOnboardingSeen(){
+ try{
+  localStorage.setItem(onboardingSeenKey(),"1");
+  localStorage.removeItem(onboardingPendingKey());
+ }catch{}
+}
+function renderOnboarding(){
+ const step=ONBOARDING_STEPS[onboardingIndex];
+ if(!step)return;
+ $("onboardingStepText").textContent=`${onboardingIndex+1} of ${ONBOARDING_STEPS.length}`;
+ $("onboardingProgressBar").style.width=`${((onboardingIndex+1)/ONBOARDING_STEPS.length)*100}%`;
+ $("onboardingIcon").textContent=step.icon;
+ $("onboardingEyebrow").textContent=step.eyebrow;
+ $("onboardingTitle").textContent=step.title;
+ $("onboardingBody").textContent=step.body;
+ $("onboardingTips").innerHTML=(step.tips||[]).map(t=>`<div><span>✓</span><p>${esc(t)}</p></div>`).join("");
+ $("onboardingBack").disabled=onboardingIndex===0;
+ $("onboardingGo").classList.toggle("hidden",!step.screen || step.screen==="home");
+ $("onboardingNext").textContent=onboardingIndex===ONBOARDING_STEPS.length-1?"Finish":"Next";
+}
+function startOnboarding(force=false){
+ if(!authState.user)return;
+ if(!force){
+  try{if(localStorage.getItem(onboardingSeenKey())==="1")return}catch{}
+ }
+ onboardingIndex=0;
+ $("onboardingOverlay")?.classList.remove("hidden");
+ document.body.classList.add("onboarding-open");
+ renderOnboarding();
+}
+function closeOnboarding(completed=false){
+ $("onboardingOverlay")?.classList.add("hidden");
+ document.body.classList.remove("onboarding-open");
+ if(completed)markOnboardingSeen();
+}
+$("onboardingNext")?.addEventListener("click",()=>{
+ if(onboardingIndex<ONBOARDING_STEPS.length-1){
+  onboardingIndex++;
+  renderOnboarding();
+ }else{
+  closeOnboarding(true);
+  go("home");
+ }
+});
+$("onboardingBack")?.addEventListener("click",()=>{
+ if(onboardingIndex>0){onboardingIndex--;renderOnboarding()}
+});
+$("onboardingGo")?.addEventListener("click",()=>{
+ const step=ONBOARDING_STEPS[onboardingIndex];
+ closeOnboarding(false);
+ if(step?.screen)go(step.screen);
+});
+$("onboardingSkip")?.addEventListener("click",()=>closeOnboarding(true));
+$("onboardingClose")?.addEventListener("click",()=>closeOnboarding(false));
+$("restartOnboardingBtn")?.addEventListener("click",()=>startOnboarding(true));
+
+function maybeStartOnboarding(bootstrap){
+ if(!authState.user)return;
+ let pending=false,seen=false;
+ try{
+  pending=localStorage.getItem(onboardingPendingKey())==="1";
+  seen=localStorage.getItem(onboardingSeenKey())==="1";
+ }catch{}
+ // Newly-created accounts always get the tour. As a fallback, zero-wardrobe
+ // tester accounts get it once even if registration happened on another device.
+ if(!seen && (pending || (authState.user.role!=="admin" && Number(bootstrap?.wardrobe_count||0)===0))){
+  setTimeout(()=>startOnboarding(false),250);
+ }
+}
+
 async function init(){
  let status;
  try{
@@ -915,6 +1067,7 @@ async function init(){
  const bootPromise=api("/api/bootstrap").then(b=>{
   if(b.name)$("greeting").textContent=`Good morning, ${b.name}`;
   if(!garments.length)$("count").textContent=`${b.wardrobe_count||0} saved item${Number(b.wardrobe_count)===1?"":"s"}`;
+  maybeStartOnboarding(b);
  }).catch(()=>{});
 
  const wardrobePromise=loadGarments(true).catch(()=>{});

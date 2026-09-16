@@ -1030,3 +1030,28 @@ The UI displays those signals alongside the existing retailer, price, sizing and
 The live product search continues to use the user's real fit history, measurements and profile-specific menswear/womenswear guidance.
 
 No destructive migration. Accounts, wardrobes, images, Saved Looks, Fit Intelligence and prior shopping data are preserved.
+
+
+## V6.8 — Guided Onboarding & Dictation Control
+
+### Cancel dictation
+All in-app MediaRecorder dictation now has two distinct actions while listening:
+- **Stop & use dictation** — finishes recording, transcribes it and applies/adds the result.
+- **Cancel dictation** — stops immediately and discards the recording without transcription or writing partial speech into the form.
+
+This applies to both ordinary free-text dictation and smart form-filling dictation.
+
+### New-user walkthrough
+New tester accounts receive a six-step guided walkthrough on first use:
+1. Why wardrobe data matters.
+2. Profile, measurements and model photos.
+3. Fast wardrobe setup via Quick Add.
+4. How to ask the stylist naturally.
+5. Fit-learning / Know My Size.
+6. Shopping, packing, Saved Looks and Wardrobe Insights.
+
+The walkthrough adapts to the signed-in Get Him Dressed / Get Her Dressed profile, can open the relevant feature directly, can be skipped, and can be restarted at any time from **My Account → Show me around the app**.
+
+The tour is stored per account in browser storage. Existing owner accounts with established wardrobes are not forced through it.
+
+No database migration and no destructive changes to wardrobes, images, Saved Looks or learning data.

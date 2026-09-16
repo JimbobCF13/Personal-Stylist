@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=6.7">
+<link rel="stylesheet" href="/static/style.css?v=6.8">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V6.7</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V6.8</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -435,6 +435,7 @@
   <div class="card account-card">
    <div class="account-identity"><div class="account-avatar" id="accountInitial">G</div><div><h4 id="accountName">Account</h4><p id="accountEmail"></p><span id="accountRole" class="pill"></span></div></div>
    <div class="account-profile-line"><b>Styling profile</b><span id="accountStylingProfile">Menswear</span></div>
+   <button id="restartOnboardingBtn" class="ghost full" type="button">Show me around the app</button>
    <button id="logoutBtn" class="ghost full" type="button">Sign out</button>
   </div>
   <div id="adminInviteCard" class="card hidden">
@@ -518,6 +519,24 @@
 </section>
 </div>
 
+<div id="onboardingOverlay" class="onboarding-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+ <div class="onboarding-card">
+  <div class="onboarding-progress"><span id="onboardingStepText">1 of 6</span><div><i id="onboardingProgressBar"></i></div></div>
+  <button id="onboardingClose" class="onboarding-close" type="button" aria-label="Close walkthrough">×</button>
+  <div id="onboardingIcon" class="onboarding-icon">✦</div>
+  <small id="onboardingEyebrow">WELCOME</small>
+  <h2 id="onboardingTitle">Your wardrobe becomes the intelligence.</h2>
+  <p id="onboardingBody"></p>
+  <div id="onboardingTips" class="onboarding-tips"></div>
+  <div class="onboarding-actions">
+   <button id="onboardingBack" class="ghost" type="button">Back</button>
+   <button id="onboardingGo" class="ghost hidden" type="button">Open this feature</button>
+   <button id="onboardingNext" class="primary" type="button">Next</button>
+  </div>
+  <button id="onboardingSkip" class="text-button onboarding-skip" type="button">Skip walkthrough</button>
+ </div>
+</div>
+
 <div id="appActivityOverlay" class="app-activity-overlay hidden" aria-live="polite" aria-atomic="true">
  <div class="activity-card">
   <div id="activityVisual" class="activity-visual working" aria-hidden="true">
@@ -527,7 +546,10 @@
   <div class="activity-copy">
    <b id="activityTitle">Working…</b>
    <span id="activityDetail">Please wait a moment.</span>
-   <button id="activityStopDictation" class="activity-stop-dictation hidden" type="button">■ Stop dictation</button>
+   <div id="activityDictationActions" class="activity-dictation-actions hidden">
+    <button id="activityStopDictation" class="activity-stop-dictation" type="button">■ Stop & use dictation</button>
+    <button id="activityCancelDictation" class="activity-cancel-dictation" type="button">× Cancel dictation</button>
+   </div>
   </div>
  </div>
 </div>
@@ -535,5 +557,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=6.7"></script>
+<script src="/static/app.js?v=6.8"></script>
 </body></html>
