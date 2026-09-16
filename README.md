@@ -715,3 +715,22 @@ The successful Help Me Pack workflow is now the design pattern for the main inpu
 - Manual Regenerate remains available for any visual the user wants changed.
 
 No database migration. Existing wardrobe and image data are untouched.
+
+
+## V5.5.1 — Safari dynamic image repaint hotfix
+
+Observed behaviour:
+- An AI-generated visual could be fully loaded but remain as the grey/black image area in Safari.
+- Slightly resizing the Safari window caused the image to appear immediately.
+- This strongly indicates a browser paint/compositing issue rather than a failed image-generation request.
+
+Fixes:
+- Adds a targeted Safari-safe repaint step after dynamically inserted images load.
+- Forces a local reflow/compositor refresh instead of waiting for a window resize.
+- Applies this to Ask My Stylist, Saved Looks, Help Me Pack visuals, Build My Own Look and product try-ons.
+- Adds eager loading and async decode hints to generated visuals.
+- Gives generated-image elements a stable minimum layout area and GPU/compositor layer.
+- Saved Look garment thumbnails now use the stable `/api/garments/{id}/image` endpoint instead of old raw image paths.
+- Also re-stabilises visible dynamic images when returning to the tab/page.
+
+No database migration. No saved garment or generated-image files are modified or deleted.

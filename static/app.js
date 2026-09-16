@@ -590,7 +590,7 @@ async function showBuiltLook(){
   const x=await api("/api/outfit-visualisation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
    garment_ids:ids,label:"My own look",reason:$("buildLookContext").value.trim(),occasion:$("buildLookContext").value.trim(),use_my_likeness:true,requested_extra_piece:""
   })});
-  box.innerHTML=`<div class="card built-look-result"><img src="${x.image_path}" alt="Your outfit visualisation"><div class="row"><button class="ghost" id="refreshBuiltLook">Regenerate image</button><button class="primary" data-look-critique="analyse">Ask the stylist</button></div><small>${esc(x.notice||"AI visualisation")}</small></div>`;
+  setDynamicImageHtml(box,`<div class="card built-look-result"><img class="dynamic-ai-image" src="${x.image_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="Your outfit visualisation"><div class="row"><button class="ghost" id="refreshBuiltLook">Regenerate image</button><button class="primary" data-look-critique="analyse">Ask the stylist</button></div><small>${esc(x.notice||"AI visualisation")}</small></div>`);
  }catch(err){box.innerHTML=`<div class="notice"><b>I couldn't create the visual.</b><br>${esc(err.message)}</div>`}
  finally{endAppActivity(activityKey)}
 }
@@ -612,7 +612,7 @@ function productLookCard(o,index,product){
  const payload=encodeURIComponent(JSON.stringify({o,product}));
  const owned=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
  return `<article class="card product-wardrobe-look"><div class="row between"><div><small>OPTION ${index+1}</small><h3>${esc(o.label)}</h3></div><span class="score">${o.score}/100</span></div>
-  <p>${esc(o.why_it_works)}</p><div class="build-selected-strip">${owned.map(g=>`<div>${g.image_path?`<img src="${g.image_path}" alt="">`:""}<span>${esc(g.garment_type||g.category)}</span></div>`).join("")}</div>
+  <p>${esc(o.why_it_works)}</p><div class="build-selected-strip">${owned.map(g=>`<div>${g.image_path?`<img src="/api/garments/${g.id}/image" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="">`:""}<span>${esc(g.garment_type||g.category)}</span></div>`).join("")}</div>
   <p class="style-note">${esc(o.style_note||"")}</p>
   <button class="primary" data-product-look-try="${payload}" data-product-look-index="${index}">Show this on me</button>
   <div id="productLookVisual-${index}"></div></article>`;
@@ -651,7 +651,7 @@ async function tryProductWardrobeLook(encoded,index,button=null,silent=false){
    product_retailer:"Retailer",product_image_url:productLookContext?.page_image_url||"",product_description:p.notes||"",
    product_colour:p.colour||"",product_material:p.material||"",product_fit:p.fit_cut||"",outfit_label:o.label,outfit_reason:o.why_it_works,use_my_likeness:true
   })});
-  box.innerHTML=`<div class="built-look-result"><img src="${x.image_path}" alt=""><button class="ghost" data-product-look-try="${encoded}" data-product-look-index="${index}">Regenerate image</button><small>${esc(x.notice||"")}</small></div>`;
+  setDynamicImageHtml(box,`<div class="built-look-result"><img class="dynamic-ai-image" src="${x.image_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt=""><button class="ghost" data-product-look-try="${encoded}" data-product-look-index="${index}">Regenerate image</button><small>${esc(x.notice||"")}</small></div>`);
  }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
  finally{if(button){button.disabled=false;button.textContent=original}}
 }
@@ -710,6 +710,61 @@ async function loadGarments(){
  }
 }
 
+
+
+function stabiliseImagePaint(img){
+ if(!img)return;
+
+ const repaint=()=>{
+  if(!img.isConnected)return;
+  img.classList.add("image-paint-ready");
+
+  // Safari can occasionally decode a dynamically inserted image without
+  // repainting its composited layer until a resize occurs. Force one local
+  // layout read + compositor refresh rather than relying on window resize.
+  void img.offsetHeight;
+  const parent=img.parentElement;
+  if(parent){
+   parent.classList.add("force-image-repaint");
+   void parent.offsetHeight;
+  }
+
+  requestAnimationFrame(()=>{
+   img.style.webkitTransform="translateZ(0)";
+   img.style.transform="translateZ(0)";
+   if(parent){
+    parent.style.webkitTransform="translateZ(0)";
+    parent.style.transform="translateZ(0)";
+   }
+   requestAnimationFrame(()=>{
+    if(parent)parent.classList.remove("force-image-repaint");
+   });
+  });
+ };
+
+ if(img.complete && img.naturalWidth>0){
+  repaint();
+  return;
+ }
+
+ img.addEventListener("load",repaint,{once:true});
+}
+
+function stabiliseDynamicImages(root=document){
+ const scope=root?.querySelectorAll ? root : document;
+ scope.querySelectorAll("img.dynamic-ai-image,img.saved-look-visual,img.saved-piece-image").forEach(stabiliseImagePaint);
+}
+
+function setDynamicImageHtml(container,html){
+ if(!container)return;
+ container.innerHTML=html;
+ requestAnimationFrame(()=>stabiliseDynamicImages(container));
+}
+
+window.addEventListener("pageshow",()=>requestAnimationFrame(()=>stabiliseDynamicImages(document)));
+document.addEventListener("visibilitychange",()=>{
+ if(!document.hidden)requestAnimationFrame(()=>stabiliseDynamicImages(document));
+});
 
 function retryableImageSrc(src){
  if(!src)return "";
@@ -1712,14 +1767,15 @@ async function loadSavedLooks(){
    return;
   }
   box.innerHTML=rows.map(renderSavedLook).join("");
+  requestAnimationFrame(()=>stabiliseDynamicImages(box));
  }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
 }
 
 function renderSavedLook(row){
  const o=row.outfit||{};
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
- const strip=pieces.map(g=>g.image_path?`<div class="saved-piece"><img src="${g.image_path}" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`:"").join("");
- const visual=row.visual_path?`<img class="saved-look-visual" src="${row.visual_path}" alt="Saved outfit visualisation">`:"";
+ const strip=pieces.map(g=>g.image_path?`<div class="saved-piece"><img class="saved-piece-image" src="/api/garments/${g.id}/image" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`:"").join("");
+ const visual=row.visual_path?`<img class="saved-look-visual dynamic-ai-image" src="${row.visual_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="Saved outfit visualisation">`:"";
  return `<article class="card saved-look-card">
   <div class="row between"><div><small>SAVED LOOK</small><h3>${esc(row.label||o.label||"Outfit")}</h3></div><button class="text-button danger-text" onclick="deleteSavedLook(${row.id})">Remove</button></div>
   ${visual}
@@ -1746,7 +1802,7 @@ function renderStoredMoreLike(baseIndex){
 function renderV4Outfit(o,index,isVariant=false,baseIndex=null){
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
  const pieceHtml=pieces.map(g=>`<div class="v4-piece">
-  <img src="${g.image_path}" alt="">
+  <img src="/api/garments/${g.id}/image" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="">
   <div><b>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small></div>
  </div>`).join("");
 
@@ -1790,7 +1846,7 @@ async function v4Visualise(encoded,index,useMyLikeness,options={}){
  if(!options.force && v4VisualCache.has(cacheKey)){
   const x=v4VisualCache.get(cacheKey);
   box.classList.remove("hidden");
-  box.innerHTML=`<img src="${x.image_path}" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
+  setDynamicImageHtml(box,`<img class="dynamic-ai-image" src="${x.image_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`);
   return;
  }
 
@@ -1819,7 +1875,7 @@ async function v4Visualise(encoded,index,useMyLikeness,options={}){
   });
   v4VisualCache.set(cacheKey,x);
   persistVisualCache();
-  box.innerHTML=`<img src="${x.image_path}" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`;
+  setDynamicImageHtml(box,`<img class="dynamic-ai-image" src="${x.image_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="AI outfit visualisation"><div class="visual-caption"><b>${esc(x.label)}</b><br>${esc(x.notice)}</div>`);
  }catch(err){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
  }finally{
@@ -2589,7 +2645,7 @@ async function packingVisualise(index,force=false,button=null,silent=false){
 
  if(!force&&packingVisualCache.has(key)){
   const x=packingVisualCache.get(key);
-  box.innerHTML=`<div class="packing-generated"><img src="${x.image_path}" alt="Packing outfit on you"><small>${esc(x.notice||"")}</small></div>`;
+  setDynamicImageHtml(box,`<div class="packing-generated"><img class="dynamic-ai-image" src="${x.image_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="Packing outfit on you"><small>${esc(x.notice||"")}</small></div>`);
   return;
  }
 
@@ -2612,7 +2668,7 @@ async function packingVisualise(index,force=false,button=null,silent=false){
    })
   });
   packingVisualCache.set(key,x);
-  box.innerHTML=`<div class="packing-generated"><img src="${x.image_path}" alt="Packing outfit on you"><small>${esc(x.notice||"")}</small></div>`;
+  setDynamicImageHtml(box,`<div class="packing-generated"><img class="dynamic-ai-image" src="${x.image_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="Packing outfit on you"><small>${esc(x.notice||"")}</small></div>`);
  }catch(err){
   box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
  }finally{

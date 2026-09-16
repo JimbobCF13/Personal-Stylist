@@ -842,3 +842,51 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .brief-dictate-btn{left:11px;right:11px;width:auto}
  .brief-more-details summary{flex-direction:column;align-items:flex-start;gap:3px}
 }
+
+
+/* V5.5.1 — Safari dynamic image repaint stability */
+.dynamic-ai-image,
+.saved-look-visual{
+ display:block;
+ width:100%;
+ height:auto;
+ min-height:120px;
+ object-fit:contain;
+ background:#f3f3f0;
+ -webkit-transform:translateZ(0);
+ transform:translateZ(0);
+ -webkit-backface-visibility:hidden;
+ backface-visibility:hidden;
+ will-change:transform;
+}
+
+.model-visual,
+.packing-generated,
+.built-look-result,
+.saved-look-card{
+ isolation:isolate;
+}
+
+.force-image-repaint{
+ -webkit-transform:translateZ(0);
+ transform:translateZ(0);
+}
+
+.dynamic-ai-image:not(.image-paint-ready){
+ opacity:.999;
+}
+
+.saved-piece-image{
+ -webkit-transform:translateZ(0);
+ transform:translateZ(0);
+ -webkit-backface-visibility:hidden;
+ backface-visibility:hidden;
+}
+
+@supports (-webkit-touch-callout:none){
+ .dynamic-ai-image,
+ .saved-look-visual,
+ .saved-piece-image{
+  image-rendering:auto;
+ }
+}
