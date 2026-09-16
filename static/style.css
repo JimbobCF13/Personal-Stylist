@@ -1055,3 +1055,209 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .auth-brand p{font-size:12px}
  .auth-card{padding:17px}
 }
+
+
+/* V6.1 — Premium visual system */
+:root{
+ --bg:#f4f2ee;
+ --card:#fff;
+ --ink:#141414;
+ --muted:#6f6d68;
+ --line:#ddd9d1;
+ --soft:#ebe8e1;
+ --accent:#151515;
+ --warm:#a68f7e;
+ --warm-soft:#eee7e1;
+ --radius:20px;
+ --shadow:0 10px 34px rgba(26,24,20,.055);
+ --shadow-strong:0 18px 60px rgba(26,24,20,.10);
+}
+
+body{
+ background:
+  radial-gradient(circle at 18% -10%,rgba(183,165,148,.16),transparent 30%),
+  linear-gradient(180deg,#f7f5f1 0,#f3f1ed 38%,#f5f4f1 100%);
+ color:var(--ink);
+ letter-spacing:-.005em;
+}
+
+.app{max-width:900px}
+
+.app-header{
+ position:sticky;top:0;z-index:20;
+ background:rgba(247,245,241,.86);
+ backdrop-filter:blur(22px) saturate(125%);
+ -webkit-backdrop-filter:blur(22px) saturate(125%);
+ border-bottom:1px solid rgba(124,115,103,.14);
+ padding:14px 22px;
+}
+.brand-lockup{display:flex;align-items:center;gap:11px;cursor:pointer}
+.brand-mark{
+ width:38px;height:38px;border-radius:12px;background:#151515;color:#fff;
+ display:grid;place-items:center;font-size:10px;font-weight:900;letter-spacing:.08em;
+ box-shadow:0 5px 16px rgba(0,0,0,.12)
+}
+.brand-copy{display:grid;gap:1px}
+.brand-copy h1{font-size:17px;letter-spacing:-.03em}
+.brand-copy small{font-size:10px}
+.header-actions{display:flex;align-items:center;gap:8px}
+.header-account{
+ width:36px;height:36px;border-radius:50%;border:1px solid var(--line);
+ background:rgba(255,255,255,.72);font-size:18px;display:grid;place-items:center
+}
+.badge{
+ background:rgba(255,255,255,.72);border:1px solid rgba(120,110,96,.12);
+ color:#777;padding:6px 8px;font-size:9px
+}
+
+.section{padding:22px 24px 34px}
+.section>h3,.section .row h3{font-size:27px;letter-spacing:-.045em}
+.card,.tile{
+ border:1px solid rgba(111,102,90,.14);
+ box-shadow:var(--shadow);
+}
+
+.primary,.ghost,.secondary,.danger{
+ border-radius:13px;min-height:42px;transition:transform .16s ease,box-shadow .16s ease,background .16s ease
+}
+.primary:hover,.ghost:hover,.secondary:hover{transform:translateY(-1px)}
+.primary{box-shadow:0 8px 20px rgba(0,0,0,.11)}
+.ghost{background:rgba(255,255,255,.62)}
+.form input,.form select,.form textarea,#search,#filter{
+ border-color:#d8d4cc;border-radius:13px;padding:13px 14px;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.65)
+}
+.form input:focus,.form select:focus,.form textarea:focus,#search:focus,#filter:focus{
+ outline:none;border-color:#9a8c80;box-shadow:0 0 0 3px rgba(166,143,126,.13)
+}
+
+/* Home becomes more editorial / premium */
+.home-shell{max-width:900px;padding:34px 24px 120px}
+.home-kicker{
+ color:#8e796a;font-size:9px;letter-spacing:.2em;margin-bottom:17px
+}
+.home-hero{
+ padding:22px 0 32px;gap:27px;border-bottom:0
+}
+.home-hero>div>small{font-size:12px}
+.home-hero h2{
+ font-size:52px;line-height:.94;letter-spacing:-.065em;font-weight:720;
+ max-width:630px;margin:9px 0 15px
+}
+.home-hero p{font-size:14px;max-width:560px;line-height:1.6}
+.home-primary{
+ border-radius:24px;padding:22px 23px;min-height:104px;
+ background:
+  linear-gradient(120deg,#161616 0,#25221f 68%,#3a302a 100%);
+ box-shadow:0 18px 45px rgba(26,22,19,.16);
+ grid-template-columns:48px 1fr auto
+}
+.home-primary b{font-size:20px}
+.home-primary em{font-size:12px;opacity:.7}
+.home-icon{width:46px;height:46px;border-color:rgba(255,255,255,.22)}
+.home-grid{
+ margin-top:10px;gap:10px;background:transparent;border:0;border-radius:0;overflow:visible
+}
+.home-card{
+ border:1px solid rgba(112,103,91,.14);
+ border-radius:20px;min-height:156px;padding:19px;
+ box-shadow:0 8px 26px rgba(27,24,20,.035);
+ transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+ position:relative;overflow:hidden
+}
+.home-card:before{
+ content:"";position:absolute;inset:0;
+ background:linear-gradient(145deg,rgba(255,255,255,0),rgba(183,166,149,.075));
+ opacity:0;transition:opacity .18s ease;pointer-events:none
+}
+.home-card:hover{
+ transform:translateY(-2px);border-color:rgba(133,116,100,.25);
+ box-shadow:0 14px 36px rgba(27,24,20,.07)
+}
+.home-card:hover:before{opacity:1}
+.home-line-icon{
+ width:38px;height:38px;border-radius:12px;
+ background:#f3f0eb;color:#3f3934;margin-bottom:24px
+}
+.home-card b{font-size:17px}
+.home-card small{color:#8f7c6c}
+.home-card em{font-size:11px;line-height:1.45;color:#75716c}
+
+/* Wardrobe feels more like a catalogue */
+.garments{gap:14px}
+.garment{
+ border-color:rgba(115,105,92,.14);border-radius:20px;
+ box-shadow:0 8px 24px rgba(25,22,18,.04)
+}
+.garment img{background:#f5f3ef}
+.meta{padding:12px 13px 14px}
+.meta b{font-size:14px;letter-spacing:-.02em}
+
+/* Nav: quieter, cleaner, more app-like */
+nav{
+ background:rgba(250,249,246,.92);
+ backdrop-filter:blur(24px) saturate(130%);
+ -webkit-backdrop-filter:blur(24px) saturate(130%);
+ border-top-color:rgba(111,103,93,.15)
+}
+.navinner{max-width:900px;padding-top:7px}
+nav button{font-size:18px;opacity:.75;transition:opacity .15s ease,transform .15s ease}
+nav button:hover{opacity:1;transform:translateY(-1px)}
+nav button span{font-size:9px}
+
+/* Auth/login becomes a real product landing surface */
+.auth-gate{
+ background:
+  radial-gradient(circle at 12% 12%,rgba(173,151,133,.24),transparent 30%),
+  linear-gradient(135deg,#f0ede7 0,#f8f6f2 58%,#ebe7df 100%)
+}
+.auth-shell{width:min(1040px,100%);grid-template-columns:1.15fr .85fr;gap:54px}
+.auth-monogram{
+ width:66px;height:66px;border-radius:20px;background:#171717;color:#fff;
+ display:grid;place-items:center;font-size:14px;font-weight:900;letter-spacing:.10em;
+ margin-bottom:28px;box-shadow:0 14px 34px rgba(0,0,0,.13)
+}
+.auth-brand small{color:#8d7969}
+.auth-brand h1{font-size:58px;line-height:.93;margin:14px 0 18px}
+.auth-brand p{font-size:15px;max-width:490px}
+.auth-proof{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px}
+.auth-proof span{
+ padding:8px 10px;border-radius:999px;border:1px solid rgba(92,82,70,.15);
+ background:rgba(255,255,255,.45);font-size:10px;color:#655e57
+}
+.auth-card{
+ border-radius:26px;padding:25px;
+ border-color:rgba(111,102,90,.16);
+ box-shadow:0 30px 80px rgba(36,31,26,.10)
+}
+
+/* Account & insight pages */
+.account-avatar{background:linear-gradient(145deg,#151515,#4b4038)}
+.intel-metric,.intel-panel,.intel-summary-card,.intel-next-purchase{
+ border-color:rgba(111,102,90,.14)
+}
+.intel-next-purchase{background:linear-gradient(145deg,#f0ece6,#f8f6f2)}
+.intel-bar-track i{background:linear-gradient(90deg,#8f7a69,#51463e)}
+
+/* Small content hierarchy improvements */
+.eyebrow{color:#8c7767!important}
+.pill{background:#efede8}
+.notice{background:#eef0ea;border-color:#d6ddd0}
+.muted-copy{color:#7a7771}
+
+@media(max-width:700px){
+ .app-header{padding:11px 14px}
+ .brand-mark{width:34px;height:34px;border-radius:10px}
+ .brand-copy h1{font-size:15px}
+ .header-account{width:33px;height:33px}
+ .home-shell{padding:24px 15px 110px}
+ .home-hero h2{font-size:43px}
+ .home-primary{border-radius:20px;padding:18px}
+ .home-grid{gap:8px}
+ .home-card{min-height:145px;border-radius:17px;padding:16px}
+ .section{padding-left:15px;padding-right:15px}
+ .auth-shell{grid-template-columns:1fr;gap:22px}
+ .auth-brand h1{font-size:43px}
+ .auth-monogram{width:52px;height:52px;border-radius:16px;margin-bottom:18px}
+ .auth-proof{margin-top:14px}
+}

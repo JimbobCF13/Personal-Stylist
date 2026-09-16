@@ -828,3 +828,33 @@ No database migration. Existing wardrobe, saved looks, feedback and images are u
 After V6.0 is deployed, open the app and create the **first account immediately**. The first account automatically becomes the Owner/Admin and inherits the existing wardrobe data. Subsequent registrations are invite-only.
 
 No destructive migration is performed on the existing stylist database or image library.
+
+
+## V6.1 — Premium UI polish
+
+This release deliberately focuses on perceived product quality before broader tester rollout.
+
+### Visual system
+- Refined warm-neutral product palette.
+- Cleaner glassy header with compact GHD brand mark and direct Account shortcut.
+- More premium typography hierarchy, spacing and card radii.
+- Stronger focus states and button feedback.
+- Reduced "prototype" feel across cards, forms and navigation.
+
+### Home
+- New editorial hero: **Know what works. Wear it better.**
+- Higher-quality primary stylist card.
+- Individual feature cards now have breathing room rather than one large grid slab.
+- Refined icon containers, labels and hover/touch feedback.
+
+### Authentication
+- Login/create-account screen now looks like a product landing experience rather than a utility form.
+- Added GHD monogram and concise value cues.
+- Account mechanics and storage isolation are unchanged from V6.0.
+
+### Other areas
+- Wardrobe catalogue cards refined.
+- Bottom navigation simplified visually.
+- Wardrobe Intelligence and Account styling aligned to the new visual system.
+
+No database migration. No account, wardrobe, image, learning or authentication behaviour is changed by this release.

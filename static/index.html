@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Him Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=6.0">
+<link rel="stylesheet" href="/static/style.css?v=6.1">
 </head>
 <body>
 
 <div id="authGate" class="auth-gate hidden">
  <div class="auth-shell">
-  <div class="auth-brand"><small>GET HIM DRESSED</small><h1>Your wardrobe. Your stylist.</h1><p>Create your own private wardrobe and train the stylist around your taste and fit.</p></div>
+  <div class="auth-brand"><span class="auth-monogram">GHD</span><small>GET HIM DRESSED</small><h1>Your wardrobe.<br>Your stylist.</h1><p>A private AI stylist that learns your clothes, your fit and the way you like to dress.</p><div class="auth-proof"><span>Private wardrobe</span><span>Personal fit learning</span><span>Looks built around you</span></div></div>
   <div class="auth-card">
    <div class="auth-tabs">
     <button id="authLoginTab" class="active" type="button">Sign in</button>
@@ -35,16 +35,22 @@
 </div>
 
 <div class="app">
-<header><div><h1>Get Him Dressed</h1><small id="status">Connecting…</small></div><span class="badge">V6.0</span></header>
+<header class="app-header">
+ <div class="brand-lockup" data-go="home">
+  <span class="brand-mark">GHD</span>
+  <span class="brand-copy"><h1>Get Him Dressed</h1><small id="status">Connecting…</small></span>
+ </div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V6.1</span></div>
+</header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
-   <div class="home-kicker">GET HIM DRESSED</div>
+   <div class="home-kicker">PRIVATE AI WARDROBE</div>
    <div class="home-hero">
     <div>
      <small id="greeting">Good morning</small>
-     <h2>Dress with intent.</h2>
-     <p>Your wardrobe, fit profile and feedback shape every recommendation.</p>
+     <h2>Know what works.<br>Wear it better.</h2>
+     <p>Your clothes, your fit and your taste — all working together in one private stylist.</p>
     </div>
     <button class="home-primary" data-go="stylistv4">
      <span class="home-icon" aria-hidden="true">
@@ -476,5 +482,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=6.0"></script>
+<script src="/static/app.js?v=6.1"></script>
 </body></html>
