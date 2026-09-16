@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#f6f1e8"><title>Get Him Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=6.4">
+<meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
+<link rel="stylesheet" href="/static/style.css?v=6.5">
 </head>
 <body>
 
 <div id="authGate" class="auth-gate hidden">
  <div class="auth-shell">
-  <div class="auth-brand"><span class="auth-monogram">GHD</span><small>GET HIM DRESSED</small><h1>Your wardrobe.<br>Your stylist.</h1><p>A private AI stylist that learns your clothes, your fit and the way you like to dress.</p><div class="auth-proof"><span>Private wardrobe</span><span>Personal fit learning</span><span>Looks built around you</span></div></div>
+  <div class="auth-brand"><span class="auth-monogram">GHD</span><small id="authBrandEyebrow">GET DRESSED</small><h1>Your wardrobe.<br>Your stylist.</h1><p>A private AI stylist that learns your clothes, your fit and the way you like to dress.</p><div class="auth-proof"><span>Private wardrobe</span><span>Personal fit learning</span><span>Looks built around you</span></div></div>
   <div class="auth-card">
    <div class="auth-tabs">
     <button id="authLoginTab" class="active" type="button">Sign in</button>
@@ -25,7 +25,14 @@
     <label>EMAIL<input id="authRegisterEmail" type="email" autocomplete="email"></label>
     <label>PASSWORD<input id="authRegisterPassword" type="password" autocomplete="new-password" placeholder="At least 8 characters"></label>
     <label id="authInviteLabel">INVITE CODE<input id="authInviteCode" autocapitalize="characters"></label>
-    <input id="authStylingProfile" type="hidden" value="menswear">
+    <div class="profile-choice-wrap">
+     <small>WHO ARE WE STYLING?</small>
+     <div class="profile-choice">
+      <button class="profile-choice-btn active" type="button" data-profile-choice="menswear"><b>Get Him Dressed</b><span>Menswear</span></button>
+      <button class="profile-choice-btn" type="button" data-profile-choice="womenswear"><b>Get Her Dressed</b><span>Womenswear</span></button>
+     </div>
+     <input id="authStylingProfile" type="hidden" value="menswear">
+    </div>
     <button id="authRegisterBtn" class="primary full" type="button">Create account</button>
     <small id="authBootstrapNote" class="auth-note"></small>
    </div>
@@ -37,15 +44,15 @@
 <div class="app">
 <header class="app-header">
  <div class="brand-lockup" data-go="home">
-  <span class="brand-mark">GHD</span>
-  <span class="brand-copy"><h1>Get Him Dressed</h1><small id="status">Connecting…</small></span>
+  <span class="brand-mark" id="brandMark">GHD</span>
+  <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V6.4</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V6.5</span></div>
 </header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
-   <div class="home-kicker">PRIVATE AI WARDROBE</div>
+   <div class="home-kicker" id="homeBrandKicker">PRIVATE AI WARDROBE</div>
    <div class="home-hero">
     <div>
      <small id="greeting">Good morning</small>
@@ -515,7 +522,7 @@
 </div>
 
 <nav><div class="navinner">
-<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
+<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=6.4"></script>
+<script src="/static/app.js?v=6.5"></script>
 </body></html>

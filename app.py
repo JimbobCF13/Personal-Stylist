@@ -235,11 +235,37 @@ def private_generated(filename:str): return FileResponse(safe_media_path("genera
 def private_model_photo(filename:str): return FileResponse(safe_media_path("model-photos",filename),headers={"Cache-Control":"private, max-age=3600"})
 
 
-WARDROBE_CATEGORY_ORDER = [
+MENSWEAR_CATEGORY_ORDER = [
     "Blazers & Tailoring", "Overshirts & Shirt Jackets", "Jackets", "Coats",
     "Knitwear", "Sweatshirts & Hoodies", "Shirts", "Polos & T-Shirts",
     "Trousers", "Shorts", "Footwear", "Accessories", "Other",
 ]
+WOMENSWEAR_CATEGORY_ORDER = [
+    "Dresses", "Skirts", "Jumpsuits & Playsuits", "Blazers & Tailoring",
+    "Jackets", "Coats", "Knitwear", "Sweatshirts & Hoodies",
+    "Blouses & Shirts", "Tops & T-Shirts", "Trousers & Jeans", "Shorts",
+    "Activewear", "Footwear", "Bags", "Accessories", "Other",
+]
+WARDROBE_CATEGORY_ORDER = MENSWEAR_CATEGORY_ORDER
+
+def styling_profile():
+    return ((current_user() or {}).get("styling_profile") or "menswear").strip().lower()
+
+def is_womenswear():
+    return styling_profile()=="womenswear"
+
+def fashion_audience():
+    return "women's" if is_womenswear() else "men's"
+
+def fashion_person():
+    return "adult female model" if is_womenswear() else "adult male model"
+
+def product_brand_name():
+    return "Get Her Dressed" if is_womenswear() else "Get Him Dressed"
+
+def wardrobe_category_order():
+    return WOMENSWEAR_CATEGORY_ORDER if is_womenswear() else MENSWEAR_CATEGORY_ORDER
+
 
 def canonical_wardrobe_category(
     category: str = "",
@@ -256,6 +282,37 @@ def canonical_wardrobe_category(
         f"{category or ''} {model_line or ''} {fit_cut or ''} {notes or ''} {brand or ''} {material or ''}".strip().lower()
     )
     raw = f"{primary} {support}".strip()
+
+    if is_womenswear():
+        women_rules = [
+            ("Dresses", ["dress","dresses","gown","maxi dress","midi dress","mini dress","shirt dress","wrap dress"]),
+            ("Skirts", ["skirt","skirts","midi skirt","maxi skirt","mini skirt"]),
+            ("Jumpsuits & Playsuits", ["jumpsuit","jumpsuits","playsuit","playsuits","romper","rompers"]),
+            ("Blazers & Tailoring", ["blazer","blazers","suit jacket","tailored jacket","waistcoat","tailored vest"]),
+            ("Coats", ["coat","coats","overcoat","trench","parka","raincoat","mac","pea coat","puffer coat"]),
+            ("Jackets", ["jacket","jackets","bomber","denim jacket","leather jacket","suede jacket","gilet","puffer jacket"]),
+            ("Knitwear", ["knitwear","jumper","sweater","cardigan","cashmere","merino","roll neck","turtleneck","pullover"]),
+            ("Sweatshirts & Hoodies", ["sweatshirt","hoodie","hooded sweatshirt","quarter zip sweatshirt"]),
+            ("Blouses & Shirts", ["blouse","blouses","shirt","shirts","button-down","button down"]),
+            ("Tops & T-Shirts", ["top","tops","t-shirt","t shirt","tee","tees","camisole","cami","vest top","tank top","bodysuit"]),
+            ("Trousers & Jeans", ["trouser","trousers","jean","jeans","chino","chinos","cargo pants","wide-leg","wide leg","legging","leggings"]),
+            ("Shorts", ["shorts","cycling shorts"]),
+            ("Activewear", ["sports bra","gym top","gym leggings","running tights","activewear","yoga pants","tennis skirt"]),
+            ("Footwear", ["shoe","shoes","trainer","trainers","sneaker","sneakers","loafer","loafers","boot","boots","heel","heels","pump","pumps","sandal","sandals","flat","flats","espadrille"]),
+            ("Bags", ["handbag","handbags","bag","bags","tote","crossbody","clutch","shoulder bag"]),
+            ("Accessories", ["belt","belts","hat","hats","cap","caps","beanie","scarf","scarves","glove","gloves","jewellery","jewelry","necklace","bracelet","earring","earrings","watch","watches"]),
+        ]
+        for cat,terms in women_rules:
+            if any(term in primary for term in terms):
+                return cat
+        for cat,terms in women_rules:
+            if any(term in raw for term in terms):
+                return cat
+        legacy=(category or "").strip().casefold()
+        for canonical in WOMENSWEAR_CATEGORY_ORDER:
+            if legacy==canonical.casefold():
+                return canonical
+        return "Other"
 
     footwear = ["footwear","shoe","shoes","sneaker","sneakers","trainer","trainers","loafer","loafers","boot","boots","derby","derbies","brogue","brogues","oxford shoe","monk strap","espadrille","slipper"]
     shorts = ["shorts","swim short","swim shorts"]
@@ -360,7 +417,7 @@ def canonical_wardrobe_category(
     if legacy == "blazers & tailoring": return "Blazers & Tailoring"
     if legacy in ("overshirts & shirt jackets","overshirts"): return "Overshirts & Shirt Jackets"
 
-    for canonical in WARDROBE_CATEGORY_ORDER:
+    for canonical in wardrobe_category_order():
         if legacy == canonical.casefold():
             return canonical
     return "Other"
@@ -563,7 +620,7 @@ def auth_status(request: Request):
       "authenticated":bool(user),
       "user":user,
       "bootstrap_available":user_count==0,
-      "app_name":"Get Him Dressed"
+      "app_name":product_brand_name()
     }
 
 @app.post("/api/auth/register")
@@ -1077,7 +1134,7 @@ def _run_garment_enrichment_current(gid: int):
         return
 
     prompt = f"""
-Research this real men's garment using the live web.
+Research this real {fashion_audience()} garment using the live web.
 
 KNOWN GARMENT DATA:
 Brand: {garment.get('brand') or ''}
@@ -1670,14 +1727,18 @@ def analyse_image(path: Path):
         return None
     client = OpenAI()
     img = encode_image(path)
-    prompt = """Analyse this photograph as a careful menswear wardrobe cataloguer.
+    prompt = f"""Analyse this photograph as a careful {fashion_audience()} wardrobe cataloguer.
 Identify only details reasonably visible from the image. Do not invent brand, size,
 fabric composition, model/line or fit if they cannot be seen or inferred with reasonable confidence.
 Use empty strings for unknown fields. Colour should be specific (e.g. stone, cream, navy, sage),
-not merely 'light'. Season and formality should be practical menswear classifications.
+not merely 'light'. Season and formality should be practical clothing classifications.
 The notes field should mention uncertainty or useful visible details.
 
-For CATEGORY, classify by wardrobe role and silhouette rather than blindly copying the product-name noun:
+For CATEGORY, use the current wardrobe profile ({styling_profile()}). If womenswear, use only:
+Dresses, Skirts, Jumpsuits & Playsuits, Blazers & Tailoring, Jackets, Coats, Knitwear,
+Sweatshirts & Hoodies, Blouses & Shirts, Tops & T-Shirts, Trousers & Jeans, Shorts,
+Activewear, Footwear, Bags, Accessories, Other.
+If menswear, classify by wardrobe role and silhouette rather than blindly copying the product-name noun:
 - short-sleeve knitted polo -> Polos & T-Shirts
 - long-sleeve knitted polo/pullover -> Knitwear
 - rugby shirt/rugby top -> Knitwear
@@ -1873,11 +1934,11 @@ def parse_quick_wardrobe(req: QuickWardrobeRequest):
         raise HTTPException(400,"That wardrobe description is too long. Split it into two batches.")
 
     client=OpenAI()
-    instructions="""You convert a user's plain-language description of their existing men's wardrobe into reviewable garment records.
+    instructions="""You convert a user's plain-language description of their existing wardrobe into reviewable garment records.
 Extract only garments the user actually says they own. One physical garment = one item.
 If they describe multiples, create separate items only when the description distinguishes them; otherwise create the stated quantity as separate records with the same known metadata.
 Never invent a brand, model, size, material, colour, pattern, fit or season. Leave unknown strings blank.
-Use these canonical categories only: Blazers & Tailoring, Overshirts & Shirt Jackets, Jackets, Coats, Knitwear, Sweatshirts & Hoodies, Shirts, Polos & T-Shirts, Trousers, Shorts, Footwear, Accessories, Other. Blazers, sports jackets and suit jackets belong in Blazers & Tailoring. Overshirts, shirt jackets and shackets belong in Overshirts & Shirt Jackets. Utility shirts and work shirts belong in Shirts unless explicitly described as an overshirt or shirt jacket. Sweatshirts and hoodies belong in Sweatshirts & Hoodies; do not classify them as Polos & T-Shirts or Knitwear.
+Use these canonical categories only: {", ".join(wardrobe_category_order())}. Blazers, sports jackets and suit jackets belong in Blazers & Tailoring. Overshirts, shirt jackets and shackets belong in Overshirts & Shirt Jackets. Utility shirts and work shirts belong in Shirts unless explicitly described as an overshirt or shirt jacket. Sweatshirts and hoodies belong in Sweatshirts & Hoodies; do not classify them as Polos & T-Shirts or Knitwear.
 Classify by wardrobe role rather than literal product naming: rugby shirts belong in Knitwear; short-sleeve knitted polos belong in Polos & T-Shirts; long-sleeve knitted polos/pullovers belong in Knitwear. A lightweight knitted pullover can belong in Knitwear even if a retailer calls it a long-sleeve T-shirt. Casual jackets such as Harringtons, bombers and gilets belong in Jackets. Overcoats, trench coats, macs, raincoats and parkas belong in Coats.
 Normalise obvious garment wording into a useful garment_type, e.g. polo shirt, crew-neck T-shirt, chinos, loafers, overshirt.
 Season and formality can be inferred conservatively from the garment itself, but leave blank when uncertain.
@@ -2524,7 +2585,7 @@ def trip_context(req: TripContextRequest):
     else:
         requested_mode="seasonal"
 
-    prompt=f"""Research this trip for a personal menswear packing assistant.
+    prompt=f"""Research this trip for a personal fashion packing assistant.
 
 TODAY: {today.isoformat()}
 DESTINATION: {req.destination or 'extract from trip brief if clearly stated'}
@@ -2831,7 +2892,7 @@ def outfit_visualisation(req: OutfitVisualisationRequest):
     style_notes = profile.get("style_notes") or ""
 
     prompt = f"""
-Create a photorealistic full-body men's fashion lookbook image showing one adult male model
+Create a photorealistic full-body {fashion_audience()} fashion lookbook image showing one {fashion_person()}
 wearing the outfit represented by the supplied garment reference images.
 
 OUTFIT:
@@ -2858,10 +2919,10 @@ Important:
 - Do not invent extra statement garments.
 - If a small neutral accessory is needed for realism, keep it unobtrusive.
 - Show the entire outfit head-to-toe, including footwear.
-- Natural standing pose, premium contemporary menswear editorial photography.
+- Natural standing pose, premium contemporary fashion editorial photography.
 - Neutral understated studio or softly lit architectural background.
 - If use_my_likeness is true, use the supplied personal reference photos to preserve the user's visible identity, face, hair, skin tone and overall proportions as closely as reasonably possible.
-- If use_my_likeness is false, use a generic adult male model who does not resemble any particular real person.
+- If use_my_likeness is false, use a generic {fashion_person()} who does not resemble any particular real person.
 - This is a styling visualisation, not a claim of exact garment fit.
 """
     prompt += f"\nuse_my_likeness: {bool(req.use_my_likeness)}\n"
@@ -2998,7 +3059,7 @@ GAP_SCHEMA = {
   "additionalProperties": False
 }
 
-SHOPPING_STYLIST_INSTRUCTIONS = """You are the wardrobe-planning and shopping specialist for one male user.
+SHOPPING_STYLIST_INSTRUCTIONS = """You are the wardrobe-planning and shopping specialist for one user.
 
 Your job is not to recommend random fashionable products. Analyse the user's ACTUAL wardrobe,
 measurements, fit history, brand notes, and style feedback, then identify purchases that add the most value.
@@ -3197,7 +3258,7 @@ def import_product_url(req: ProductUrlImportRequest):
         client=OpenAI()
 
         if not direct_blocked and (meta.get("title") or meta.get("page_text")):
-            prompt=f"""Extract the menswear product details from this retailer page. The user owns or has bought the item.
+            prompt=f"""Extract the fashion product details from this retailer page. The user owns or has bought the item.
 URL: {url}
 PAGE TITLE: {meta.get('title') or ''}
 PAGE DESCRIPTION: {meta.get('description') or ''}
@@ -3225,7 +3286,7 @@ Use the retailer page as the factual source.
 
         if analysis is None:
             import_method="web_search_fallback"
-            search_prompt=f"""Identify the exact menswear product represented by this retailer URL and extract supported facts from the live web.
+            search_prompt=f"""Identify the exact fashion product represented by this retailer URL and extract supported facts from the live web.
 
 EXACT PRODUCT URL:
 {url}
@@ -3238,7 +3299,7 @@ Rules:
 - labelled_size must be empty because the URL does not establish which size the user owns.
 - fit_cut: use the retailer/brand's stated fit when available. If not stated but the cut is reasonably classifiable from reliable product descriptions, provide a concise stylist classification.
 - season: classify practical seasonality from the known garment type and evidenced material (for example "Spring/Summer" or "Year-round"). This is a stylist classification, not a retailer claim.
-- formality: classify the garment's normal menswear formality from its known type/design (for example "Casual", "Smart casual", "Business casual", "Formal"). This is a stylist classification.
+- formality: classify the garment's normal clothing formality from its known type/design (for example "Casual", "Smart casual", "Business casual", "Formal"). This is a stylist classification.
 - If material cannot be established from a reliable web result, leave material empty rather than guessing.
 - category should reflect wardrobe function, not merely the retailer's noun: short-sleeve knitted polos are Polos & T-Shirts; long-sleeve knitted polos/pullovers and rugby shirts are Knitwear; sweatshirts are Sweatshirts & Hoodies; overshirts are Overshirts & Shirt Jackets; true buttoned shirts are Shirts.
 - garment_type should still describe the exact item using the retailer's wording where useful.
@@ -3334,7 +3395,7 @@ def source_products(req: ProductSourceRequest):
     ]},ensure_ascii=False)
 
     prompt = f"""
-Search the live web for men's clothing products currently offered by reputable retailers that match this specification.
+Search the live web for {fashion_audience()} clothing products currently offered by reputable retailers that match this specification.
 
 SEARCH PHRASE: {req.search_phrase}
 CATEGORY: {req.category or 'not specified'}
@@ -3466,7 +3527,7 @@ def weather_context(req: WeatherContextRequest):
 LOCATION: {location}
 WHEN: {when}
 
-This weather will be used by a menswear stylist. Use current forecast information from reliable
+This weather will be used by a personal stylist. Use current forecast information from reliable
 weather sources. If the requested date is outside reliable forecast range, say so and use low
 confidence rather than inventing conditions.
 
@@ -3533,7 +3594,7 @@ STYLIST_V4_SCHEMA = {
   "additionalProperties": False
 }
 
-STYLIST_V4_INSTRUCTIONS = """You are a high-level personal stylist for one male user.
+STYLIST_V4_INSTRUCTIONS = """You are a high-level personal stylist for one user.
 
 Use the user's actual wardrobe, fit profile, brand/size history and previous style feedback.
 The request is free text and may contain occasion, weather, dress code, preferred garment,
@@ -4104,7 +4165,7 @@ def look_critique(req:LookCritiqueRequest):
              "wardrobe":[compact(g) for g in wardrobe],"profile":profile}
     response=OpenAI().responses.create(
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},
-      instructions=f"""You are a restrained, practical men's personal stylist. {instruction}
+      instructions=f"""You are a restrained, practical personal stylist. {instruction}
 Never claim an item is owned unless its garment id is in the wardrobe data.
 replacement_garment_id must be a real wardrobe id or null. Avoid change for change's sake.""",
       input=json.dumps(context,ensure_ascii=False),

@@ -522,7 +522,7 @@ async function registerAccount(){
    email:$("authRegisterEmail").value.trim(),
    password:$("authRegisterPassword").value,
    invite_code:$("authInviteCode").value.trim(),
-   styling_profile:"menswear"
+   styling_profile:$("authStylingProfile").value||"menswear"
   })});
   authState.user=x.user;
   location.reload();
@@ -534,6 +534,7 @@ $("authRegisterBtn")?.addEventListener("click",registerAccount);
 async function loadAccount(){
  if(!authState.user)return;
  const u=authState.user;
+ applyStylingProfileUI(u);
  $("accountName").textContent=u.display_name||"Account";
  $("accountEmail").textContent=u.email||"";
  $("accountRole").textContent=u.role==="admin"?"Owner / Admin":"Tester";
@@ -841,6 +842,24 @@ async function tryProductWardrobeLook(encoded,index,button=null,silent=false){
  finally{if(button){button.disabled=false;button.textContent=original}}
 }
 
+
+function applyStylingProfileUI(user){
+ const women=(user?.styling_profile||"menswear")==="womenswear";
+ WARDROBE_ORDER=[...(women?WOMENSWEAR_ORDER:MENSWEAR_ORDER)];
+ const brand=women?"Get Her Dressed":"Get Him Dressed";
+ document.title=brand;
+ if($("appBrandName"))$("appBrandName").textContent=brand;
+ if($("homeBrandKicker"))$("homeBrandKicker").textContent=`${brand.toUpperCase()} · PRIVATE AI WARDROBE`;
+ if($("accountStylingProfile"))$("accountStylingProfile").textContent=women?"Womenswear":"Menswear";
+ document.body.dataset.stylingProfile=women?"womenswear":"menswear";
+}
+document.querySelectorAll("[data-profile-choice]").forEach(btn=>{
+ btn.addEventListener("click",()=>{
+  $("authStylingProfile").value=btn.dataset.profileChoice;
+  document.querySelectorAll("[data-profile-choice]").forEach(x=>x.classList.toggle("active",x===btn));
+ });
+});
+
 async function init(){
  let status;
  try{
@@ -857,6 +876,7 @@ async function init(){
   return;
  }
  authState.user=status.user;
+ applyStylingProfileUI(authState.user);
  hideAuthGate();
 
  const cacheOwner=localStorage.getItem("ghd.cacheOwner");
@@ -894,7 +914,9 @@ async function init(){
  if(latestStylistSession)requestAnimationFrame(renderLatestStylistSession);
  Promise.allSettled([healthPromise,bootPromise,wardrobePromise,profilePromise]);
 }
-const WARDROBE_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
+const MENSWEAR_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
+const WOMENSWEAR_ORDER=["Dresses","Skirts","Jumpsuits & Playsuits","Blazers & Tailoring","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Blouses & Shirts","Tops & T-Shirts","Trousers & Jeans","Shorts","Activewear","Footwear","Bags","Accessories","Other"];
+let WARDROBE_ORDER=[...MENSWEAR_ORDER];
 let selectedWardrobeCategory="";
 let wardrobeReturnGarmentId=null;
 let wardrobeReturnCategory="";
@@ -902,8 +924,10 @@ let wardrobeRestorePending=false;
 
 function normalisedCategory(c){
  const raw=String(c||"Other").trim().toLowerCase();
- if(raw==="jackets & outerwear")return "Jackets";
- if(raw==="overshirts")return "Overshirts & Shirt Jackets";
+ if((authState.user?.styling_profile||"menswear")==="menswear"){
+  if(raw==="jackets & outerwear")return "Jackets";
+  if(raw==="overshirts")return "Overshirts & Shirt Jackets";
+ }
  return WARDROBE_ORDER.find(x=>x.toLowerCase()===raw)||"Other";
 }
 

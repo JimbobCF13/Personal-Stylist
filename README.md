@@ -939,3 +939,22 @@ Owner/Admin can view tester activity, revoke unused invites, disable/re-enable t
 - Garment strip images and saved visuals lazy-load rather than all decoding at once.
 
 No destructive migration. Existing accounts, wardrobe images, Saved Looks and generated visuals are unchanged.
+
+
+## V6.5 — Get Her Dressed foundation + Saved Looks navigation
+New accounts can choose **Get Him Dressed (Menswear)** or **Get Her Dressed (Womenswear)**.
+
+Womenswear accounts use their own taxonomy: Dresses, Skirts, Jumpsuits & Playsuits,
+Blazers & Tailoring, Jackets, Coats, Knitwear, Sweatshirts & Hoodies, Blouses & Shirts,
+Tops & T-Shirts, Trousers & Jeans, Shorts, Activewear, Footwear, Bags, Accessories and Other.
+
+Core garment analysis, wardrobe parsing, product search, garment research and outfit visualisation
+now use the account styling profile or gender-neutral instructions. Generic womenswear outfit
+visualisations use an adult female model.
+
+The signed-in brand changes to **Get Her Dressed** for womenswear accounts while existing
+menswear accounts remain **Get Him Dressed**.
+
+A persistent **Saved** tab has also been added to the bottom navigation.
+
+No destructive migration. Existing accounts, wardrobes, images, Saved Looks and learning remain unchanged.

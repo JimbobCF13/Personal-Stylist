@@ -1347,3 +1347,20 @@ nav button span{font-size:9px}
 }
 @keyframes imagePlaceholder{to{background-position:-200% 0}}
 .home-card,.garment,.saved-look-card{contain:layout paint style}
+
+/* V6.5 — shared Get Him / Get Her platform */
+.profile-choice-wrap{display:grid;gap:8px}
+.profile-choice-wrap>small{font-size:9px;font-weight:850;letter-spacing:.11em;color:#87796e}
+.profile-choice{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.profile-choice-btn{border:1px solid var(--line);background:#f8f7f4;border-radius:13px;padding:11px;text-align:left;display:grid;gap:2px;color:var(--ink)}
+.profile-choice-btn b{font-size:11px}.profile-choice-btn span{font-size:9px;color:#888}
+.profile-choice-btn.active{background:#171717;color:#fff;border-color:#171717}.profile-choice-btn.active span{color:#bbb}
+body[data-styling-profile="womenswear"] .brand-mark{background:linear-gradient(145deg,#211c20,#6d5862)}
+body[data-styling-profile="womenswear"] .home-primary{background:linear-gradient(120deg,#171417 0,#2b2328 68%,#4b3841 100%)}
+.navinner{grid-template-columns:repeat(9,1fr)}
+@media(max-width:620px){
+ .navinner{overflow-x:auto;display:flex;scrollbar-width:none}
+ .navinner::-webkit-scrollbar{display:none}
+ nav button{min-width:62px;flex:0 0 62px}
+ nav button span{font-size:8px}
+}
