@@ -734,3 +734,33 @@ Fixes:
 - Also re-stabilises visible dynamic images when returning to the tab/page.
 
 No database migration. No saved garment or generated-image files are modified or deleted.
+
+
+## V5.6 — Saved-look exploration + explicit style learning + clearer dictation stop
+
+### Saved Looks
+- Adds **More like this** directly to every saved look.
+- Adds **Use as inspiration** for a looser interpretation: preserve the taste/polish but allow a different palette and bigger piece changes.
+- Saved looks are now fed into the main stylist and packing context as a strong positive style signal.
+
+### Lightweight outfit reactions
+Rather than a heavy 1–5 rating scale, each stylist outfit now supports:
+- **Favourite** — strongest positive signal and saves the look.
+- **Works for me** — positive preference signal.
+- **Less like this** — soft negative signal without forcing the user to say they dislike an outfit.
+
+The stylist learns from repeated patterns rather than one click and is explicitly told not to overfit to one colour palette. If saved/reaction history becomes dominated by one palette, it should still offer a strong alternative direction where appropriate.
+
+### Visible learning
+The Profile → Style Learning panel now reports:
+- number of saved looks,
+- outfit reactions,
+- recurring colours in saved looks,
+- recurring garment types,
+- brands with Perfect fit feedback.
+
+### Dictation stop
+The centre-screen Listening card now contains its own prominent **Stop dictation** button.
+The overlay card is clickable while the blurred background remains non-interactive, so the user no longer has to find the original blurred Stop button behind it.
+
+No database migration. Existing wardrobe, saved looks and image files are untouched.

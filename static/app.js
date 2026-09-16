@@ -70,6 +70,11 @@ function renderAppActivity(){
  $("activityTitle").textContent=item.title||"Working…";
  $("activityDetail").textContent=item.detail||"Please wait a moment.";
  $("activityVisual").className=`activity-visual ${item.mode||"working"}`;
+ const stop=$("activityStopDictation");
+ if(stop){
+  const listening=item.mode==="listening" && activeAiDictation?.recorder?.state==="recording";
+  stop.classList.toggle("hidden",!listening);
+ }
 }
 function beginAppActivity(key,title,detail="",mode="working"){
  appActivities.delete(key);
@@ -86,6 +91,13 @@ function endAppActivity(key){
  appActivities.delete(key);
  renderAppActivity();
 }
+
+$("activityStopDictation")?.addEventListener("click",()=>{
+ const rec=activeAiDictation?.recorder;
+ if(rec?.state==="recording"){
+  try{rec.stop()}catch{}
+ }
+});
 
 function dictationMimeType(){
  const candidates=[
@@ -1584,17 +1596,34 @@ async function loadStyleLearning(){
   const x=await api("/api/style-learning");
   const ratings=x.ratings||{};
   const total=x.feedback_count||0;
+  const saved=x.saved_look_count||0;
   const brands=(x.perfect_fit_brands||[]).map(b=>`${esc(b.brand)} (${b.count})`).join(", ");
-  const ratingText=total
-    ? `Based on ${total} outfit rating${total===1?"":"s"}: ${["Love it","Like it","Not for me","Too smart","Too casual"].filter(k=>ratings[k]).map(k=>`${k}: ${ratings[k]}`).join(" · ")}`
-    : "No outfit feedback yet.";
-  const brandText=brands ? `<br><b>Perfect-fit brands:</b> ${brands}` : "";
-  $("styleLearning").innerHTML=`<p>${ratingText}${brandText}</p><small>${esc(x.message||"")}</small>`;
+  const colours=(x.saved_colours||[]).map(c=>`${esc(c.name)} (${c.count})`).join(", ");
+  const garmentTypes=(x.saved_garment_types||[]).map(c=>`${esc(c.name)} (${c.count})`).join(", ");
+
+  const signals=[];
+  if(saved)signals.push(`${saved} saved look${saved===1?"":"s"}`);
+  if(total)signals.push(`${total} outfit reaction${total===1?"":"s"}`);
+
+  let html=`<p><b>Learning from:</b> ${signals.length?signals.join(" · "):"No style signals yet."}</p>`;
+  if(ratings["Works for me"]||ratings["Loved"]||ratings["Less like this"]){
+   html+=`<p><b>Reactions:</b> ${
+    [
+     ratings["Loved"]?`Favourites: ${ratings["Loved"]}`:"",
+     ratings["Works for me"]?`Works for me: ${ratings["Works for me"]}`:"",
+     ratings["Less like this"]?`Less like this: ${ratings["Less like this"]}`:""
+    ].filter(Boolean).join(" · ")
+   }</p>`;
+  }
+  if(colours)html+=`<p><b>Colours recurring in saved looks:</b> ${colours}</p>`;
+  if(garmentTypes)html+=`<p><b>Pieces recurring in saved looks:</b> ${garmentTypes}</p>`;
+  if(brands)html+=`<p><b>Perfect-fit brands:</b> ${brands}</p>`;
+  html+=`<small>${esc(x.message||"")}</small>`;
+  $("styleLearning").innerHTML=html;
  }catch{
   $("styleLearning").innerHTML="<small>Style learning data is temporarily unavailable.</small>";
  }
 }
-
 
 async function loadModelPhotos(){
  try{
@@ -1734,6 +1763,27 @@ function renderLatestStylistSession(){
   (x.outfits||[]).map((o,i)=>renderV4Outfit(o,i)).join("");
 }
 
+
+async function reactToOutfit(encoded,rating,button){
+ const o=JSON.parse(decodeURIComponent(encoded));
+ const original=button?.textContent||rating;
+ if(button){button.disabled=true;button.textContent="Saved";}
+ try{
+  await api("/api/feedback",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({outfit:o,rating})
+  });
+  if(button){
+   button.classList.add("reaction-saved");
+   button.textContent=rating==="Works for me"?"✓ Works for me":"↘ Less like this";
+   setTimeout(()=>{button.disabled=false},350);
+  }
+ }catch(err){
+  if(button){button.disabled=false;button.textContent=original}
+  alert(err.message);
+ }
+}
+
 async function saveFavouriteOutfit(encoded,index,button){
  const o=JSON.parse(decodeURIComponent(encoded));
  const visual=currentVisualPathForOutfit(o);
@@ -1749,6 +1799,10 @@ async function saveFavouriteOutfit(encoded,index,button){
     visual_path:visual
    })
   });
+  await api("/api/feedback",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({outfit:o,rating:"Loved"})
+  }).catch(()=>{});
   if(button)button.textContent="★ Saved";
  }catch(err){
   if(button){button.disabled=false;button.textContent=original;}
@@ -1776,6 +1830,7 @@ function renderSavedLook(row){
  const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
  const strip=pieces.map(g=>g.image_path?`<div class="saved-piece"><img class="saved-piece-image" src="/api/garments/${g.id}/image" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`:"").join("");
  const visual=row.visual_path?`<img class="saved-look-visual dynamic-ai-image" src="${row.visual_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="Saved outfit visualisation">`:"";
+ const payload=encodeURIComponent(JSON.stringify({outfit:o,request_text:row.request_text||"",weather_context:row.weather_context||""}));
  return `<article class="card saved-look-card">
   <div class="row between"><div><small>SAVED LOOK</small><h3>${esc(row.label||o.label||"Outfit")}</h3></div><button class="text-button danger-text" onclick="deleteSavedLook(${row.id})">Remove</button></div>
   ${visual}
@@ -1783,8 +1838,48 @@ function renderSavedLook(row){
   ${o.why_it_works?`<p>${esc(o.why_it_works)}</p>`:""}
   ${row.weather_context?`<div class="saved-weather"><b>Weather context:</b> ${esc(row.weather_context)}</div>`:""}
   ${row.request_text?`<small class="saved-request">Originally asked: ${esc(row.request_text)}</small>`:""}
+  <div class="saved-look-actions">
+   <button class="primary" type="button" onclick="savedLookVariations('${payload}',${row.id},'similar',this)">More like this</button>
+   <button class="ghost" type="button" onclick="savedLookVariations('${payload}',${row.id},'inspiration',this)">Use as inspiration</button>
+   <button class="ghost reaction-btn positive" type="button" onclick="reactToOutfit('${encodeURIComponent(JSON.stringify(o))}','Works for me',this)">✓ Works for me</button>
+  </div>
+  <div id="savedLookVariations-${row.id}" class="saved-look-variations"></div>
  </article>`;
 }
+
+async function savedLookVariations(encoded,rowId,mode,button){
+ const data=JSON.parse(decodeURIComponent(encoded));
+ const box=$(`savedLookVariations-${rowId}`);
+ if(!box)return;
+ const original=button?.textContent||"More like this";
+ if(button){button.disabled=true;button.textContent="Creating…";}
+ box.innerHTML='<div class="visual-loading">Building variations from this saved look…</div>';
+
+ const requestText=mode==="inspiration"
+  ? `${data.request_text||""}\n\nUse this saved outfit as inspiration. Preserve the overall taste and level of polish, but feel free to change the colour palette and key pieces more substantially so it feels fresh rather than nearly identical.`
+  : `${data.request_text||""}\n\nCreate close variations of this saved look. Keep the same overall character and make only useful changes.`;
+
+ try{
+  const x=await api("/api/stylist-v4/more-like-this",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    base_outfit:data.outfit,
+    request_text:requestText,
+    weather_context:data.weather_context||"",
+    owned_only:false,
+    max_options:3
+   })
+  });
+  const baseIndex=5000+(Number(rowId)*10);
+  box.innerHTML=(x.outfits||[]).map((o,j)=>renderV4Outfit(o,baseIndex+j,true,rowId)).join("")||
+    '<div class="notice">No useful variations found.</div>';
+ }catch(err){
+  box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
+ }finally{
+  if(button){button.disabled=false;button.textContent=original;}
+ }
+}
+
 
 async function deleteSavedLook(id){
  if(!confirm("Remove this saved look?"))return;
@@ -1825,6 +1920,8 @@ function renderV4Outfit(o,index,isVariant=false,baseIndex=null){
   </div>
   <div class="v4-actions">
    <button class="primary favourite-look-btn" type="button" onclick="saveFavouriteOutfit('${payload}',${index},this)">☆ Favourite</button>
+   <button class="ghost reaction-btn positive" type="button" onclick="reactToOutfit('${payload}','Works for me',this)">✓ Works for me</button>
+   <button class="ghost reaction-btn soft-negative" type="button" onclick="reactToOutfit('${payload}','Less like this',this)">↘ Less like this</button>
    <button class="ghost" type="button" onclick="v4Regenerate('${payload}',${index},true,this)">Regenerate image</button>
    <button class="ghost" type="button" onclick="v4Visualise('${payload}',${index},false)">See on model</button>
    ${!isVariant?`<button class="ghost more-like-btn" type="button" onclick="v4MoreLike('${payload}',${index},this)">More like this</button>`:""}

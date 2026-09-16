@@ -1487,7 +1487,10 @@ def style_learning():
         "SELECT rating, outfit_json, created_at FROM feedback ORDER BY id DESC LIMIT 100"
     ).fetchall()]
     garments = [dict(r) for r in con.execute(
-        "SELECT brand, garment_type, fit_feedback, colour, material, formality FROM garments ORDER BY id DESC"
+        "SELECT id, brand, garment_type, fit_feedback, colour, material, formality FROM garments ORDER BY id DESC"
+    ).fetchall()]
+    favourites = [dict(r) for r in con.execute(
+        "SELECT outfit_json, created_at FROM outfit_favourites ORDER BY id DESC LIMIT 100"
     ).fetchall()]
     con.close()
 
@@ -1499,14 +1502,39 @@ def style_learning():
     for g in garments:
         if (g.get("fit_feedback") or "").lower() == "perfect fit" and g.get("brand"):
             perfect_fit_brands[g["brand"]] = perfect_fit_brands.get(g["brand"], 0) + 1
-
     top_brands = sorted(perfect_fit_brands.items(), key=lambda x: (-x[1], x[0]))[:5]
+
+    garment_map={g["id"]:g for g in garments}
+    saved_colours={}
+    saved_categories={}
+    for row in favourites:
+        try:
+            outfit=json.loads(row.get("outfit_json") or "{}")
+        except Exception:
+            continue
+        for raw_id in outfit.get("owned_garment_ids",[]):
+            try: gid=int(raw_id)
+            except Exception: continue
+            g=garment_map.get(gid)
+            if not g: continue
+            colour=(g.get("colour") or "").strip()
+            category=(g.get("garment_type") or "").strip()
+            if colour:
+                saved_colours[colour]=saved_colours.get(colour,0)+1
+            if category:
+                saved_categories[category]=saved_categories.get(category,0)+1
+
+    top_colours=sorted(saved_colours.items(),key=lambda x:(-x[1],x[0]))[:5]
+    top_categories=sorted(saved_categories.items(),key=lambda x:(-x[1],x[0]))[:5]
 
     return {
         "feedback_count": len(rows),
+        "saved_look_count": len(favourites),
         "ratings": counts,
         "perfect_fit_brands": [{"brand": b, "count": c} for b, c in top_brands],
-        "message": "The stylist uses repeated patterns in your feedback and fit history; one-off ratings are treated cautiously."
+        "saved_colours": [{"name": n, "count": c} for n,c in top_colours],
+        "saved_garment_types": [{"name": n, "count": c} for n,c in top_categories],
+        "message": "Saved looks are treated as a strong positive signal. Reactions and fit feedback build the pattern over time, but the stylist is instructed to preserve variety rather than repeat one palette indefinitely."
     }
 
 @app.post("/api/outfits")
@@ -1892,6 +1920,9 @@ def help_me_pack(req: PackingRequest):
     garments=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
     profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     feedback=[dict(r) for r in con.execute("SELECT rating,outfit_json,created_at FROM feedback ORDER BY id DESC LIMIT 30").fetchall()]
+    favourites=[dict(r) for r in con.execute(
+        "SELECT label,outfit_json,request_text,weather_context FROM outfit_favourites ORDER BY id DESC LIMIT 20"
+    ).fetchall()]
     con.close()
 
     if len(garments)<3:
@@ -1934,7 +1965,7 @@ Rules:
       "shopping_allowed":req.shopping_allowed,"notes":req.notes
      },
      "researched_trip_context":req.trip_context or {},
-     "profile":profile,"wardrobe":compact,"recent_feedback":feedback
+     "profile":profile,"wardrobe":compact,"recent_feedback":feedback,"saved_looks":favourites
     }
 
     try:
@@ -2806,6 +2837,14 @@ Priorities:
 - Reason about colour harmony, material/texture, silhouette, footwear, layering, weather,
   seasonality, formality, occasion and practicality.
 - Use fit feedback, preferred brands and learned feedback where relevant.
+- Treat SAVED LOOKS as a strong positive signal: the user deliberately kept those outfits.
+- Treat "Works for me" feedback as a positive signal and "Less like this" as a soft negative signal.
+- Learn repeated patterns across saved looks and feedback: palette, contrast, silhouette, layering,
+  footwear, smartness and recurring garment combinations.
+- Do not overfit to one repeated pattern. If recent preferences are dominated by one palette
+  (for example light blue / pale neutrals), keep some options in that direction but deliberately
+  include at least one strong alternative palette when appropriate.
+- A single reaction should not outweigh repeated evidence.
 - Distinguish timelessly appropriate choices from trend-led choices when useful.
 - Keep explanations concise and specific rather than generic.
 - Score each outfit 0–100 for how well it fits the request and the user's known preferences.
@@ -2823,6 +2862,9 @@ def stylist_v4(req: StylistV4Request):
     profile = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     feedback = [dict(r) for r in con.execute(
         "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 40"
+    ).fetchall()]
+    favourites = [dict(r) for r in con.execute(
+        "SELECT label, outfit_json, request_text, weather_context FROM outfit_favourites ORDER BY id DESC LIMIT 30"
     ).fetchall()]
     con.close()
 
@@ -2845,7 +2887,8 @@ def stylist_v4(req: StylistV4Request):
       "max_options": max_options,
       "profile": profile,
       "wardrobe": garments,
-      "recent_feedback": feedback
+      "recent_feedback": feedback,
+      "saved_looks": favourites
     }
 
     client = OpenAI()
