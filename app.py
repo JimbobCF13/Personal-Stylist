@@ -1480,6 +1480,181 @@ Produce genuinely different outfit options. Use only garment IDs supplied in the
 Be concise but specific about why the outfit works and, where relevant, connect recommendations to learned preferences."""
 
 
+
+
+WARDROBE_INTELLIGENCE_SCHEMA = {
+ "type":"object",
+ "properties":{
+  "summary":{"type":"string"},
+  "strengths":{"type":"array","maxItems":5,"items":{"type":"string"}},
+  "gaps":{"type":"array","maxItems":5,"items":{"type":"object","properties":{
+    "title":{"type":"string"},
+    "reason":{"type":"string"},
+    "priority":{"type":"string","enum":["low","medium","high"]}
+  },"required":["title","reason","priority"],"additionalProperties":False}},
+  "saved_style_patterns":{"type":"array","maxItems":5,"items":{"type":"string"}},
+  "versatility_wins":{"type":"array","maxItems":5,"items":{"type":"string"}},
+  "variety_nudge":{"type":"string"},
+  "next_purchase":{"type":"object","properties":{
+    "item":{"type":"string"},
+    "why":{"type":"string"},
+    "unlock_estimate":{"type":"string"}
+  },"required":["item","why","unlock_estimate"],"additionalProperties":False}
+ },
+ "required":["summary","strengths","gaps","saved_style_patterns","versatility_wins","variety_nudge","next_purchase"],
+ "additionalProperties":False
+}
+
+@app.get("/api/wardrobe-intelligence")
+def wardrobe_intelligence():
+    con=db()
+    garments=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    favourites=[dict(r) for r in con.execute(
+        "SELECT id,label,outfit_json,request_text,weather_context,created_at FROM outfit_favourites ORDER BY id DESC LIMIT 100"
+    ).fetchall()]
+    feedback=[dict(r) for r in con.execute(
+        "SELECT rating,outfit_json,created_at FROM feedback ORDER BY id DESC LIMIT 100"
+    ).fetchall()]
+    con.close()
+
+    if not garments:
+        return {
+          "metrics":{"total_items":0,"categories":0,"saved_looks":0,"perfect_fit_items":0},
+          "category_counts":[],
+          "colour_counts":[],
+          "saved_item_counts":[],
+          "analysis":{
+            "summary":"Add wardrobe items to unlock wardrobe intelligence.",
+            "strengths":[],"gaps":[],"saved_style_patterns":[],"versatility_wins":[],
+            "variety_nudge":"",
+            "next_purchase":{"item":"","why":"","unlock_estimate":""}
+          }
+        }
+
+    category_counts={}
+    colour_counts={}
+    perfect_fit=0
+    for g in garments:
+        category=(g.get("category") or "Other").strip()
+        category_counts[category]=category_counts.get(category,0)+1
+        colour=(g.get("colour") or "").strip()
+        if colour:
+            colour_counts[colour]=colour_counts.get(colour,0)+1
+        if (g.get("fit_feedback") or "").strip().lower()=="perfect fit":
+            perfect_fit+=1
+
+    garment_by_id={g["id"]:g for g in garments}
+    saved_item_counts={}
+    for row in favourites:
+        try:
+            outfit=json.loads(row.get("outfit_json") or "{}")
+        except Exception:
+            continue
+        for raw in outfit.get("owned_garment_ids",[]):
+            try: gid=int(raw)
+            except Exception: continue
+            if gid in garment_by_id:
+                saved_item_counts[gid]=saved_item_counts.get(gid,0)+1
+
+    category_list=[
+        {"name":name,"count":count}
+        for name,count in sorted(category_counts.items(),key=lambda x:(-x[1],x[0]))
+    ]
+    colour_list=[
+        {"name":name,"count":count}
+        for name,count in sorted(colour_counts.items(),key=lambda x:(-x[1],x[0]))[:12]
+    ]
+    saved_list=[]
+    for gid,count in sorted(saved_item_counts.items(),key=lambda x:(-x[1],x[0]))[:12]:
+        g=garment_by_id[gid]
+        saved_list.append({
+          "id":gid,
+          "count":count,
+          "label":" ".join(x for x in [g.get("brand"),g.get("garment_type") or g.get("category")] if x),
+          "colour":g.get("colour") or "",
+          "category":g.get("category") or ""
+        })
+
+    metrics={
+      "total_items":len(garments),
+      "categories":len(category_counts),
+      "saved_looks":len(favourites),
+      "perfect_fit_items":perfect_fit
+    }
+
+    compact=[{
+      "id":g["id"],
+      "category":g.get("category"),
+      "garment_type":g.get("garment_type"),
+      "brand":g.get("brand"),
+      "colour":g.get("colour"),
+      "material":g.get("material"),
+      "pattern":g.get("pattern"),
+      "fit_cut":g.get("fit_cut"),
+      "fit_feedback":g.get("fit_feedback"),
+      "season":g.get("season"),
+      "formality":g.get("formality"),
+      "saved_look_count":saved_item_counts.get(g["id"],0)
+    } for g in garments]
+
+    fallback={
+      "summary":"Your dashboard is based on wardrobe composition, saved-look patterns and fit feedback.",
+      "strengths":[],
+      "gaps":[],
+      "saved_style_patterns":[],
+      "versatility_wins":[],
+      "variety_nudge":"Keep using Saved Looks and Works for me / Less like this to make these insights sharper.",
+      "next_purchase":{"item":"No clear purchase yet","why":"More preference evidence will make this more useful.","unlock_estimate":"Not enough evidence yet"}
+    }
+
+    analysis=fallback
+    if os.getenv("OPENAI_API_KEY") and OpenAI is not None:
+        prompt={
+          "metrics":metrics,
+          "category_counts":category_list,
+          "colour_counts":colour_list,
+          "frequently_saved_items":saved_list,
+          "wardrobe":compact,
+          "recent_feedback":feedback[-60:],
+          "saved_looks":favourites[:40]
+        }
+        instructions="""You are analysing one man's real wardrobe for a private personal stylist app.
+
+Give practical wardrobe intelligence, not generic fashion advice.
+
+Evidence rules:
+- Distinguish wardrobe composition from actual wear. A garment appearing rarely in Saved Looks is NOT proof it is rarely worn.
+- Saved Looks are positive preference evidence; repeated appearances are stronger than one appearance.
+- Fit feedback is high-value evidence.
+- Identify genuine category/colour/formality/seasonal imbalances only when supported by the data.
+- Do not tell the user to buy something merely because a category count is low. A purchase should solve a real versatility or occasion gap.
+- "next_purchase" should be "No clear purchase needed" when the current evidence does not justify one.
+- unlock_estimate must be qualitative and evidence-based (for example "would combine with several navy/grey trousers and two jackets"), not a fabricated numeric count.
+- Notice dominant colour patterns, but explicitly preserve variety rather than reinforcing one palette endlessly.
+- Strong wardrobe items are pieces that combine broad versatility, good fit feedback, or repeated Saved Look use.
+- Keep the writing concise and specific to the supplied wardrobe.
+"""
+        try:
+            response=OpenAI().responses.create(
+              model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+              reasoning={"effort":"low"},
+              instructions=instructions,
+              input=json.dumps(prompt,ensure_ascii=False),
+              text={"format":{"type":"json_schema","name":"wardrobe_intelligence","schema":WARDROBE_INTELLIGENCE_SCHEMA,"strict":True}}
+            )
+            analysis=json.loads(response.output_text)
+        except Exception:
+            analysis=fallback
+
+    return {
+      "metrics":metrics,
+      "category_counts":category_list,
+      "colour_counts":colour_list,
+      "saved_item_counts":saved_list,
+      "analysis":analysis,
+      "evidence_note":"Saved Look frequency shows what you choose to save, not necessarily what you wear most often."
+    }
+
 @app.get("/api/style-learning")
 def style_learning():
     con = db()

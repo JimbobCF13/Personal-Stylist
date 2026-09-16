@@ -72,8 +72,9 @@ function renderAppActivity(){
  $("activityVisual").className=`activity-visual ${item.mode||"working"}`;
  const stop=$("activityStopDictation");
  if(stop){
-  const listening=item.mode==="listening" && activeAiDictation?.recorder?.state==="recording";
+  const listening=item.mode==="listening";
   stop.classList.toggle("hidden",!listening);
+  stop.setAttribute("aria-hidden",listening?"false":"true");
  }
 }
 function beginAppActivity(key,title,detail="",mode="working"){
@@ -192,7 +193,8 @@ async function toggleAiDictation(button,field,status){
   button.classList.add("recording");
   status.classList.remove("hidden");
   status.textContent="Listening… tap Stop when you've finished.";
-  beginAppActivity("dictation","Listening…","Speak naturally, then tap Stop when you've finished.","listening");
+  beginAppActivity("dictation","Listening…","Speak naturally, then press the large Stop dictation button below.","listening");
+  $("activityStopDictation")?.classList.remove("hidden");
   safetyTimer=setTimeout(()=>{
    if(recorder.state==="recording"){
     try{recorder.stop()}catch{}
@@ -399,7 +401,8 @@ async function toggleSmartDictation(button,status,mode){
   button.classList.add("recording");
   status.classList.remove("hidden");
   status.textContent="Listening… tell me everything in one go.";
-  beginAppActivity("dictation","Listening…","Tell me the whole brief naturally, then tap Stop.","listening");
+  beginAppActivity("dictation","Listening…","Tell me the whole brief naturally, then press Stop dictation below.","listening");
+  $("activityStopDictation")?.classList.remove("hidden");
   timer=setTimeout(()=>{if(recorder.state==="recording")try{recorder.stop()}catch{}},90000);
  };
  recorder.onerror=()=>{
@@ -459,6 +462,7 @@ function go(id){
  if(id==="outfits")populateAnchor();
  if(id==="stylistv4")populateV4Anchor();
  if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}
+ if(id==="intelligence")loadWardrobeIntelligence();
  if(id==="quickwardrobe")renderQuickWardrobeResults();
  if(id==="buildlook")renderBuildLookPicker();
 }
@@ -1590,6 +1594,105 @@ $("saveGarment").addEventListener("click",async()=>{
  }
 });
 
+
+
+function renderIntelligenceMetric(value,label,note=""){
+ return `<div class="intel-metric"><strong>${esc(value)}</strong><b>${esc(label)}</b>${note?`<small>${esc(note)}</small>`:""}</div>`;
+}
+
+function intelList(items,empty="No strong pattern yet."){
+ return items?.length
+  ? `<ul>${items.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`
+  : `<p class="muted-copy">${esc(empty)}</p>`;
+}
+
+function renderWardrobeIntelligence(x){
+ const box=$("wardrobeIntelligenceResults");
+ if(!box)return;
+ const m=x.metrics||{};
+ const a=x.analysis||{};
+ const categories=x.category_counts||[];
+ const colours=x.colour_counts||[];
+ const saved=x.saved_item_counts||[];
+
+ const maxCat=Math.max(1,...categories.map(c=>Number(c.count||0)));
+ const categoryBars=categories.map(c=>`<div class="intel-bar-row">
+  <span>${esc(c.name)}</span>
+  <div class="intel-bar-track"><i style="width:${Math.max(4,(Number(c.count||0)/maxCat)*100)}%"></i></div>
+  <b>${c.count}</b>
+ </div>`).join("");
+
+ const colourChips=colours.map(c=>`<span class="intel-chip">${esc(c.name)} <b>${c.count}</b></span>`).join("");
+
+ const savedItems=saved.length?saved.map(item=>`<div class="intel-saved-item">
+  <img src="/api/garments/${item.id}/image" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="">
+  <div><b>${esc(item.label||"Garment")}</b><small>${esc([item.colour,item.category].filter(Boolean).join(" · "))}</small></div>
+  <span>${item.count}× saved</span>
+ </div>`).join(""):`<p class="muted-copy">Save a few outfits and this will start showing which pieces recur in looks you deliberately keep.</p>`;
+
+ const gaps=(a.gaps||[]).map(g=>`<article class="intel-gap ${esc(g.priority||"low")}">
+  <div class="row between"><b>${esc(g.title)}</b><span>${esc(g.priority||"")}</span></div>
+  <p>${esc(g.reason)}</p>
+ </article>`).join("")||`<p class="muted-copy">No clear wardrobe gap identified yet.</p>`;
+
+ box.innerHTML=`
+  <div class="intel-metrics">
+   ${renderIntelligenceMetric(m.total_items||0,"Wardrobe items")}
+   ${renderIntelligenceMetric(m.categories||0,"Categories")}
+   ${renderIntelligenceMetric(m.saved_looks||0,"Saved looks")}
+   ${renderIntelligenceMetric(m.perfect_fit_items||0,"Perfect-fit items")}
+  </div>
+
+  <div class="card intel-summary-card">
+   <small class="eyebrow">STYLIST VIEW</small>
+   <h4>${esc(a.summary||"Wardrobe overview")}</h4>
+   ${a.variety_nudge?`<div class="intel-variety"><b>Keep it varied</b><p>${esc(a.variety_nudge)}</p></div>`:""}
+  </div>
+
+  <div class="intel-grid">
+   <div class="card intel-panel"><small class="eyebrow">WHAT'S WORKING</small><h4>Wardrobe strengths</h4>${intelList(a.strengths)}</div>
+   <div class="card intel-panel"><small class="eyebrow">REAL GAPS</small><h4>Where to improve</h4><div class="intel-gap-list">${gaps}</div></div>
+   <div class="card intel-panel"><small class="eyebrow">YOUR TASTE</small><h4>Patterns from Saved Looks</h4>${intelList(a.saved_style_patterns)}</div>
+   <div class="card intel-panel"><small class="eyebrow">VERSATILITY</small><h4>Pieces doing useful work</h4>${intelList(a.versatility_wins)}</div>
+  </div>
+
+  <div class="card intel-next-purchase">
+   <small class="eyebrow">NEXT PURCHASE</small>
+   <h4>${esc(a.next_purchase?.item||"No clear purchase needed")}</h4>
+   <p>${esc(a.next_purchase?.why||"")}</p>
+   ${a.next_purchase?.unlock_estimate?`<small>${esc(a.next_purchase.unlock_estimate)}</small>`:""}
+  </div>
+
+  <div class="intel-grid intel-data-grid">
+   <div class="card intel-panel"><small class="eyebrow">WARDROBE MIX</small><h4>Categories</h4><div class="intel-bars">${categoryBars}</div></div>
+   <div class="card intel-panel"><small class="eyebrow">COLOUR MIX</small><h4>Most common colours</h4><div class="intel-chips">${colourChips||'<span class="muted-copy">No colour data yet.</span>'}</div></div>
+  </div>
+
+  <div class="card intel-panel">
+   <small class="eyebrow">SAVED-LOOK SIGNAL</small>
+   <h4>Pieces recurring in looks you save</h4>
+   <div class="intel-saved-list">${savedItems}</div>
+   <small class="intel-evidence-note">${esc(x.evidence_note||"")}</small>
+  </div>`;
+ requestAnimationFrame(()=>stabiliseDynamicImages(box));
+}
+
+async function loadWardrobeIntelligence(){
+ const box=$("wardrobeIntelligenceResults");
+ if(!box)return;
+ box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Analysing your wardrobe…</b><small>Looking at composition, saved looks and fit feedback.</small></div></div>';
+ beginAppActivity("wardrobe-intel","Analysing your wardrobe…","Looking for strengths, genuine gaps and useful style patterns.","working");
+ try{
+  const x=await api("/api/wardrobe-intelligence");
+  renderWardrobeIntelligence(x);
+ }catch(err){
+  box.innerHTML=`<div class="notice"><b>I couldn't analyse the wardrobe.</b><br>${esc(err.message)}</div>`;
+ }finally{
+  endAppActivity("wardrobe-intel");
+ }
+}
+
+$("refreshWardrobeIntelligence")?.addEventListener("click",loadWardrobeIntelligence);
 
 async function loadStyleLearning(){
  try{

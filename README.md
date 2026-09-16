@@ -764,3 +764,34 @@ The centre-screen Listening card now contains its own prominent **Stop dictation
 The overlay card is clickable while the blurred background remains non-interactive, so the user no longer has to find the original blurred Stop button behind it.
 
 No database migration. Existing wardrobe, saved looks and image files are untouched.
+
+
+## V5.7 — Wardrobe Intelligence + dictation stop fix
+
+### Wardrobe Intelligence
+Adds a new **My Wardrobe Insights** dashboard from the home screen.
+
+The dashboard combines:
+- wardrobe category balance,
+- common colours,
+- Perfect fit feedback,
+- Saved Look patterns,
+- repeated garments in Saved Looks,
+- outfit reactions.
+
+It surfaces:
+- wardrobe strengths,
+- genuine gaps,
+- Saved Look style patterns,
+- versatile pieces,
+- a variety nudge so the stylist does not overfit to one palette,
+- the most defensible next-purchase opportunity.
+
+Evidence is labelled carefully: Saved Look frequency is treated as preference evidence, not proof of actual wearing frequency.
+
+### Dictation
+The centre Listening card now shows a large, high-contrast **■ Stop dictation** button whenever the activity mode is Listening.
+The button visibility no longer depends on Safari reporting the recorder state at exactly the same moment the overlay renders.
+A visible **Recording is live** badge is also added.
+
+No database migration. Existing wardrobe, saved looks, feedback and images are untouched.

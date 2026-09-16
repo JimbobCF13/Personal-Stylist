@@ -925,3 +925,97 @@ h1,h2,h3,h4{letter-spacing:-.02em}
  .saved-look-actions .primary{grid-column:1/-1}
  .reaction-btn{font-size:10px}
 }
+
+
+/* V5.7 — unmistakable dictation stop */
+.activity-stop-dictation{
+ display:block;
+ width:100%;
+ margin-top:12px;
+ min-height:50px;
+ border:0;
+ border-radius:12px;
+ background:#111;
+ color:#fff;
+ font-size:14px;
+ font-weight:850;
+ cursor:pointer;
+ box-shadow:0 8px 22px rgba(0,0,0,.18);
+}
+.activity-stop-dictation.hidden{display:none!important}
+.activity-visual.listening ~ .activity-copy .activity-stop-dictation{
+ background:#111;
+ animation:dictationStopPulse 1.15s ease-in-out infinite;
+}
+.activity-visual.listening ~ .activity-copy:before{
+ content:"Recording is live";
+ display:inline-flex;
+ width:max-content;
+ padding:4px 7px;
+ border-radius:999px;
+ background:#f3e1df;
+ color:#7e342d;
+ font-size:9px;
+ font-weight:850;
+ text-transform:uppercase;
+ letter-spacing:.07em;
+ margin-bottom:2px;
+}
+
+/* V5.7 — Wardrobe Intelligence */
+.intelligence-section{max-width:1180px}
+.intelligence-title-row{align-items:flex-end}
+.intelligence-title-row h3{margin:3px 0 0}
+.intelligence-intro{max-width:760px;color:#6f6f6a;font-size:12px;line-height:1.55}
+.intel-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+.intel-metric{
+ border:1px solid var(--line);border-radius:15px;padding:15px;background:#fff;display:grid;gap:3px
+}
+.intel-metric strong{font-size:27px;line-height:1;font-weight:850;letter-spacing:-.04em}
+.intel-metric b{font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.intel-metric small{font-size:9px;color:#888}
+.intel-summary-card h4,.intel-panel h4,.intel-next-purchase h4{font-size:18px;margin:5px 0 10px}
+.intel-variety{margin-top:12px;padding:10px 12px;border-radius:12px;background:#f5f4ef}
+.intel-variety b{font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+.intel-variety p{font-size:11px;line-height:1.45;margin:4px 0 0;color:#666}
+.intel-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+.intel-panel ul{margin:0;padding-left:18px}
+.intel-panel li{font-size:11px;line-height:1.5;margin:6px 0;color:#4f4f4b}
+.intel-gap-list{display:grid;gap:8px}
+.intel-gap{border:1px solid var(--line);border-radius:11px;padding:10px;background:#fafaf8}
+.intel-gap .row b{font-size:11px}
+.intel-gap .row span{font-size:8px;text-transform:uppercase;letter-spacing:.08em}
+.intel-gap p{font-size:10px;line-height:1.45;color:#666;margin:5px 0 0}
+.intel-gap.high{border-left:3px solid #555}
+.intel-gap.medium{border-left:3px solid #999}
+.intel-next-purchase{margin:12px 0;background:#f3f3ef}
+.intel-next-purchase p{font-size:11px;line-height:1.5;color:#555}
+.intel-next-purchase>small:last-child{display:block;color:#777;margin-top:8px}
+.intel-bars{display:grid;gap:8px}
+.intel-bar-row{display:grid;grid-template-columns:minmax(120px,1fr) 2fr 28px;gap:9px;align-items:center}
+.intel-bar-row>span{font-size:9px}
+.intel-bar-row>b{font-size:9px;text-align:right}
+.intel-bar-track{height:7px;background:#ecece7;border-radius:99px;overflow:hidden}
+.intel-bar-track i{display:block;height:100%;background:#777;border-radius:99px}
+.intel-chips{display:flex;gap:7px;flex-wrap:wrap}
+.intel-chip{border:1px solid var(--line);border-radius:999px;padding:6px 8px;font-size:9px;background:#fafaf8}
+.intel-chip b{margin-left:3px}
+.intel-saved-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.intel-saved-item{
+ display:grid;grid-template-columns:48px 1fr auto;gap:9px;align-items:center;
+ border:1px solid var(--line);border-radius:12px;padding:7px;background:#fafaf8
+}
+.intel-saved-item img{width:48px;height:58px;object-fit:contain;border-radius:8px;background:#fff}
+.intel-saved-item div{display:grid;gap:2px;min-width:0}
+.intel-saved-item div b{font-size:10px}
+.intel-saved-item div small{font-size:8px;color:#888}
+.intel-saved-item>span{font-size:8px;color:#777;white-space:nowrap}
+.intel-evidence-note{display:block;margin-top:10px;color:#999;font-size:8px}
+
+@media(max-width:700px){
+ .intel-metrics{grid-template-columns:1fr 1fr}
+ .intel-grid{grid-template-columns:1fr}
+ .intel-saved-list{grid-template-columns:1fr}
+ .intel-bar-row{grid-template-columns:minmax(92px,1fr) 1.4fr 24px}
+ .intelligence-title-row{align-items:flex-start}
+}
