@@ -2,16 +2,44 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#f6f1e8"><title>Personal Stylist</title>
-<link rel="stylesheet" href="/static/style.css?v=5.7">
+<meta name="theme-color" content="#f6f1e8"><title>Get Him Dressed</title>
+<link rel="stylesheet" href="/static/style.css?v=6.0">
 </head>
 <body>
+
+<div id="authGate" class="auth-gate hidden">
+ <div class="auth-shell">
+  <div class="auth-brand"><small>GET HIM DRESSED</small><h1>Your wardrobe. Your stylist.</h1><p>Create your own private wardrobe and train the stylist around your taste and fit.</p></div>
+  <div class="auth-card">
+   <div class="auth-tabs">
+    <button id="authLoginTab" class="active" type="button">Sign in</button>
+    <button id="authRegisterTab" type="button">Create account</button>
+   </div>
+   <div id="authLoginPane">
+    <label>EMAIL<input id="authLoginEmail" type="email" autocomplete="email"></label>
+    <label>PASSWORD<input id="authLoginPassword" type="password" autocomplete="current-password"></label>
+    <button id="authLoginBtn" class="primary full" type="button">Sign in</button>
+   </div>
+   <div id="authRegisterPane" class="hidden">
+    <label>NAME<input id="authRegisterName" autocomplete="name"></label>
+    <label>EMAIL<input id="authRegisterEmail" type="email" autocomplete="email"></label>
+    <label>PASSWORD<input id="authRegisterPassword" type="password" autocomplete="new-password" placeholder="At least 8 characters"></label>
+    <label id="authInviteLabel">INVITE CODE<input id="authInviteCode" autocapitalize="characters"></label>
+    <input id="authStylingProfile" type="hidden" value="menswear">
+    <button id="authRegisterBtn" class="primary full" type="button">Create account</button>
+    <small id="authBootstrapNote" class="auth-note"></small>
+   </div>
+   <div id="authMessage" class="notice hidden"></div>
+  </div>
+ </div>
+</div>
+
 <div class="app">
-<header><div><h1>Personal Stylist</h1><small id="status">Connecting…</small></div><span class="badge">V5.7</span></header>
+<header><div><h1>Get Him Dressed</h1><small id="status">Connecting…</small></div><span class="badge">V6.0</span></header>
 
 <section id="home" class="screen active">
   <div class="home-shell">
-   <div class="home-kicker">PERSONAL STYLIST</div>
+   <div class="home-kicker">GET HIM DRESSED</div>
    <div class="home-hero">
     <div>
      <small id="greeting">Good morning</small>
@@ -63,6 +91,10 @@
     <button class="home-card" data-go="intelligence">
      <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-8M22 19H2"/><path d="m3 7 6-3 6 4 6-5"/></svg></span>
      <span><small>WARDROBE INTELLIGENCE</small><b>My Wardrobe Insights</b><em>See strengths, gaps, patterns and the smartest next move</em></span>
+    </button>
+    <button class="home-card" data-go="account">
+     <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c1-5 4-7 7-7s6 2 7 7"/></svg></span>
+     <span><small>ACCOUNT</small><b>My Account</b><em>Login, tester invites and styling profile</em></span>
     </button>
     <button class="home-card" data-go="savedlooks">
      <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg></span>
@@ -209,7 +241,7 @@
  <div class="section">
   <div class="row between"><h3>Ask My Stylist</h3><button class="ghost" data-go="savedlooks" type="button">★ Saved Looks</button></div>
   <div class="card form brief-first-form">
-   <div class="stylist-intro"><span class="eyebrow">PERSONAL STYLIST</span><p>Tell me the whole situation in one go — where you're going, when, what you're doing and how you want to look.</p></div>
+   <div class="stylist-intro"><span class="eyebrow">GET HIM DRESSED</span><p>Tell me the whole situation in one go — where you're going, when, what you're doing and how you want to look.</p></div>
    <label>YOUR BRIEF
     <div class="dictation-wrap brief-first-wrap">
      <textarea id="v4Request" rows="6" placeholder="e.g. I’m going to dinner in London tomorrow night. Smart casual, polished but not overdressed, and I’d like to wear my grey trousers if they work."></textarea>
@@ -374,6 +406,22 @@
  </div>
 </section>
 
+<section id="account" class="screen">
+ <div class="section account-section">
+  <small class="eyebrow">GET HIM DRESSED</small><h3>My Account</h3>
+  <div class="card account-card">
+   <div class="account-identity"><div class="account-avatar" id="accountInitial">G</div><div><h4 id="accountName">Account</h4><p id="accountEmail"></p><span id="accountRole" class="pill"></span></div></div>
+   <div class="account-profile-line"><b>Styling profile</b><span id="accountStylingProfile">Menswear</span></div>
+   <button id="logoutBtn" class="ghost full" type="button">Sign out</button>
+  </div>
+  <div id="adminInviteCard" class="card hidden">
+   <div class="row between"><div><small class="eyebrow">TESTER ACCESS</small><h4>Invite a tester</h4></div><button id="createInviteBtn" class="primary" type="button">Create invite</button></div>
+   <p class="muted-copy">Each invite creates a completely separate wardrobe, profile, photos and learning history.</p>
+   <div id="inviteResults"></div>
+  </div>
+ </div>
+</section>
+
 <section id="profile" class="screen">
  <div class="section"><h3>My Profile & Fit</h3>
   <div class="card form brief-first-form">
@@ -426,7 +474,7 @@
 </div>
 
 <nav><div class="navinner">
-<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button>
+<button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=5.7"></script>
+<script src="/static/app.js?v=6.0"></script>
 </body></html>

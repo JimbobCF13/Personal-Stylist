@@ -1,10 +1,11 @@
 
-import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re, tempfile
-from datetime import date
+import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re, tempfile, hashlib, hmac, secrets
+from contextvars import ContextVar
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 try:
@@ -22,35 +23,202 @@ register_heif_opener()
 ROOT = Path(__file__).resolve().parent
 
 # Persistent storage.
-# On Render set DATA_DIR=/var/data, matching the mounted persistent disk.
-# Local development falls back to a project "data" directory.
+# Existing single-user data remains untouched at DATA_DIR and becomes the first
+# (owner/admin) account's store. Tester accounts receive isolated subdirectories.
 DATA_DIR = Path(os.getenv("DATA_DIR", str(ROOT / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-DB = DATA_DIR / "stylist.db"
-UPLOADS = DATA_DIR / "uploads"
-UPLOADS.mkdir(parents=True, exist_ok=True)
+AUTH_DB = DATA_DIR / "accounts.db"
+USERS_DIR = DATA_DIR / "users"
+USERS_DIR.mkdir(parents=True, exist_ok=True)
 
-CLEANED = DATA_DIR / "cleaned"
-CLEANED.mkdir(parents=True, exist_ok=True)
+CURRENT_USER = ContextVar("ghd_current_user", default=None)
+SESSION_COOKIE = "ghd_session"
+SESSION_DAYS = 30
 
-GENERATED = DATA_DIR / "generated"
-GENERATED.mkdir(parents=True, exist_ok=True)
-
-MODEL_PHOTOS = DATA_DIR / "model_photos"
-MODEL_PHOTOS.mkdir(parents=True, exist_ok=True)
-
-app = FastAPI(title="Personal Stylist V2")
+app = FastAPI(title="Get Him Dressed")
 app.mount("/static", StaticFiles(directory=ROOT/"static"), name="static")
-app.mount("/uploads", StaticFiles(directory=UPLOADS), name="uploads")
-app.mount("/cleaned", StaticFiles(directory=CLEANED), name="cleaned")
-app.mount("/generated", StaticFiles(directory=GENERATED), name="generated")
-app.mount("/model-photos", StaticFiles(directory=MODEL_PHOTOS), name="model-photos")
+
+def auth_db():
+    con=sqlite3.connect(AUTH_DB)
+    con.row_factory=sqlite3.Row
+    return con
+
+def utc_now():
+    return datetime.now(timezone.utc)
+
+def init_auth_db():
+    con=auth_db()
+    con.executescript("""
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'tester',
+      styling_profile TEXT NOT NULL DEFAULT 'menswear',
+      storage_scope TEXT NOT NULL DEFAULT 'isolated',
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS invites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT UNIQUE NOT NULL,
+      created_by INTEGER NOT NULL,
+      max_uses INTEGER NOT NULL DEFAULT 1,
+      uses INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(created_by) REFERENCES users(id)
+    );
+    """)
+    con.commit(); con.close()
+
+def password_hash(password: str) -> str:
+    if len(password or "") < 8:
+        raise HTTPException(400,"Use a password of at least 8 characters.")
+    salt=secrets.token_bytes(16)
+    iterations=260000
+    digest=hashlib.pbkdf2_hmac("sha256",password.encode("utf-8"),salt,iterations)
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${digest.hex()}"
+
+def password_ok(password: str, stored: str) -> bool:
+    try:
+        alg,it,salt_hex,digest_hex=stored.split("$",3)
+        if alg!="pbkdf2_sha256": return False
+        test=hashlib.pbkdf2_hmac("sha256",password.encode("utf-8"),bytes.fromhex(salt_hex),int(it))
+        return hmac.compare_digest(test.hex(),digest_hex)
+    except Exception:
+        return False
+
+def public_user(row):
+    if not row: return None
+    d=dict(row)
+    return {k:d.get(k) for k in ["id","email","display_name","role","styling_profile","storage_scope","created_at"]}
+
+def get_user_by_id(uid: int):
+    con=auth_db()
+    row=con.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
+    con.close()
+    return public_user(row)
+
+def current_user():
+    return CURRENT_USER.get()
+
+def current_user_id():
+    u=current_user()
+    return int(u["id"]) if u else None
+
+def active_user_root():
+    u=current_user()
+    if not u or u.get("storage_scope")=="legacy":
+        root=DATA_DIR
+    else:
+        root=USERS_DIR/str(u["id"])
+    root.mkdir(parents=True,exist_ok=True)
+    return root
+
+def uploads_dir():
+    p=active_user_root()/"uploads"; p.mkdir(parents=True,exist_ok=True); return p
+
+def cleaned_dir():
+    p=active_user_root()/"cleaned"; p.mkdir(parents=True,exist_ok=True); return p
+
+def generated_dir():
+    p=active_user_root()/"generated"; p.mkdir(parents=True,exist_ok=True); return p
+
+def model_photos_dir():
+    p=active_user_root()/"model_photos"; p.mkdir(parents=True,exist_ok=True); return p
+
+def current_db_path():
+    return active_user_root()/"stylist.db"
 
 def db():
-    con = sqlite3.connect(DB)
-    con.row_factory = sqlite3.Row
+    con=sqlite3.connect(current_db_path())
+    con.row_factory=sqlite3.Row
     return con
+
+def session_hash(token: str):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+def create_session(user_id: int):
+    token=secrets.token_urlsafe(32)
+    now=utc_now()
+    expires=now+timedelta(days=SESSION_DAYS)
+    con=auth_db()
+    con.execute("DELETE FROM sessions WHERE expires_at < ?",(now.isoformat(),))
+    con.execute("INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)",
+                (session_hash(token),user_id,expires.isoformat(),now.isoformat()))
+    con.commit(); con.close()
+    return token,expires
+
+def user_from_session(token: str):
+    if not token: return None
+    now=utc_now().isoformat()
+    con=auth_db()
+    row=con.execute("""
+      SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id
+      WHERE s.token_hash=? AND s.expires_at>?
+    """,(session_hash(token),now)).fetchone()
+    con.close()
+    return public_user(row)
+
+def require_admin():
+    u=current_user()
+    if not u or u.get("role")!="admin":
+        raise HTTPException(403,"Admin access required.")
+    return u
+
+init_auth_db()
+
+PUBLIC_PATHS={
+    "/","/api/health","/api/auth/status","/api/auth/login","/api/auth/register"
+}
+
+@app.middleware("http")
+async def account_context(request: Request, call_next):
+    path=request.url.path
+    user=user_from_session(request.cookies.get(SESSION_COOKIE,""))
+    token=CURRENT_USER.set(user)
+    try:
+        protected_media=path.startswith("/uploads/") or path.startswith("/cleaned/") or path.startswith("/generated/") or path.startswith("/model-photos/")
+        protected_api=path.startswith("/api/") and path not in PUBLIC_PATHS
+        if (protected_api or protected_media) and not user:
+            return JSONResponse({"detail":"Please sign in to Get Him Dressed."},status_code=401)
+        return await call_next(request)
+    finally:
+        CURRENT_USER.reset(token)
+
+def safe_media_path(kind: str, filename: str):
+    if Path(filename).name != filename:
+        raise HTTPException(400,"Invalid file path.")
+    roots={
+      "uploads":uploads_dir(),
+      "cleaned":cleaned_dir(),
+      "generated":generated_dir(),
+      "model-photos":model_photos_dir()
+    }
+    root=roots.get(kind)
+    if not root: raise HTTPException(404,"File not found.")
+    path=root/filename
+    if not path.exists() or not path.is_file():
+        raise HTTPException(404,"File not found.")
+    return path
+
+@app.get("/uploads/{filename}")
+def private_upload(filename:str): return FileResponse(safe_media_path("uploads",filename),headers={"Cache-Control":"private, max-age=3600"})
+@app.get("/cleaned/{filename}")
+def private_cleaned(filename:str): return FileResponse(safe_media_path("cleaned",filename),headers={"Cache-Control":"private, max-age=3600"})
+@app.get("/generated/{filename}")
+def private_generated(filename:str): return FileResponse(safe_media_path("generated",filename),headers={"Cache-Control":"private, max-age=3600"})
+@app.get("/model-photos/{filename}")
+def private_model_photo(filename:str): return FileResponse(safe_media_path("model-photos",filename),headers={"Cache-Control":"private, max-age=3600"})
 
 
 WARDROBE_CATEGORY_ORDER = [
@@ -351,13 +519,156 @@ async def transcribe_audio(file: UploadFile = File(...)):
             except Exception:
                 pass
 
+
+class RegisterRequest(BaseModel):
+    display_name: str
+    email: str
+    password: str
+    invite_code: str = ""
+    styling_profile: str = "menswear"
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+def initialise_isolated_user_store(user: dict):
+    token=CURRENT_USER.set(user)
+    try:
+        init_db()
+        normalise_existing_wardrobe_categories()
+    finally:
+        CURRENT_USER.reset(token)
+
+@app.get("/api/auth/status")
+def auth_status(request: Request):
+    con=auth_db()
+    user_count=con.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+    con.close()
+    user=user_from_session(request.cookies.get(SESSION_COOKIE,""))
+    return {
+      "authenticated":bool(user),
+      "user":user,
+      "bootstrap_available":user_count==0,
+      "app_name":"Get Him Dressed"
+    }
+
+@app.post("/api/auth/register")
+def register_account(req: RegisterRequest):
+    email=(req.email or "").strip().lower()
+    name=(req.display_name or "").strip()
+    profile=(req.styling_profile or "menswear").strip().lower()
+    if profile not in {"menswear","womenswear"}:
+        profile="menswear"
+    if not email or "@" not in email:
+        raise HTTPException(400,"Enter a valid email address.")
+    if not name:
+        raise HTTPException(400,"Enter your name.")
+
+    con=auth_db()
+    count=con.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+    role="admin" if count==0 else "tester"
+    scope="legacy" if count==0 else "isolated"
+
+    if count>0:
+        code=(req.invite_code or "").strip().upper()
+        invite=con.execute("""
+          SELECT * FROM invites
+          WHERE code=? AND uses < max_uses AND (expires_at IS NULL OR expires_at>?)
+        """,(code,utc_now().isoformat())).fetchone()
+        if not invite:
+            con.close()
+            raise HTTPException(400,"That invite code is invalid or has already been used.")
+    else:
+        invite=None
+
+    try:
+        cur=con.execute("""
+          INSERT INTO users(email,display_name,password_hash,role,styling_profile,storage_scope,created_at)
+          VALUES (?,?,?,?,?,?,?)
+        """,(email,name,password_hash(req.password),role,profile,scope,utc_now().isoformat()))
+        uid=cur.lastrowid
+        if invite:
+            con.execute("UPDATE invites SET uses=uses+1 WHERE id=?",(invite["id"],))
+        con.commit()
+    except sqlite3.IntegrityError:
+        con.close()
+        raise HTTPException(400,"An account with that email already exists.")
+
+    row=con.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
+    con.close()
+    user=public_user(row)
+    if scope=="isolated":
+        initialise_isolated_user_store(user)
+
+    token,expires=create_session(uid)
+    response=JSONResponse({"ok":True,"user":user})
+    response.set_cookie(SESSION_COOKIE,token,httponly=True,samesite="lax",
+                        secure=os.getenv("COOKIE_SECURE","1")!="0",
+                        max_age=SESSION_DAYS*86400,path="/")
+    return response
+
+@app.post("/api/auth/login")
+def login_account(req: LoginRequest):
+    email=(req.email or "").strip().lower()
+    con=auth_db()
+    row=con.execute("SELECT * FROM users WHERE email=?",(email,)).fetchone()
+    con.close()
+    if not row or not password_ok(req.password,row["password_hash"]):
+        raise HTTPException(401,"Email or password is incorrect.")
+    user=public_user(row)
+    token,expires=create_session(user["id"])
+    response=JSONResponse({"ok":True,"user":user})
+    response.set_cookie(SESSION_COOKIE,token,httponly=True,samesite="lax",
+                        secure=os.getenv("COOKIE_SECURE","1")!="0",
+                        max_age=SESSION_DAYS*86400,path="/")
+    return response
+
+@app.post("/api/auth/logout")
+def logout_account(request: Request):
+    token=request.cookies.get(SESSION_COOKIE,"")
+    if token:
+        con=auth_db()
+        con.execute("DELETE FROM sessions WHERE token_hash=?",(session_hash(token),))
+        con.commit(); con.close()
+    response=JSONResponse({"ok":True})
+    response.delete_cookie(SESSION_COOKIE,path="/")
+    return response
+
+@app.get("/api/account")
+def account_details():
+    u=current_user()
+    return {"user":u}
+
+@app.post("/api/account/invites")
+def create_invite():
+    u=require_admin()
+    code=secrets.token_hex(4).upper()
+    expires=utc_now()+timedelta(days=14)
+    con=auth_db()
+    con.execute("""INSERT INTO invites(code,created_by,max_uses,uses,expires_at,created_at)
+                   VALUES (?,?,1,0,?,?)""",
+                (code,u["id"],expires.isoformat(),utc_now().isoformat()))
+    con.commit(); con.close()
+    return {"code":code,"expires_at":expires.isoformat()}
+
+@app.get("/api/account/invites")
+def list_invites():
+    u=require_admin()
+    con=auth_db()
+    rows=[dict(r) for r in con.execute(
+      "SELECT code,max_uses,uses,expires_at,created_at FROM invites WHERE created_by=? ORDER BY id DESC LIMIT 20",
+      (u["id"],)
+    ).fetchall()]
+    con.close()
+    return rows
+
 @app.get("/")
 def home():
     return FileResponse(ROOT/"static"/"index.html")
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "ai_enabled": bool(os.getenv("OPENAI_API_KEY")) and OpenAI is not None, "data_dir": str(DATA_DIR), "database": str(DB)}
+    return {"ok": True, "ai_enabled": bool(os.getenv("OPENAI_API_KEY")) and OpenAI is not None, "data_dir": str(DATA_DIR), "database": str(current_db_path())}
 
 @app.get("/api/profile")
 def get_profile():
@@ -526,7 +837,7 @@ GARMENT_ENRICHMENT_SCHEMA = {
   "additionalProperties": False
 }
 
-def run_garment_enrichment(gid: int):
+def _run_garment_enrichment_current(gid: int):
     con = db()
     row = con.execute("SELECT * FROM garments WHERE id=?", (gid,)).fetchone()
     if not row:
@@ -633,6 +944,18 @@ Rules:
         con.close()
 
 
+def run_garment_enrichment(gid: int, user_id: Optional[int]=None):
+    token=None
+    if user_id:
+        user=get_user_by_id(user_id)
+        if user:
+            token=CURRENT_USER.set(user)
+    try:
+        return _run_garment_enrichment_current(gid)
+    finally:
+        if token is not None:
+            CURRENT_USER.reset(token)
+
 @app.get("/api/garments/{gid}/detail")
 def garment_detail(gid: int):
     con = db()
@@ -699,7 +1022,7 @@ def enrich_garment(gid: int, background_tasks: BackgroundTasks):
     con.commit()
     con.close()
 
-    background_tasks.add_task(run_garment_enrichment, gid)
+    background_tasks.add_task(run_garment_enrichment, gid, current_user_id())
     return {"ok": True, "status": "researching"}
 
 
@@ -992,7 +1315,7 @@ def create_catalogue_image(source_path: Path) -> Path:
             y = (canvas_h - im.height) // 2
             canvas.paste(im, (x, y))
 
-            out_path = CLEANED / f"catalogue_{uuid.uuid4().hex}.jpg"
+            out_path = cleaned_dir() / f"catalogue_{uuid.uuid4().hex}.jpg"
             canvas.save(out_path, format="JPEG", quality=92, optimize=True)
             return out_path
     except Exception:
@@ -1098,7 +1421,7 @@ def premium_remove_background(source_path: Path) -> Path:
         )
         canvas = Image.new("RGBA", (canvas_w, canvas_h), (249, 249, 248, 255))
         canvas.alpha_composite(cutout, ((canvas_w - cutout.width) // 2, (canvas_h - cutout.height) // 2))
-        out = CLEANED / f"ai_isolated_{uuid.uuid4().hex}.png"
+        out = cleaned_dir() / f"ai_isolated_{uuid.uuid4().hex}.png"
         canvas.convert("RGB").save(out, "PNG", optimize=True)
         return out
     except CleanupServiceError:
@@ -1109,8 +1432,8 @@ def premium_remove_background(source_path: Path) -> Path:
 
 def resolve_saved_image_path(rel_path: str) -> Path:
     rel = str(rel_path or "").lstrip("/")
-    if rel.startswith("uploads/") or rel.startswith("cleaned/") or rel.startswith("model-photos/") or rel.startswith("generated/"):
-        return DATA_DIR / rel
+    if rel.startswith(("uploads/","cleaned/","model-photos/","generated/")):
+        return active_user_root() / rel
     return ROOT / rel
 
 GARMENT_SCHEMA = {
@@ -1180,7 +1503,7 @@ async def analyse_garment(file: UploadFile = File(...)):
     # iPhones can upload HEIC/HEIF with inconsistent metadata.
     original_suffix = Path(file.filename or "photo").suffix.lower() or ".upload"
     raw_name = f"{uuid.uuid4().hex}{original_suffix}"
-    raw_path = UPLOADS / raw_name
+    raw_path = uploads_dir() / raw_name
 
     data = await file.read()
     if not data:
@@ -1215,7 +1538,7 @@ async def analyse_garment(file: UploadFile = File(...)):
     return {
       "image_path": (
           f"/cleaned/{catalogue_path.name}"
-          if catalogue_path.parent == CLEANED
+          if catalogue_path.parent == cleaned_dir()
           else f"/uploads/{image_path.name}"
       ),
       "original_image_path": f"/uploads/{image_path.name}",
@@ -1233,7 +1556,7 @@ async def replace_garment_photo(gid: int, file: UploadFile = File(...)):
         raise HTTPException(404,"Garment not found.")
 
     suffix=Path(file.filename or "photo").suffix.lower() or ".upload"
-    raw=UPLOADS/f"{uuid.uuid4().hex}{suffix}"
+    raw=uploads_dir() /f"{uuid.uuid4().hex}{suffix}"
     data=await file.read()
     if not data:
         con.close()
@@ -1246,7 +1569,7 @@ async def replace_garment_photo(gid: int, file: UploadFile = File(...)):
     try:
         normal=normalise_image_for_ai(raw)
         catalogue=create_catalogue_image(normal)
-        display=(f"/cleaned/{catalogue.name}" if catalogue.parent==CLEANED else f"/uploads/{normal.name}")
+        display=(f"/cleaned/{catalogue.name}" if catalogue.parent==cleaned_dir() else f"/uploads/{normal.name}")
         original=f"/uploads/{normal.name}"
     except Exception:
         con.close()
@@ -1458,7 +1781,7 @@ OUTFIT_SCHEMA = {
  "additionalProperties":False
 }
 
-STYLIST_INSTRUCTIONS = """You are a highly skilled personal menswear stylist for one individual.
+STYLIST_INSTRUCTIONS = """You are a highly skilled personal stylist for one individual.
 Prioritise the user's real wardrobe. Never claim they own an item not in the wardrobe data.
 Reason carefully about colour, shade, fabric/texture, season, actual temperature, occasion,
 formality, silhouette, footwear, body/fit preferences, brand/size history and fit feedback.
@@ -2111,7 +2434,7 @@ def help_me_pack(req: PackingRequest):
      "pattern","fit_cut","fit_feedback","season","formality"
     ]} for g in garments]
 
-    instructions="""You are a meticulous personal menswear stylist and efficient travel packer.
+    instructions="""You are a meticulous personal stylist and efficient travel packer.
 Build a coherent capsule from the user's ACTUAL wardrobe, not unrelated outfits.
 
 Rules:
@@ -2201,7 +2524,7 @@ def get_model_photos():
 @app.post("/api/model-photos")
 async def add_model_photo(file: UploadFile = File(...), label: str = Form("")):
     suffix = Path(file.filename or "portrait").suffix.lower() or ".upload"
-    raw_path = MODEL_PHOTOS / f"{uuid.uuid4().hex}{suffix}"
+    raw_path = model_photos_dir() / f"{uuid.uuid4().hex}{suffix}"
     data = await file.read()
     if not data:
         raise HTTPException(400, "The uploaded photo was empty.")
@@ -2209,8 +2532,8 @@ async def add_model_photo(file: UploadFile = File(...), label: str = Form("")):
         raise HTTPException(400, "That photo is too large. Please choose an image under 15 MB.")
     raw_path.write_bytes(data)
     image_path = normalise_image_for_ai(raw_path)
-    if image_path.parent != MODEL_PHOTOS:
-        target = MODEL_PHOTOS / image_path.name
+    if image_path.parent != model_photos_dir():
+        target = model_photos_dir() / image_path.name
         target.write_bytes(image_path.read_bytes())
         image_path = target
     con = db()
@@ -2229,7 +2552,7 @@ def delete_model_photo(photo_id: int):
     con.commit()
     con.close()
     if row:
-        p = MODEL_PHOTOS / Path(row["image_path"]).name
+        p = model_photos_dir() / Path(row["image_path"]).name
         try:
             if p.exists():
                 p.unlink()
@@ -2289,7 +2612,7 @@ def outfit_visualisation(req: OutfitVisualisationRequest):
     likeness_files = []
     if req.use_my_likeness:
         for mp in model_photos:
-            p = MODEL_PHOTOS / Path(mp.get("image_path") or "").name
+            p = model_photos_dir() / Path(mp.get("image_path") or "").name
             if p.exists():
                 likeness_files.append(p)
         if not likeness_files:
@@ -2395,7 +2718,7 @@ Important:
         raise HTTPException(502, "The image model returned an unsupported image response.")
 
     filename = f"outfit_{uuid.uuid4().hex}.png"
-    out_path = GENERATED / filename
+    out_path = generated_dir() / filename
     out_path.write_bytes(base64.b64decode(b64))
 
     return {
@@ -2646,8 +2969,8 @@ def _download_import_image(image_url: str) -> tuple[str,str]:
             data=r.read(12*1024*1024)
         if not data:return "",""
         suffix=".png" if "png" in ctype else ".webp" if "webp" in ctype else ".jpg"
-        raw=UPLOADS/f"urlimport_{uuid.uuid4().hex}{suffix}"; raw.write_bytes(data); normal=normalise_image_for_ai(raw); catalogue=create_catalogue_image(normal)
-        display=f"/cleaned/{catalogue.name}" if catalogue.parent==CLEANED else f"/uploads/{normal.name}"
+        raw=uploads_dir() /f"urlimport_{uuid.uuid4().hex}{suffix}"; raw.write_bytes(data); normal=normalise_image_for_ai(raw); catalogue=create_catalogue_image(normal)
+        display=f"/cleaned/{catalogue.name}" if catalogue.parent==cleaned_dir() else f"/uploads/{normal.name}"
         return display,f"/uploads/{normal.name}"
     except Exception:return "",""
 
@@ -2995,7 +3318,7 @@ STYLIST_V4_SCHEMA = {
   "additionalProperties": False
 }
 
-STYLIST_V4_INSTRUCTIONS = """You are a high-level personal menswear stylist for one male user.
+STYLIST_V4_INSTRUCTIONS = """You are a high-level personal stylist for one male user.
 
 Use the user's actual wardrobe, fit profile, brand/size history and previous style feedback.
 The request is free text and may contain occasion, weather, dress code, preferred garment,
@@ -3061,6 +3384,7 @@ def stylist_v4(req: StylistV4Request):
       "owned_only": bool(req.owned_only),
       "max_options": max_options,
       "profile": profile,
+      "styling_profile": (current_user() or {}).get("styling_profile","menswear"),
       "wardrobe": garments,
       "recent_feedback": feedback,
       "saved_looks": favourites
@@ -3548,7 +3872,7 @@ def product_tryon(req: ProductTryOnRequest):
     likeness_files=[]
     if req.use_my_likeness:
         for mp in model_photos:
-            p=MODEL_PHOTOS/Path(mp.get("image_path") or "").name
+            p=model_photos_dir() /Path(mp.get("image_path") or "").name
             if p.exists(): likeness_files.append(p)
         if not likeness_files:
             raise HTTPException(400,"Add at least one photo in My Model before using Try on me.")
@@ -3564,7 +3888,7 @@ def product_tryon(req: ProductTryOnRequest):
                 with urllib.request.urlopen(request,timeout=12) as r:
                     data=r.read(12*1024*1024)
                 if data:
-                    tmp=GENERATED/f"product_ref_{uuid.uuid4().hex}.img"
+                    tmp=generated_dir() /f"product_ref_{uuid.uuid4().hex}.img"
                     tmp.write_bytes(data)
                     product_file=normalise_image_for_ai(tmp)
                     try:
@@ -3626,7 +3950,7 @@ Do not invent visible logos. This is an AI styling visualisation, not a guarante
         raise HTTPException(502,"The image model returned an unsupported image response.")
 
     filename=f"product_tryon_{uuid.uuid4().hex}.png"
-    out=GENERATED/filename
+    out=generated_dir() /filename
     out.write_bytes(base64.b64decode(b64))
     return {
         "ok":True,

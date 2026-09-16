@@ -12,6 +12,7 @@ let quickWardrobeItems=[];
 let quickWardrobeRecognition=null;
 let buildLookSelected=new Set();
 let productLookContext=null;
+let authState={user:null,bootstrap_available:false};
 
 
 
@@ -27,6 +28,9 @@ function esc(value){
 
 async function api(url,opts={}){
  const r=await fetch(url,opts); const data=await r.json().catch(()=>({}));
+ if(r.status===401 && !url.startsWith("/api/auth/")){
+  showAuthGate({bootstrap_available:false});
+ }
  if(!r.ok) throw new Error(data.detail||"Something went wrong");
  return data;
 }
@@ -450,6 +454,100 @@ function setupSmartDictation(buttonId,statusId,mode){
  button.addEventListener("click",()=>toggleSmartDictation(button,status,mode));
 }
 
+
+function setAuthMessage(text){
+ const box=$("authMessage");
+ if(!box)return;
+ box.textContent=text||"";
+ box.classList.toggle("hidden",!text);
+}
+function showAuthGate(status={}){
+ authState.bootstrap_available=Boolean(status.bootstrap_available);
+ $("authGate")?.classList.remove("hidden");
+ document.body.classList.add("auth-locked");
+ if($("authInviteLabel"))$("authInviteLabel").classList.toggle("hidden",authState.bootstrap_available);
+ if($("authBootstrapNote"))$("authBootstrapNote").textContent=authState.bootstrap_available
+   ?"First account becomes the owner/admin and keeps the existing wardrobe already on this app."
+   :"Registration is invite-only during testing.";
+}
+function hideAuthGate(){
+ $("authGate")?.classList.add("hidden");
+ document.body.classList.remove("auth-locked");
+}
+function selectAuthTab(which){
+ const login=which==="login";
+ $("authLoginTab")?.classList.toggle("active",login);
+ $("authRegisterTab")?.classList.toggle("active",!login);
+ $("authLoginPane")?.classList.toggle("hidden",!login);
+ $("authRegisterPane")?.classList.toggle("hidden",login);
+ setAuthMessage("");
+}
+$("authLoginTab")?.addEventListener("click",()=>selectAuthTab("login"));
+$("authRegisterTab")?.addEventListener("click",()=>selectAuthTab("register"));
+
+async function loginAccount(){
+ const btn=$("authLoginBtn");
+ btn.disabled=true;btn.textContent="Signing in…";setAuthMessage("");
+ try{
+  const x=await api("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+   email:$("authLoginEmail").value.trim(),password:$("authLoginPassword").value
+  })});
+  authState.user=x.user;
+  location.reload();
+ }catch(err){setAuthMessage(err.message)}
+ finally{btn.disabled=false;btn.textContent="Sign in"}
+}
+$("authLoginBtn")?.addEventListener("click",loginAccount);
+
+async function registerAccount(){
+ const btn=$("authRegisterBtn");
+ btn.disabled=true;btn.textContent="Creating account…";setAuthMessage("");
+ try{
+  const x=await api("/api/auth/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+   display_name:$("authRegisterName").value.trim(),
+   email:$("authRegisterEmail").value.trim(),
+   password:$("authRegisterPassword").value,
+   invite_code:$("authInviteCode").value.trim(),
+   styling_profile:"menswear"
+  })});
+  authState.user=x.user;
+  location.reload();
+ }catch(err){setAuthMessage(err.message)}
+ finally{btn.disabled=false;btn.textContent="Create account"}
+}
+$("authRegisterBtn")?.addEventListener("click",registerAccount);
+
+async function loadAccount(){
+ if(!authState.user)return;
+ const u=authState.user;
+ $("accountName").textContent=u.display_name||"Account";
+ $("accountEmail").textContent=u.email||"";
+ $("accountRole").textContent=u.role==="admin"?"Owner / Admin":"Tester";
+ $("accountStylingProfile").textContent=(u.styling_profile||"menswear")==="womenswear"?"Womenswear":"Menswear";
+ $("accountInitial").textContent=(u.display_name||"G").trim().charAt(0).toUpperCase();
+ $("adminInviteCard").classList.toggle("hidden",u.role!=="admin");
+ if(u.role==="admin")await loadInvites();
+}
+async function loadInvites(){
+ try{
+  const rows=await api("/api/account/invites");
+  $("inviteResults").innerHTML=rows.length?rows.map(r=>`<div class="invite-row"><code>${esc(r.code)}</code><span>${r.uses}/${r.max_uses} used</span><small>Expires ${new Date(r.expires_at).toLocaleDateString()}</small></div>`).join(""):'<p class="muted-copy">No active invites yet.</p>';
+ }catch(err){$("inviteResults").innerHTML=`<small>${esc(err.message)}</small>`}
+}
+$("createInviteBtn")?.addEventListener("click",async()=>{
+ const btn=$("createInviteBtn");btn.disabled=true;btn.textContent="Creating…";
+ try{
+  const x=await api("/api/account/invites",{method:"POST"});
+  await loadInvites();
+  alert(`Invite code: ${x.code}`);
+ }catch(err){alert(err.message)}
+ finally{btn.disabled=false;btn.textContent="Create invite"}
+});
+$("logoutBtn")?.addEventListener("click",async()=>{
+ await api("/api/auth/logout",{method:"POST"});
+ location.reload();
+});
+
 function go(id){
  document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
  $(id).classList.add("active");
@@ -462,6 +560,7 @@ function go(id){
  if(id==="outfits")populateAnchor();
  if(id==="stylistv4")populateV4Anchor();
  if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}
+ if(id==="account")loadAccount();
  if(id==="intelligence")loadWardrobeIntelligence();
  if(id==="quickwardrobe")renderQuickWardrobeResults();
  if(id==="buildlook")renderBuildLookPicker();
@@ -673,9 +772,38 @@ async function tryProductWardrobeLook(encoded,index,button=null,silent=false){
 }
 
 async function init(){
+ let status;
+ try{
+  const r=await fetch("/api/auth/status");
+  status=await r.json();
+ }catch{
+  showAuthGate({bootstrap_available:false});
+  setAuthMessage("The app is temporarily unavailable.");
+  return;
+ }
+ if(!status.authenticated){
+  showAuthGate(status);
+  selectAuthTab(status.bootstrap_available?"register":"login");
+  return;
+ }
+ authState.user=status.user;
+ hideAuthGate();
+
+ // Keep browser-side stylist cache isolated between users on a shared device.
+ const cacheOwner=localStorage.getItem("ghd.cacheOwner");
+ if(cacheOwner!==String(authState.user.id)){
+  localStorage.removeItem("personalStylist.latestStylistSession.v1");
+  localStorage.removeItem("personalStylist.v4VisualCache.v1");
+  localStorage.setItem("ghd.cacheOwner",String(authState.user.id));
+ }
  loadPersistentStylistState();
- try{const h=await api("/api/health");$("status").textContent=h.ai_enabled?"AI stylist connected":"Working prototype · AI key not connected"}catch{$("status").textContent="App offline"}
- await loadGarments(); await loadProfile();
+
+ try{
+  const h=await api("/api/health");
+  $("status").textContent=`${authState.user.display_name} · ${h.ai_enabled?"AI stylist connected":"AI key not connected"}`;
+ }catch{$("status").textContent="App offline"}
+ await loadGarments();
+ await loadProfile();
  if(latestStylistSession)renderLatestStylistSession();
 }
 const WARDROBE_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];

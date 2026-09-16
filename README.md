@@ -795,3 +795,36 @@ The button visibility no longer depends on Safari reporting the recorder state a
 A visible **Recording is live** badge is also added.
 
 No database migration. Existing wardrobe, saved looks, feedback and images are untouched.
+
+
+## V6.0 — Get Him Dressed / Invite-only tester accounts
+
+### Product rebrand
+- Working product name is now **Get Him Dressed**.
+- The app architecture includes a `styling_profile` field so the same platform can later support **Get Her Dressed / womenswear** without cloning the entire codebase.
+
+### Account model
+- First account created after deployment becomes **Owner / Admin**.
+- That first account is attached to the existing legacy `/var/data` store, so the current wardrobe, photos, saved looks and learning history remain untouched.
+- All later accounts require an admin-generated invite code.
+- Tester accounts receive isolated SQLite databases and isolated upload/cleaned/generated/model-photo directories under `/var/data/users/<user_id>/`.
+- Media URLs now resolve against the signed-in user's private storage rather than one shared public static directory.
+- Browser-local stylist caches are cleared when a different user signs in on the same device.
+
+### Authentication
+- Email/password login.
+- PBKDF2-SHA256 password hashing with per-password random salt.
+- Opaque random server-side sessions, stored hashed in the auth database.
+- HttpOnly, SameSite=Lax session cookie.
+- 30-day sessions.
+- Set `COOKIE_SECURE=0` only for local HTTP development; production defaults to secure cookies.
+
+### Tester invites
+- Owner/Admin can create one-use invite codes from **My Account**.
+- Invites expire after 14 days.
+- Each tester builds their own wardrobe, fit profile, saved looks, feedback and reference-photo collection.
+
+### Important deployment step
+After V6.0 is deployed, open the app and create the **first account immediately**. The first account automatically becomes the Owner/Admin and inherits the existing wardrobe data. Subsequent registrations are invite-only.
+
+No destructive migration is performed on the existing stylist database or image library.
