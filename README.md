@@ -1733,3 +1733,14 @@ Default non-admin beta image limits are 20/day and 300/month. Override with `BET
 Text dollar figures are estimates from measured token usage; image activity is counted separately because reference-image input billing varies. Provider invoices remain the source of truth.
 
 No destructive migration.
+
+
+## V7.10.1 — Dictation Consistency Audit
+
+A full voice-entry audit was completed across the major user-input workflows. Premium voice input is now present and visually consistent in Quick Add Wardrobe, Add Garment, Build My Own Look, Style an Online Item, Ask My Stylist, What Should I Wear, Plan My Week, Help Me Pack, Wardrobe Gaps & Shopping, and Profile & Fit.
+
+Plan My Week now supports smart dictation. The complete transcript becomes the weekly brief, while explicit details can also populate the week start date, 5/7-day span, location, work/daily context, dress needs and permission for a missing item.
+
+All voice controls now use the same premium capsule/orb component. The recording lifecycle was also fixed so the premium treatment survives recording, transcription, cancellation and later reuse instead of reverting to cheap plain-text buttons after the first recording.
+
+No destructive migration.

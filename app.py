@@ -3217,6 +3217,9 @@ def parse_voice_form(req: VoiceFormRequest):
       "stylist":{
         "request_text","location","when","shopping"
       },
+      "week":{
+        "start_date","days","location","work_context","dress_needs","shopping_allowed"
+      },
       "outfit":{
         "occasion","dress_code","smartness","season","temperature","weather",
         "location","wardrobe_mode","context_notes"
@@ -3255,6 +3258,14 @@ def parse_voice_form(req: VoiceFormRequest):
 - location is the place relevant to the outfit/weather if clearly stated.
 - when is the date/day/time phrase, normalized clearly where possible.
 - shopping should be "owned" if they explicitly want wardrobe only, otherwise "open" when they allow suggestions.""",
+      "week":"""Extract useful structure from a weekly outfit-planning brief.
+- start_date should be YYYY-MM-DD only when the user gives enough information to resolve it.
+- days should be 5 or 7 only when the user clearly states the planning span.
+- location is the place relevant to the week's weather if stated.
+- work_context should capture office, commute, WFH, school run, meetings and other day-to-day context.
+- dress_needs should capture business casual, smart meetings, relaxed days or other dress requirements.
+- shopping_allowed should be Yes only when the user explicitly allows a missing/new item; otherwise omit it.
+- The full spoken brief is preserved separately in the main week brief, so do not try to squeeze every detail into these fields.""",
       "outfit":"""Extract the structured outfit request.
 - occasion should be one of: Casual daytime, Smart casual, Dinner, Date night, Business meeting, Business casual, Wedding / event, Wedding guest, Cocktail / party, Formal evening, Work event, Daytime event, Holiday / resort, Travel day.
 - dress_code: Use your judgement, Casual, Smart casual, Business casual, Business, Cocktail, Formal.

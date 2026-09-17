@@ -3044,3 +3044,22 @@ input:focus,select:focus,textarea:focus,#search:focus,#filter:focus{
 .beta-user-head{display:flex;justify-content:space-between;gap:10px;align-items:end;margin:16px 0 7px}.beta-user-head b{font-size:10px}.beta-user-head small{font-size:8px;color:#81776e}
 .beta-user-list{border-top:1px solid rgba(76,64,54,.08)}.beta-user-row{display:grid;grid-template-columns:minmax(150px,1.6fr) repeat(4,minmax(65px,.7fr));gap:8px;align-items:center;padding:10px 2px;border-bottom:1px solid rgba(76,64,54,.07)}.beta-user-row>div b{display:block;font-size:9px}.beta-user-row>div small{display:block;font-size:7px;color:#8a8179}.beta-user-row>span{display:grid}.beta-user-row>span b{font-size:10px}.beta-user-row>span small{font-size:7px;color:#92887f}.beta-usage-note{display:block;margin-top:11px;color:#827970;font-size:8px}
 @media(max-width:760px){.beta-checks{grid-template-columns:1fr}.beta-usage-metrics{grid-template-columns:1fr 1fr}.beta-user-row{grid-template-columns:1fr 1fr 1fr}.beta-user-row>div{grid-column:1/-1}}
+
+
+/* =========================================================
+   V7.10.1 — CONSISTENT PREMIUM VOICE INPUT
+   ========================================================= */
+.premium-voice-button{
+ min-height:54px;min-width:190px;padding:8px 13px 8px 9px;display:flex;align-items:center;gap:10px;
+ border:1px solid rgba(76,64,54,.14);border-radius:999px;background:rgba(255,253,249,.96);color:#2b2622;
+ box-shadow:0 8px 22px rgba(42,34,28,.07);cursor:pointer;text-align:left;
+ transition:transform .15s ease,background .15s ease,border-color .15s ease,box-shadow .15s ease;
+}
+.premium-voice-button:hover{background:#fff;border-color:rgba(76,64,54,.24);box-shadow:0 10px 26px rgba(42,34,28,.095);transform:translateY(-1px)}
+.premium-voice-button .voice-orb{width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border-radius:50%;background:#201d1a;color:#fff;font-size:10px;line-height:1;box-shadow:0 5px 14px rgba(30,26,23,.13)}
+.premium-voice-button .voice-copy{min-width:0;display:grid;gap:2px}.premium-voice-button .voice-copy b{font-family:var(--ui-font);font-size:10px;line-height:1.15;font-weight:760;letter-spacing:0;white-space:nowrap}.premium-voice-button .voice-copy small{font-size:7px;line-height:1.15;font-weight:550;color:#8e837a;letter-spacing:.015em;text-transform:none;white-space:nowrap}
+.premium-voice-button.recording{border-color:#bca39b;background:#fff7f4;box-shadow:0 0 0 4px rgba(144,78,67,.06),0 9px 24px rgba(42,34,28,.08)}.premium-voice-button.recording .voice-orb{background:#874f47;animation:premiumVoicePulse 1.2s ease-in-out infinite}.premium-voice-button.processing{opacity:.72}.premium-voice-button.processing .voice-orb{background:#6f665e}@keyframes premiumVoicePulse{50%{box-shadow:0 0 0 7px rgba(135,79,71,.10)}}
+.dictation-wrap{position:relative}.premium-voice-button.voice-inline{position:absolute;right:11px;bottom:11px;z-index:2}.dictation-wrap:has(.premium-voice-button.voice-inline) textarea{padding-bottom:78px}.premium-voice-button.voice-card{position:static;flex:0 0 auto}
+.smart-dictation-card{border-color:rgba(76,64,54,.10)!important;background:linear-gradient(135deg,rgba(246,241,235,.76),rgba(253,251,247,.86))!important;border-radius:17px!important;padding:14px!important}.smart-dictation-card>div>b{font-family:var(--display-font);font-weight:500;font-size:16px;letter-spacing:-.025em}.smart-dictation-card>div>small{color:#917b6c!important}.smart-dictation-card>div>span{color:#827970!important;font-size:9px!important}
+.dictation-status{margin-top:8px;padding:9px 11px;border-radius:11px;background:rgba(240,235,228,.72);color:#6f665e;font-size:9px;line-height:1.45}.dictation-status.hidden{display:none!important}.dictation-status b{color:#39332e}.dictation-status small{display:block;margin-top:2px;color:#8d847c}.week-brief-wrap textarea{min-height:145px}
+@media(max-width:700px){.premium-voice-button.voice-inline{position:static;width:100%;margin-top:9px}.dictation-wrap:has(.premium-voice-button.voice-inline) textarea{padding-bottom:14px}.premium-voice-button.voice-card{width:100%;margin-top:10px}.smart-dictation-card{display:block!important}.premium-voice-button .voice-copy b,.premium-voice-button .voice-copy small{white-space:normal}}

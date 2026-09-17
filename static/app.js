@@ -179,6 +179,25 @@ function appendDictationText(field,text){
  field.focus();
 }
 
+function rememberVoiceButton(button){
+ if(button && !button.dataset.voiceIdleHtml)button.dataset.voiceIdleHtml=button.innerHTML;
+}
+function setVoiceButtonState(button,state){
+ if(!button)return;
+ rememberVoiceButton(button);
+ if(state==="idle"){
+  button.innerHTML=button.dataset.voiceIdleHtml||button.innerHTML;
+  button.classList.remove("recording","processing");
+  return;
+ }
+ const copy=state==="recording"
+  ?["■","Stop recording","Tap when you’re finished"]
+  :["…","Understanding","Just a moment"];
+ button.innerHTML=`<span class="voice-orb" aria-hidden="true">${copy[0]}</span><span class="voice-copy"><b>${copy[1]}</b><small>${copy[2]}</small></span>`;
+ button.classList.toggle("recording",state==="recording");
+ button.classList.toggle("processing",state==="processing");
+}
+
 async function toggleAiDictation(button,field,status){
  if(!button||!field||!status)return;
 
@@ -237,8 +256,7 @@ async function toggleAiDictation(button,field,status){
  };
 
  recorder.onstart=()=>{
-  button.textContent="■ Stop";
-  button.classList.add("recording");
+  setVoiceButtonState(button,"recording");
   status.classList.remove("hidden");
   status.textContent="Listening… tap Stop when you've finished.";
   beginAppActivity("dictation","Listening…","Speak naturally, then press the large Stop dictation button below.","listening");
@@ -263,14 +281,14 @@ async function toggleAiDictation(button,field,status){
   if(cancelled){
    endAppActivity("dictation");
    button.disabled=false;
-   button.textContent="🎙️ Dictate";
+   setVoiceButtonState(button,"idle");
    status.textContent="Dictation cancelled — nothing was added.";
    return;
   }
 
   updateAppActivity("dictation","Transcribing…","Turning your recording into text.","transcribing");
   button.disabled=true;
-  button.textContent="Transcribing…";
+  setVoiceButtonState(button,"processing");
   status.textContent="Turning your recording into text…";
 
   try{
@@ -288,7 +306,7 @@ async function toggleAiDictation(button,field,status){
   }finally{
    endAppActivity("dictation");
    button.disabled=false;
-   button.textContent="🎙️ Dictate";
+   setVoiceButtonState(button,"idle");
   }
  };
 
@@ -298,8 +316,7 @@ async function toggleAiDictation(button,field,status){
   stream.getTracks().forEach(t=>t.stop());
   activeAiDictation=null;
   endAppActivity("dictation");
-  button.classList.remove("recording");
-  button.textContent="🎙️ Dictate";
+  setVoiceButtonState(button,"idle");
   status.classList.remove("hidden");
   status.textContent="I couldn't start recording. Please try again.";
  }
@@ -308,6 +325,7 @@ async function toggleAiDictation(button,field,status){
 function setupAiDictation(buttonId,fieldId,statusId){
  const button=$(buttonId),field=$(fieldId),status=$(statusId);
  if(!button||!field||!status)return;
+ rememberVoiceButton(button);
  button.addEventListener("click",()=>toggleAiDictation(button,field,status));
 }
 
@@ -317,7 +335,9 @@ function setFieldValue(id,value){
  if(!el || value===undefined || value===null || String(value).trim()==="")return false;
  const v=String(value).trim();
 
- if(el.tagName==="SELECT"){
+ if(el.type==="checkbox"){
+  el.checked=/^(yes|true|1|allow|allowed|on)$/i.test(v);
+ }else if(el.tagName==="SELECT"){
   const options=[...el.options];
   const exact=options.find(o=>o.value.toLowerCase()===v.toLowerCase() || o.textContent.trim().toLowerCase()===v.toLowerCase());
   if(exact)el.value=exact.value;
@@ -343,6 +363,10 @@ const SMART_DICTATION_MAPS={
  },
  stylist:{
   request_text:"v4Request",location:"v4Location",when:"v4When",shopping:"v4Shopping"
+ },
+ week:{
+  start_date:"weekStart",days:"weekDays",location:"weekLocation",
+  work_context:"weekWorkContext",dress_needs:"weekDressNeeds",shopping_allowed:"weekShopping"
  },
  outfit:{
   occasion:"occasion",dress_code:"dress_code",smartness:"smartness",season:"outfit_season",
@@ -371,6 +395,9 @@ function normaliseSmartValue(mode,field,value){
  if(mode==="packing" && field==="shopping_allowed"){
   return /^yes|true|allow|open/i.test(String(value))?"Yes":"No";
  }
+ if(mode==="week" && field==="shopping_allowed"){
+  return /^yes|true|allow|open/i.test(String(value))?"Yes":"No";
+ }
  if(mode==="stylist" && field==="shopping"){
   return String(value).toLowerCase().includes("owned")?"owned":"open";
  }
@@ -383,6 +410,10 @@ async function applySmartTranscript(mode,transcript,status){
   if(mode==="packing" && $("pack_brief")){
    $("pack_brief").value=String(transcript||"").trim();
    $("pack_brief").dispatchEvent(new Event("input",{bubbles:true}));
+  }
+  if(mode==="week" && $("weekBrief")){
+   $("weekBrief").value=String(transcript||"").trim();
+   $("weekBrief").dispatchEvent(new Event("input",{bubbles:true}));
   }
   if(mode==="outfit" && $("outfit_brief")){
    $("outfit_brief").value=String(transcript||"").trim();
@@ -458,8 +489,7 @@ async function toggleSmartDictation(button,status,mode){
 
  recorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
  recorder.onstart=()=>{
-  button.textContent="■ Stop";
-  button.classList.add("recording");
+  setVoiceButtonState(button,"recording");
   status.classList.remove("hidden");
   status.textContent="Listening… tell me everything in one go.";
   beginAppActivity("dictation","Listening…","Tell me the whole brief naturally, then press Stop dictation below.","listening");
@@ -482,13 +512,13 @@ async function toggleSmartDictation(button,status,mode){
   if(cancelled){
    endAppActivity("dictation");
    button.disabled=false;
-   button.textContent=button.dataset.smartLabel||"🎙️ Dictate everything";
+   setVoiceButtonState(button,"idle");
    status.textContent="Dictation cancelled — nothing was added.";
    return;
   }
 
   button.disabled=true;
-  button.textContent="Understanding…";
+  setVoiceButtonState(button,"processing");
   updateAppActivity("dictation","Transcribing…","Then I’ll organise the information into the form.","transcribing");
 
   try{
@@ -504,15 +534,16 @@ async function toggleSmartDictation(button,status,mode){
    status.textContent=`Dictation couldn't be processed: ${err.message}`;
   }finally{
    button.disabled=false;
-   button.textContent=button.dataset.smartLabel||"🎙️ Dictate everything";
+   setVoiceButtonState(button,"idle");
   }
  };
- button.dataset.smartLabel=button.textContent;
+ rememberVoiceButton(button);
  try{recorder.start(300)}
  catch{
   stream.getTracks().forEach(t=>t.stop());
   activeAiDictation=null;
   endAppActivity("dictation");
+  setVoiceButtonState(button,"idle");
   status.textContent="I couldn't start recording. Please try again.";
  }
 }
@@ -520,6 +551,7 @@ async function toggleSmartDictation(button,status,mode){
 function setupSmartDictation(buttonId,statusId,mode){
  const button=$(buttonId),status=$(statusId);
  if(!button||!status)return;
+ rememberVoiceButton(button);
  button.addEventListener("click",()=>toggleSmartDictation(button,status,mode));
 }
 
@@ -950,7 +982,9 @@ async function saveQuickWardrobeSelected(){
 }
 
 function startQuickWardrobeDictation(){
- toggleAiDictation($("quickWardrobeDictate"),$("quickWardrobeText"),$("quickWardrobeDictationStatus"));
+ const button=$("quickWardrobeDictate");
+ rememberVoiceButton(button);
+ toggleAiDictation(button,$("quickWardrobeText"),$("quickWardrobeDictationStatus"));
 }
 
 
@@ -3822,6 +3856,7 @@ setupAiDictation("buildLookDictate","buildLookContext","buildLookDictationStatus
 setupAiDictation("productLookDictate","productLookOccasion","productLookDictationStatus");
 
 setupSmartDictation("packSmartDictate","packSmartDictationStatus","packing");
+setupSmartDictation("weekSmartDictate","weekSmartDictationStatus","week");
 setupSmartDictation("stylistSmartDictate","stylistSmartDictationStatus","stylist");
 setupSmartDictation("outfitSmartDictate","outfitSmartDictationStatus","outfit");
 setupSmartDictation("shoppingSmartDictate","shoppingSmartDictationStatus","shopping");

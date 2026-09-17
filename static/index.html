@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.10">
+<link rel="stylesheet" href="/static/style.css?v=7.10.1">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.10</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.10.1</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -158,7 +158,7 @@
    <label>WHAT'S IN YOUR WARDROBE?
     <div class="dictation-wrap">
      <textarea id="quickWardrobeText" rows="7" placeholder="For example: Navy Ralph Lauren polo, medium, fits perfectly. Two Uniqlo Supima T-shirts in white and navy, medium. Cream M&S tailored trousers, 32 waist. Dark brown suede loafers from Loake…"></textarea>
-     <button id="quickWardrobeDictate" class="ghost dictate-btn" type="button">Dictate</button>
+     <button id="quickWardrobeDictate" class="premium-voice-button voice-inline voice-quick" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Tell me what you own</b><small>Speak instead of typing</small></span></button>
     </div>
    </label>
    <div id="quickWardrobeDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
@@ -175,7 +175,7 @@
   <div class="card form">
    <div class="smart-dictation-card compact">
     <div><small>OPTIONAL VOICE DETAILS</small><b>Describe the garment</b><span>Useful if you already know the brand, size, colour, material or fit.</span></div>
-    <button id="garmentSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate garment</button>
+    <button id="garmentSmartDictate" class="premium-voice-button voice-card" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Describe this garment</b><small>Add details by voice</small></span></button>
    </div>
    <div id="garmentSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <div class="photo-actions"><label class="upload"><input id="cameraPhoto" type="file" accept="image/*" capture="environment"><span>📷 Take Photo</span></label><label class="upload"><input id="libraryPhoto" type="file" accept="image/*" multiple><span>🖼️ Choose Photo(s)</span></label></div><div class="add-divider"><span>or</span></div><div id="urlDropZone" class="url-import-card"><div><small>ADD FROM A PRODUCT PAGE</small><b>Paste or drag in a retailer link</b><p>I’ll pull in the product details. You can then keep the retailer image or add your own photo without losing the web information.</p></div><div class="url-import-row"><input id="productUrl" type="url" placeholder="https://brand.com/product/…"><button id="importProductUrl" class="secondary" type="button">Import</button></div><small id="urlImportStatus" class="url-import-status"></small><small class="combine-source-note">Start either way: photo first or web link first. The app will combine both into the same garment before you save.</small></div>
@@ -237,7 +237,7 @@
    <label>OPTIONAL BRIEF
     <div class="dictation-wrap brief-first-wrap compact-brief">
      <textarea id="buildLookContext" rows="3" placeholder="e.g. Dinner in London tomorrow, smart casual and polished but relaxed."></textarea>
-     <button id="buildLookDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate</button>
+     <button id="buildLookDictate" class="premium-voice-button voice-inline" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Describe the occasion</b><small>Speak instead of typing</small></span></button>
     </div>
    </label>
    <div id="buildLookDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
@@ -259,7 +259,7 @@
    <label>OPTIONAL BRIEF
     <div class="dictation-wrap brief-first-wrap compact-brief">
      <textarea id="productLookOccasion" rows="3" placeholder="e.g. I want to wear this for smart dinners and weekends, mostly with pieces I already own."></textarea>
-     <button id="productLookDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate</button>
+     <button id="productLookDictate" class="premium-voice-button voice-inline" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Tell me how you’ll wear it</b><small>Speak instead of typing</small></span></button>
     </div>
    </label>
    <div id="productLookDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
@@ -277,7 +277,7 @@
    <label>YOUR BRIEF
     <div class="dictation-wrap brief-first-wrap">
      <textarea id="v4Request" rows="6" placeholder="e.g. I’m going to dinner in London tomorrow night. Smart casual, polished but not overdressed, and I’d like to wear my grey trousers if they work."></textarea>
-     <button id="stylistSmartDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate brief</button>
+     <button id="stylistSmartDictate" class="premium-voice-button voice-inline" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Tell me what you need</b><small>Speak naturally</small></span></button>
     </div>
    </label>
    <div id="stylistSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
@@ -338,7 +338,7 @@
    <label>YOUR BRIEF
     <div class="dictation-wrap brief-first-wrap">
      <textarea id="outfit_brief" rows="5" placeholder="e.g. Client meeting in London tomorrow followed by a relaxed dinner. I want to look polished and contemporary but not too formal."></textarea>
-     <button id="outfitSmartDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate brief</button>
+     <button id="outfitSmartDictate" class="premium-voice-button voice-inline" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Describe the occasion</b><small>Speak naturally</small></span></button>
     </div>
    </label>
    <div id="outfitSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
@@ -367,8 +367,12 @@
   <div class="row between"><div><small class="eyebrow">WEEKLY WARDROBE</small><h3>Plan My Week</h3><p class="muted-copy">Plan work and everyday outfits in one go — no suitcase required.</p></div><button class="ghost" data-go="savedlooks" type="button">★ Saved Looks</button></div>
   <div class="card form week-planner-form">
    <label>WHAT DOES YOUR WEEK LOOK LIKE?
-    <textarea id="weekBrief" rows="5" placeholder="e.g. Monday and Tuesday in the office, client meeting Wednesday, working from home Thursday and casual office Friday. I want variety without overthinking it."></textarea>
+    <div class="dictation-wrap week-brief-wrap">
+     <textarea id="weekBrief" rows="5" placeholder="e.g. Monday and Tuesday in the office, client meeting Wednesday, working from home Thursday and casual office Friday. I want variety without overthinking it."></textarea>
+     <button id="weekSmartDictate" class="premium-voice-button voice-inline" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Tell me about your week</b><small>Speak instead of typing</small></span></button>
+    </div>
    </label>
+   <div id="weekSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <div class="three">
     <label>WEEK STARTING<input id="weekStart" type="date"></label>
     <label>DAYS<select id="weekDays"><option value="5">5 days</option><option value="7">7 days</option></select></label>
@@ -400,7 +404,7 @@
    <label>YOUR TRIP
     <div class="dictation-wrap pack-brief-wrap">
      <textarea id="pack_brief" rows="6" placeholder="e.g. I’m going to San Francisco from 3–10 October for lectures, business lunches and dinners, some sightseeing and one smarter evening. I’ll be walking a lot and I want to pack fairly light."></textarea>
-     <button id="packSmartDictate" class="trip-voice-button smart-dictate-btn pack-brief-dictate" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span><b>Tell me about your trip</b><small>Speak instead of typing</small></span></button>
+     <button id="packSmartDictate" class="premium-voice-button voice-inline" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Tell me about your trip</b><small>Speak instead of typing</small></span></button>
     </div>
    </label>
    <div id="packSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
@@ -445,7 +449,7 @@
    <label>WHAT ARE YOU LOOKING FOR?
     <div class="dictation-wrap brief-first-wrap">
      <textarea id="shopGoal" rows="5" placeholder="e.g. I want a lightweight navy jacket for smart-casual dinners and travel, ideally under £250, that adds something different to what I already own."></textarea>
-     <button id="shoppingSmartDictate" class="primary smart-dictate-btn brief-dictate-btn" type="button">🎙️ Dictate brief</button>
+     <button id="shoppingSmartDictate" class="premium-voice-button voice-inline" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Tell me what you’re looking for</b><small>Speak instead of typing</small></span></button>
     </div>
    </label>
    <div id="shoppingSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
@@ -586,7 +590,7 @@
    <div class="stylist-intro"><span class="eyebrow">FIT PROFILE</span><p>Tell me your measurements, preferred fit and brand sizing in one go, or open the manual fields below.</p></div>
    <div class="smart-dictation-card compact">
     <div><small>VOICE FIRST</small><b>Tell me your fit profile</b><span>I’ll only fill measurements and preferences you actually say.</span></div>
-    <button id="profileSmartDictate" class="primary smart-dictate-btn" type="button">🎙️ Dictate profile</button>
+    <button id="profileSmartDictate" class="premium-voice-button voice-card" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span class="voice-copy"><b>Tell me about your fit</b><small>Add measurements & preferences</small></span></button>
    </div>
    <div id="profileSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
    <details class="brief-more-details profile-manual-details" open>
@@ -664,5 +668,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.10"></script>
+<script src="/static/app.js?v=7.10.1"></script>
 </body></html>
