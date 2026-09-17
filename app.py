@@ -115,6 +115,10 @@ def init_auth_db():
         con.execute("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
     except sqlite3.OperationalError:
         pass
+    try:
+        con.execute("ALTER TABLE users ADD COLUMN home_order_json TEXT")
+    except sqlite3.OperationalError:
+        pass
     con.commit(); con.close()
 
 def password_hash(password: str) -> str:
@@ -1159,6 +1163,55 @@ def account_details():
     u=current_user()
     return {"user":u}
 
+HOME_FEATURE_KEYS=[
+    "wardrobe","shopping","packing","weekplanner","fitintel","profile",
+    "buildlook","productlook","quickwardrobe","shortlist","intelligence","account","savedlooks"
+]
+
+def _normalise_home_order(raw):
+    values=[]
+    if isinstance(raw,str):
+        try: raw=json.loads(raw)
+        except Exception: raw=[]
+    if isinstance(raw,list):
+        for value in raw:
+            key=str(value or "").strip()
+            if key in HOME_FEATURE_KEYS and key not in values:
+                values.append(key)
+    for key in HOME_FEATURE_KEYS:
+        if key not in values:
+            values.append(key)
+    return values
+
+class HomeOrderRequest(BaseModel):
+    order: list[str]
+
+@app.get("/api/account/home-order")
+def get_home_order():
+    uid=current_user_id()
+    con=auth_db()
+    row=con.execute("SELECT home_order_json FROM users WHERE id=?",(uid,)).fetchone()
+    con.close()
+    order=_normalise_home_order(row["home_order_json"] if row else None)
+    return {"order":order,"default_order":HOME_FEATURE_KEYS}
+
+@app.put("/api/account/home-order")
+def save_home_order(req: HomeOrderRequest):
+    uid=current_user_id()
+    order=_normalise_home_order(req.order)
+    con=auth_db()
+    con.execute("UPDATE users SET home_order_json=? WHERE id=?",(json.dumps(order),uid))
+    con.commit();con.close()
+    return {"ok":True,"order":order,"default_order":HOME_FEATURE_KEYS}
+
+@app.delete("/api/account/home-order")
+def reset_home_order():
+    uid=current_user_id()
+    con=auth_db()
+    con.execute("UPDATE users SET home_order_json=NULL WHERE id=?",(uid,))
+    con.commit();con.close()
+    return {"ok":True,"order":HOME_FEATURE_KEYS,"default_order":HOME_FEATURE_KEYS}
+
 
 def _safe_export_name(value:str) -> str:
     cleaned=re.sub(r"[^A-Za-z0-9_-]+","-",str(value or "").strip()).strip("-")
@@ -1184,7 +1237,7 @@ def account_data_manifest():
     payload={
       "export_format":"get-dressed-portable-backup-v1",
       "exported_at":utc_now().isoformat(),
-      "app_version":"7.10",
+      "app_version":"7.10.2",
       "account":{
         "id":u.get("id"),
         "email":u.get("email"),

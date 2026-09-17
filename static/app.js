@@ -863,6 +863,155 @@ $("logoutBtn")?.addEventListener("click",async()=>{
  location.reload();
 });
 
+
+const HOME_DEFAULT_ORDER=["wardrobe","shopping","packing","weekplanner","fitintel","profile","buildlook","productlook","quickwardrobe","shortlist","intelligence","account","savedlooks"];
+let homeOrder=[...HOME_DEFAULT_ORDER];
+let homeOrderDraft=[...HOME_DEFAULT_ORDER];
+
+function sanitiseHomeOrder(order){
+ const out=[];
+ (Array.isArray(order)?order:[]).forEach(key=>{
+  if(HOME_DEFAULT_ORDER.includes(key) && !out.includes(key))out.push(key);
+ });
+ HOME_DEFAULT_ORDER.forEach(key=>{if(!out.includes(key))out.push(key)});
+ return out;
+}
+
+function applyHomeOrder(order){
+ homeOrder=sanitiseHomeOrder(order);
+ const grid=$("homeFeatureGrid");
+ if(!grid)return;
+ homeOrder.forEach(key=>{
+  const card=grid.querySelector(`[data-home-key="${key}"]`);
+  if(card)grid.appendChild(card);
+ });
+}
+
+function homeCardLabel(key){
+ const card=$("homeFeatureGrid")?.querySelector(`[data-home-key="${key}"]`);
+ return card?.querySelector("b")?.textContent?.trim() || key;
+}
+
+async function loadHomeOrder(){
+ try{
+  const x=await api("/api/account/home-order");
+  applyHomeOrder(x.order||HOME_DEFAULT_ORDER);
+ }catch{
+  applyHomeOrder(HOME_DEFAULT_ORDER);
+ }
+}
+
+function renderHomeCustomiseList(){
+ const box=$("homeCustomiseList");if(!box)return;
+ box.innerHTML=homeOrderDraft.map((key,index)=>`
+  <div class="home-customise-row" draggable="true" data-home-order-key="${esc(key)}">
+   <span class="home-drag-handle" aria-hidden="true">⋮⋮</span>
+   <div><small>${String(index+1).padStart(2,"0")}</small><b>${esc(homeCardLabel(key))}</b></div>
+   <div class="home-order-buttons">
+    <button type="button" aria-label="Move ${esc(homeCardLabel(key))} up" data-home-move="up" ${index===0?"disabled":""}>↑</button>
+    <button type="button" aria-label="Move ${esc(homeCardLabel(key))} down" data-home-move="down" ${index===homeOrderDraft.length-1?"disabled":""}>↓</button>
+   </div>
+  </div>`).join("");
+
+ let draggedKey=null;
+ box.querySelectorAll(".home-customise-row").forEach(row=>{
+  row.addEventListener("dragstart",e=>{
+   draggedKey=row.dataset.homeOrderKey;
+   row.classList.add("dragging");
+   try{e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",draggedKey)}catch{}
+  });
+  row.addEventListener("dragend",()=>{
+   row.classList.remove("dragging");
+   box.querySelectorAll(".home-customise-row").forEach(x=>x.classList.remove("drag-over"));
+   draggedKey=null;
+  });
+  row.addEventListener("dragover",e=>{
+   if(!draggedKey || draggedKey===row.dataset.homeOrderKey)return;
+   e.preventDefault();
+   row.classList.add("drag-over");
+  });
+  row.addEventListener("dragleave",()=>row.classList.remove("drag-over"));
+  row.addEventListener("drop",e=>{
+   e.preventDefault();
+   row.classList.remove("drag-over");
+   const target=row.dataset.homeOrderKey;
+   if(!draggedKey || draggedKey===target)return;
+   const from=homeOrderDraft.indexOf(draggedKey);
+   const to=homeOrderDraft.indexOf(target);
+   if(from<0||to<0)return;
+   homeOrderDraft.splice(from,1);
+   homeOrderDraft.splice(to,0,draggedKey);
+   renderHomeCustomiseList();
+  });
+ });
+}
+
+function openHomeCustomise(){
+ homeOrderDraft=[...homeOrder];
+ renderHomeCustomiseList();
+ $("homeCustomiseStatus").textContent="";
+ $("homeCustomisePanel").classList.remove("hidden");
+ $("customiseHomeBtn").classList.add("active");
+ $("homeCustomisePanel").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function closeHomeCustomise(){
+ $("homeCustomisePanel")?.classList.add("hidden");
+ $("customiseHomeBtn")?.classList.remove("active");
+}
+
+$("customiseHomeBtn")?.addEventListener("click",()=>{
+ if($("homeCustomisePanel")?.classList.contains("hidden"))openHomeCustomise();
+ else closeHomeCustomise();
+});
+$("closeHomeCustomise")?.addEventListener("click",closeHomeCustomise);
+
+$("homeCustomiseList")?.addEventListener("click",e=>{
+ const btn=e.target.closest("[data-home-move]");
+ if(!btn)return;
+ const row=btn.closest("[data-home-order-key]");
+ const key=row?.dataset.homeOrderKey;if(!key)return;
+ const index=homeOrderDraft.indexOf(key);
+ const delta=btn.dataset.homeMove==="up"?-1:1;
+ const next=index+delta;
+ if(index<0||next<0||next>=homeOrderDraft.length)return;
+ [homeOrderDraft[index],homeOrderDraft[next]]=[homeOrderDraft[next],homeOrderDraft[index]];
+ renderHomeCustomiseList();
+});
+
+$("saveHomeOrder")?.addEventListener("click",async()=>{
+ const btn=$("saveHomeOrder"),status=$("homeCustomiseStatus");
+ const original=btn.textContent;btn.disabled=true;btn.textContent="Saving…";status.textContent="";
+ try{
+  const x=await api("/api/account/home-order",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({order:homeOrderDraft})});
+  applyHomeOrder(x.order||homeOrderDraft);
+  homeOrderDraft=[...homeOrder];
+  status.textContent="Home layout saved to your account.";
+  btn.textContent="✓ Saved";
+  setTimeout(closeHomeCustomise,650);
+ }catch(err){
+  status.textContent=err.message;
+  btn.textContent=original;
+ }finally{
+  setTimeout(()=>{btn.disabled=false;btn.textContent=original},700);
+ }
+});
+
+$("resetHomeOrder")?.addEventListener("click",async()=>{
+ const btn=$("resetHomeOrder"),status=$("homeCustomiseStatus");
+ const original=btn.textContent;btn.disabled=true;btn.textContent="Resetting…";status.textContent="";
+ try{
+  const x=await api("/api/account/home-order",{method:"DELETE"});
+  applyHomeOrder(x.order||HOME_DEFAULT_ORDER);
+  homeOrderDraft=[...homeOrder];
+  renderHomeCustomiseList();
+  status.textContent="Default home order restored.";
+ }catch(err){
+  status.textContent=err.message;
+ }finally{
+  btn.disabled=false;btn.textContent=original;
+ }
+});
+
 function go(id){
  document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
  $(id).classList.add("active");
@@ -1310,6 +1459,7 @@ async function init(){
  authState.user=status.user;
  applyStylingProfileUI(authState.user);
  hideAuthGate();
+ loadHomeOrder();
 
  const cacheOwner=localStorage.getItem("ghd.cacheOwner");
  if(cacheOwner!==String(authState.user.id)){

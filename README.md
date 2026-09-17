@@ -1744,3 +1744,19 @@ Plan My Week now supports smart dictation. The complete transcript becomes the w
 All voice controls now use the same premium capsule/orb component. The recording lifecycle was also fixed so the premium treatment survives recording, transcription, cancellation and later reuse instead of reverting to cheap plain-text buttons after the first recording.
 
 No destructive migration.
+
+
+## V7.10.2 — Customisable Home
+
+The home-screen feature tiles can now be reordered per account.
+
+### How it works
+- `Customise home` opens a dedicated arrangement panel.
+- Desktop users can drag rows into their preferred order.
+- Mobile/touch users can use clear up/down controls.
+- `Save layout` persists the order to the signed-in account, so it follows the user across devices.
+- `Reset to default` restores the original product order.
+- The main Ask My Stylist hero remains fixed; only the feature shortcuts underneath it are rearranged.
+
+### Data safety
+Adds one nullable `home_order_json` column to the accounts `users` table using a safe additive migration. No wardrobe, media, profile, saved-look, trip or fit data is changed.
