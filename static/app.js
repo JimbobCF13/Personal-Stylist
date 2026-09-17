@@ -697,6 +697,7 @@ function go(id){
  $(id).classList.add("active");
  document.querySelectorAll("nav [data-go]").forEach(x=>x.classList.toggle("nav-active",x.dataset.go===id));
  if(id!=="wardrobe" || !wardrobeRestorePending)scrollTo(0,0);
+ if(id==="home")refreshSetupProgress();
  if(id==="wardrobe")loadGarments(false);
  if(id==="shortlist")loadShortlist();
  if(id==="savedlooks")loadSavedLooks();
@@ -706,7 +707,7 @@ function go(id){
  if(id==="outfits")populateAnchor();
  if(id==="stylistv4")populateV4Anchor();
  if(id==="profile"){loadProfile();loadStyleLearning();loadModelPhotos()}
- if(id==="account")loadAccount();
+ if(id==="account"){loadAccount();refreshSetupProgress()}
  if(id==="intelligence")loadWardrobeIntelligence();
  if(id==="fitintel")loadFitIntelligence();
  if(id==="quickwardrobe")renderQuickWardrobeResults();
@@ -1045,6 +1046,65 @@ $("onboardingSkip")?.addEventListener("click",()=>closeOnboarding(true));
 $("onboardingClose")?.addEventListener("click",()=>closeOnboarding(false));
 $("restartOnboardingBtn")?.addEventListener("click",()=>startOnboarding(true));
 
+let latestSetupProgress=null;
+
+function setupStepIcon(done){return done?"✓":"○"}
+
+function renderSetupProgress(x){
+ latestSetupProgress=x;
+ const card=$("setupProgressCard");
+ if(card){
+  card.classList.toggle("hidden",Boolean(x?.is_complete));
+  if(!x?.is_complete){
+   $("setupProgressPercent").textContent=`${x.percent||0}%`;
+   $("setupProgressCount").textContent=`${x.completed||0}/${x.total||6}`;
+   $("setupProgressBar").style.width=`${Math.max(0,Math.min(100,Number(x.percent||0)))}%`;
+   $("setupProgressSteps").innerHTML=(x.steps||[]).map(step=>`
+    <button type="button" class="setup-step${step.complete?" complete":""}" data-setup-screen="${esc(step.screen)}">
+     <span>${setupStepIcon(step.complete)}</span>
+     <span><b>${esc(step.label)}</b><small>${esc(step.detail||"")}</small></span>
+    </button>`).join("");
+   const next=x.next_step;
+   const btn=$("setupNextAction");
+   if(btn){
+    btn.dataset.setupScreen=next?.screen||"home";
+    btn.textContent=next?`Next: ${next.label}`:"Setup complete";
+   }
+  }
+ }
+ const account=$("accountSetupSummary");
+ if(account){
+  account.innerHTML=x?.is_complete
+   ? `<b>Personal setup</b><span>✓ Complete — the stylist has the core signals it needs.</span>`
+   : `<b>Personal setup</b><span>${x?.completed||0}/${x?.total||6} complete · ${x?.next_step?.label||"Continue setup"}</span>`;
+ }
+}
+
+async function refreshSetupProgress(){
+ if(!authState.user)return null;
+ try{
+  const x=await api("/api/setup-progress");
+  renderSetupProgress(x);
+  return x;
+ }catch{return null}
+}
+
+async function recordSetupEvent(eventKey){
+ try{
+  await api("/api/setup-progress/event",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({event_key:eventKey})
+  });
+  refreshSetupProgress();
+ }catch{}
+}
+
+document.addEventListener("click",e=>{
+ const b=e.target.closest("[data-setup-screen]");
+ if(!b)return;
+ go(b.dataset.setupScreen||"home");
+});
+
 function maybeStartOnboarding(bootstrap){
  if(!authState.user)return;
  let pending=false,seen=false;
@@ -1106,6 +1166,7 @@ async function init(){
   if(b.name)$("greeting").textContent=`Good morning, ${b.name}`;
   if(!garments.length)$("count").textContent=`${b.wardrobe_count||0} saved item${Number(b.wardrobe_count)===1?"":"s"}`;
   maybeStartOnboarding(b);
+  refreshSetupProgress();
  }).catch(()=>{});
 
  const wardrobePromise=loadGarments(true).catch(()=>{});
@@ -2302,6 +2363,7 @@ async function deleteModelPhoto(id){
  if(!confirm("Remove this reference photo?"))return;
  await api(`/api/model-photos/${id}`,{method:"DELETE"});
  await loadModelPhotos();
+ refreshSetupProgress();
 }
 const modelPhotoInput=$("modelPhotoInput");
 if(modelPhotoInput){
@@ -2324,6 +2386,7 @@ if(modelPhotoInput){
 
    modelPhotoInput.value="";
    await loadModelPhotos();
+   refreshSetupProgress();
    status.textContent=`Uploaded ${files.length} reference photo${files.length===1?"":"s"} successfully.`;
    setTimeout(()=>status.classList.add("hidden"),2500);
   }catch(err){
@@ -2337,7 +2400,10 @@ async function loadProfile(){
 $("saveProfile").addEventListener("click",async()=>{
  const keys=["name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes","usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size","preferred_rise","preferred_hem_length","heel_preference","accessory_notes"],p={};
  keys.forEach(k=>{let v=$(k).value;p[k]=["height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm"].includes(k)?(v?Number(v):null):v});
- await api("/api/profile",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});alert("Profile saved.");await loadProfile();
+ await api("/api/profile",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+ alert("Profile saved.");
+ await loadProfile();
+ refreshSetupProgress();
 });
 
 function populateV4Anchor(){
@@ -2474,6 +2540,7 @@ async function saveFavouriteOutfit(encoded,index,button){
    body:JSON.stringify({outfit:o,rating:"Loved"})
   }).catch(()=>{});
   localStorage.removeItem(userCacheKey("savedLooks"));
+  refreshSetupProgress();
   if(button)button.textContent="★ Saved";
  }catch(err){
   if(button){button.disabled=false;button.textContent=original;}
@@ -3482,6 +3549,7 @@ if(runStylistV4Btn){
     saved_at:new Date().toISOString()
    };
    persistStylistSession();
+   recordSetupEvent("stylist_result");
 
    box.innerHTML=stylistResultHtml(x);
    renderStylistRefineBar(Boolean((x.outfits||[]).length));

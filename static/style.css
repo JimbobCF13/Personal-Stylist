@@ -1811,3 +1811,46 @@ nav [data-go].nav-active:after{
  text-transform:none;
  letter-spacing:0;
 }
+
+
+/* V7.6 — guided setup */
+.setup-progress-card{
+ margin:16px 0 18px;
+ padding:17px;
+ border:1px solid rgba(28,25,22,.12);
+ border-radius:20px;
+ background:rgba(255,255,255,.78);
+ box-shadow:0 14px 34px rgba(28,25,22,.06);
+ backdrop-filter:blur(16px);
+}
+.setup-progress-card.hidden{display:none}
+.setup-progress-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.setup-progress-head h3{margin:3px 0 5px}
+.setup-progress-head p{margin:0;color:#6f6962;font-size:10px}
+.setup-progress-score{display:grid;justify-items:end;min-width:58px}
+.setup-progress-score strong{font-size:22px;line-height:1}
+.setup-progress-score span{margin-top:4px;color:#7b746d;font-size:9px}
+.setup-progress-track{height:5px;background:#ebe7e1;border-radius:999px;overflow:hidden;margin:14px 0}
+.setup-progress-track i{display:block;height:100%;width:0;background:currentColor;border-radius:inherit;transition:width .3s ease}
+.setup-progress-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.setup-step{
+ width:100%;display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start;text-align:left;
+ border:1px solid var(--line);background:#faf8f5;border-radius:12px;padding:9px;
+}
+.setup-step>span:first-child{
+ display:grid;place-items:center;width:20px;height:20px;border:1px solid #cfc8bf;border-radius:50%;font-size:9px
+}
+.setup-step b{display:block;font-size:9px}
+.setup-step small{display:block;margin-top:3px;color:#817a72;font-size:8px;line-height:1.35}
+.setup-step.complete{opacity:.62;background:#f5f3ef}
+.setup-step.complete>span:first-child{background:#24211f;color:#fff;border-color:#24211f}
+.setup-next-action{margin-top:11px;width:100%}
+.account-setup-summary{
+ display:flex;justify-content:space-between;gap:12px;padding:10px 0;margin:5px 0 10px;
+ border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:9px
+}
+.account-setup-summary span{color:#746d66;text-align:right}
+@media(max-width:680px){
+ .setup-progress-steps{grid-template-columns:1fr}
+ .setup-progress-head{align-items:center}
+}

@@ -567,6 +567,10 @@ def init_db():
       previous_last_worn_at TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS setup_events (
+      event_key TEXT PRIMARY KEY,
+      completed_at TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_outfit_wear_events_favourite
       ON outfit_wear_events(favourite_id,id);
     """)
@@ -1023,6 +1027,89 @@ def app_bootstrap():
       "wardrobe_count":wardrobe_count,
       "saved_look_count":saved_count
     }
+
+
+SETUP_STEPS = [
+    ("profile","Personalise your profile","profile"),
+    ("model_photo","Add a model photo","profile"),
+    ("wardrobe","Build a useful wardrobe","quickwardrobe"),
+    ("fit_review","Review one real fit","fitintel"),
+    ("stylist","Try your personal stylist","stylistv4"),
+    ("saved_look","Save a look you like","savedlooks"),
+]
+
+@app.get("/api/setup-progress")
+def setup_progress():
+    con=db()
+    profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone() or {})
+    wardrobe_count=int(con.execute("SELECT COUNT(*) FROM garments").fetchone()[0] or 0)
+    model_photo_count=int(con.execute("SELECT COUNT(*) FROM model_photos").fetchone()[0] or 0)
+    saved_count=int(con.execute("SELECT COUNT(*) FROM outfit_favourites").fetchone()[0] or 0)
+    feedback_count=int(con.execute("SELECT COUNT(*) FROM feedback").fetchone()[0] or 0)
+    fit_review_count=int(con.execute(
+        "SELECT COUNT(*) FROM garments WHERE COALESCE(fit_review_status,'')='confirmed' OR fit_reviewed_at IS NOT NULL"
+    ).fetchone()[0] or 0)
+    event_rows=con.execute("SELECT event_key,completed_at FROM setup_events").fetchall()
+    events={r["event_key"]:r["completed_at"] for r in event_rows}
+    con.close()
+
+    profile_signals=[
+      profile.get("height_cm"),profile.get("chest_cm"),profile.get("waist_cm"),
+      profile.get("usual_top_size"),profile.get("usual_bottom_size"),profile.get("usual_dress_size"),
+      profile.get("usual_shoe_size"),profile.get("preferred_fit"),profile.get("style_notes"),profile.get("brand_notes")
+    ]
+    profile_complete=bool((profile.get("name") or "").strip()) and sum(1 for x in profile_signals if x not in (None,""))>=1
+    stylist_complete=bool(events.get("stylist_result") or feedback_count>0 or saved_count>0)
+
+    state={
+      "profile":profile_complete,
+      "model_photo":model_photo_count>=1,
+      "wardrobe":wardrobe_count>=6,
+      "fit_review":fit_review_count>=1,
+      "stylist":stylist_complete,
+      "saved_look":saved_count>=1,
+    }
+    detail={
+      "profile": "Measurements, sizing or preferences added" if profile_complete else "Add your name plus at least one fit, size or style preference.",
+      "model_photo": f"{model_photo_count} model photo{'s' if model_photo_count!=1 else ''} saved" if model_photo_count else "Add a clear photo so outfit visuals can look like you.",
+      "wardrobe": f"{wardrobe_count} wardrobe items saved" if wardrobe_count else "Add your everyday favourites first.",
+      "fit_review": f"{fit_review_count} confirmed fit review{'s' if fit_review_count!=1 else ''}" if fit_review_count else "Review how one real garment fits.",
+      "stylist": "Personal stylist used" if stylist_complete else "Ask the stylist for your first real outfit.",
+      "saved_look": f"{saved_count} saved look{'s' if saved_count!=1 else ''}" if saved_count else "Save one outfit that feels right.",
+    }
+
+    steps=[]
+    for key,label,screen in SETUP_STEPS:
+        steps.append({"key":key,"label":label,"screen":screen,"complete":bool(state[key]),"detail":detail[key]})
+    completed=sum(1 for x in steps if x["complete"])
+    next_step=next((x for x in steps if not x["complete"]),None)
+    return {
+      "completed":completed,
+      "total":len(steps),
+      "percent":round((completed/len(steps))*100) if steps else 100,
+      "is_complete":completed==len(steps),
+      "steps":steps,
+      "next_step":next_step,
+      "wardrobe_target":6,
+    }
+
+class SetupEventRequest(BaseModel):
+    event_key: str
+
+@app.post("/api/setup-progress/event")
+def record_setup_event(req: SetupEventRequest):
+    allowed={"stylist_result"}
+    key=(req.event_key or "").strip()
+    if key not in allowed:
+        raise HTTPException(400,"Unknown setup event.")
+    con=db()
+    con.execute("""
+      INSERT INTO setup_events(event_key,completed_at) VALUES (?,?)
+      ON CONFLICT(event_key) DO UPDATE SET completed_at=excluded.completed_at
+    """,(key,utc_now().isoformat()))
+    con.commit();con.close()
+    return {"ok":True,"event_key":key}
+
 
 @app.get("/api/profile")
 def get_profile():

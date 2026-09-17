@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.5.1">
+<link rel="stylesheet" href="/static/style.css?v=7.6">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.5.1</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.6</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -68,6 +68,16 @@
      <span class="home-arrow">→</span>
     </button>
    </div>
+
+   <section id="setupProgressCard" class="setup-progress-card hidden" aria-live="polite">
+    <div class="setup-progress-head">
+     <div><small class="eyebrow">MAKE IT YOURS</small><h3 id="setupProgressTitle">Finish your personal setup</h3><p id="setupProgressCopy">A few real signals make the stylist much more useful.</p></div>
+     <div class="setup-progress-score"><strong id="setupProgressPercent">0%</strong><span id="setupProgressCount">0/6</span></div>
+    </div>
+    <div class="setup-progress-track"><i id="setupProgressBar"></i></div>
+    <div id="setupProgressSteps" class="setup-progress-steps"></div>
+    <button id="setupNextAction" class="primary setup-next-action" type="button">Continue setup</button>
+   </section>
 
    <div class="home-grid">
     <button class="home-card" data-go="wardrobe">
@@ -487,6 +497,7 @@
   <div class="card account-card">
    <div class="account-identity"><div class="account-avatar" id="accountInitial">G</div><div><h4 id="accountName">Account</h4><p id="accountEmail"></p><span id="accountRole" class="pill"></span></div></div>
    <div class="account-profile-line"><b>Styling profile</b><span id="accountStylingProfile">Menswear</span></div>
+   <div id="accountSetupSummary" class="account-setup-summary"><b>Personal setup</b><span>Checking…</span></div>
    <button id="restartOnboardingBtn" class="ghost full" type="button">Show me around the app</button>
    <button id="logoutBtn" class="ghost full" type="button">Sign out</button>
   </div>
@@ -617,5 +628,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.5.1"></script>
+<script src="/static/app.js?v=7.6"></script>
 </body></html>

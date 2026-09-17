@@ -1450,3 +1450,36 @@ This allows the user to correct edge cases immediately without fighting the AI c
 A new additive `category_manual` flag is stored per garment. Existing garments default to automatic classification; manually edited garments become locked to the selected category.
 
 No garments, images, fit history, Saved Looks or other user data are removed.
+
+
+## V7.6 — Guided Setup & First-Week Experience
+
+V7.6 adds a persistent, server-backed setup progress system so new testers can understand what materially improves the stylist without being forced through the walkthrough again.
+
+### Six useful setup milestones
+The app now tracks:
+1. Personal profile — name plus at least one sizing, fit or style signal.
+2. Model photo — at least one saved likeness photo.
+3. Useful wardrobe — at least six wardrobe items.
+4. Fit review — at least one confirmed real-garment fit review.
+5. Personal stylist — first real stylist result.
+6. Saved Look — at least one outfit deliberately saved.
+
+### Home guidance
+Until all six milestones are complete, Home shows a compact premium setup card with:
+- live completion percentage,
+- each milestone and its current real state,
+- the next most useful action,
+- direct navigation into the right feature.
+
+The card disappears from Home once setup is complete.
+
+### Account status
+My Account always shows a compact Personal Setup status, so users can see whether the core personalisation signals are complete without replaying onboarding.
+
+### Cross-device persistence
+Progress is calculated from real server data. Stylist usage uses a small additive `setup_events` table, while profile, wardrobe, model photos, fit reviews and Saved Looks are read directly from their existing records.
+
+Existing users are recognised from their current data rather than being treated as new accounts.
+
+No destructive migration.
