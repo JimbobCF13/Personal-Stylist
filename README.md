@@ -1622,3 +1622,59 @@ Authenticated POST/PUT/PATCH/DELETE API requests now reject an explicit cross-or
 V7.8 does **not** pretend to provide email-based forgotten-password recovery. Proper password-reset and email verification should be added only when a real transactional email provider is connected.
 
 No wardrobe/media migration. No destructive user-data changes.
+
+
+## V7.9 — Premium Visual Redesign
+
+V7.9 is a presentation-layer redesign rather than a feature release. Existing workflows, data models and behaviours remain intact.
+
+### Design direction
+- warmer editorial neutral palette
+- serif display typography for fashion/editorial hierarchy
+- calmer sans-serif UI typography for controls and metadata
+- reduced "boxy SaaS" appearance
+- more intentional whitespace and spacing rhythm
+- lighter borders and shadows
+- pill-shaped controls with quieter hierarchy
+- stronger fashion-catalogue image framing
+- desktop floating navigation dock
+- deliberately different desktop and mobile compositions
+
+### Home
+The home screen now behaves more like a fashion/editorial landing page:
+- larger display headline
+- two-column desktop hero
+- stronger primary stylist action
+- refined trust signals
+- three-column desktop feature grid
+- calmer setup-progress treatment
+
+### Wardrobe
+Wardrobe is now a catalogue-style layout with:
+- three columns on larger desktops
+- larger garment imagery
+- less visual chrome
+- editorial category headings
+- quieter category pills and search
+- cleaner action controls
+
+### Ask My Stylist
+Stylist results have been redesigned as premium recommendation cards:
+- editorial outfit titles
+- refined score treatment
+- cleaner garment rows
+- softer stylist notes
+- better action hierarchy
+- more intentional generated-image framing
+
+### Saved Looks, packing, weekly planning and shopping
+These now share the same premium visual language so the app feels like one product rather than separate feature modules.
+
+### Account and profile
+Security, backups, model photos and profile learning use a private-client aesthetic rather than administrative dashboard styling.
+
+### Generated image sizing
+The V7.6.3 laptop-friendly image constraints are explicitly preserved. V7.9 does not make outfit images oversized again.
+
+### Behaviour and data safety
+No feature logic was intentionally removed or changed. No destructive migration.
