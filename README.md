@@ -1305,3 +1305,18 @@ The bottom navigation now clearly highlights the active destination instead of e
 - more consistent elevated-card treatment.
 
 No destructive migration. Existing wardrobes, Saved Looks, old wear counts, trips, accounts, images and fit history remain intact.
+
+
+## V7.3.1 — Saved Look image sizing fix
+
+V7.3 accidentally promoted Saved Look generated visuals to full card width and used `object-fit: cover`, making portrait outfit images oversized and visually dominant.
+
+This corrective release:
+- caps Saved Look visuals at 520px wide on desktop,
+- centres them within the card,
+- preserves their natural portrait aspect ratio,
+- uses `object-fit: contain` so no part of the outfit is cropped,
+- keeps full responsive width on smaller phones,
+- leaves the V7.3 wear-history controls and other polish unchanged.
+
+No database or data migration changes.
