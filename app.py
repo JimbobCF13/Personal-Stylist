@@ -545,6 +545,15 @@ def init_db():
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS outfit_wear_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      favourite_id INTEGER NOT NULL,
+      worn_at TEXT NOT NULL,
+      previous_last_worn_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_outfit_wear_events_favourite
+      ON outfit_wear_events(favourite_id,id);
     """)
     try:
         con.execute("ALTER TABLE garments ADD COLUMN original_image_path TEXT")
@@ -3876,9 +3885,13 @@ def update_outfit_favourite(fid:int, req: SavedLookUpdateRequest):
 def mark_saved_look_worn(fid:int):
     now=utc_now().isoformat()
     con=db()
-    exists=con.execute("SELECT id FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
+    exists=con.execute("SELECT id,last_worn_at FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
     if not exists:
         con.close();raise HTTPException(404,"Saved look not found.")
+    con.execute("""
+      INSERT INTO outfit_wear_events(favourite_id,worn_at,previous_last_worn_at)
+      VALUES (?,?,?)
+    """,(fid,now,exists["last_worn_at"]))
     con.execute("""
       UPDATE outfit_favourites
       SET wore_count=COALESCE(wore_count,0)+1,last_worn_at=?,updated_at=?
@@ -3888,6 +3901,43 @@ def mark_saved_look_worn(fid:int):
     row=con.execute("SELECT * FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
     con.close()
     return saved_look_row(row)
+
+@app.post("/api/outfit-favourites/{fid}/undo-wear")
+def undo_saved_look_wear(fid:int):
+    con=db()
+    row=con.execute("SELECT * FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
+    if not row:
+        con.close();raise HTTPException(404,"Saved look not found.")
+
+    current=max(0,int(row["wore_count"] or 0))
+    if current<=0:
+        con.close()
+        return saved_look_row(row)
+
+    event=con.execute("""
+      SELECT * FROM outfit_wear_events
+      WHERE favourite_id=? ORDER BY id DESC LIMIT 1
+    """,(fid,)).fetchone()
+
+    new_count=max(0,current-1)
+    if event:
+        restored_last=event["previous_last_worn_at"]
+        con.execute("DELETE FROM outfit_wear_events WHERE id=?",(event["id"],))
+    else:
+        # Counts created before V7.3 have no per-wear event history.
+        # Preserve the old last-worn date unless the count returns to zero.
+        restored_last=None if new_count==0 else row["last_worn_at"]
+
+    now=utc_now().isoformat()
+    con.execute("""
+      UPDATE outfit_favourites
+      SET wore_count=?,last_worn_at=?,updated_at=?
+      WHERE id=?
+    """,(new_count,restored_last,now,fid))
+    con.commit()
+    updated=con.execute("SELECT * FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
+    con.close()
+    return saved_look_row(updated)
 
 @app.delete("/api/outfit-favourites/{fid}")
 def delete_outfit_favourite(fid:int):

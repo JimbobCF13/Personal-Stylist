@@ -1265,3 +1265,43 @@ Styling forms and dictation now recognise more useful event types:
 Wedding guest, Cocktail / party, Formal evening, Work event and Daytime event.
 
 No destructive migration. Existing menswear and womenswear accounts, wardrobes, images, Saved Looks, trips and fit history remain intact.
+
+
+## V7.3 — Visual & Product Polish
+
+V7.3 focuses on making the existing app feel more deliberate and finished rather than adding another large workflow.
+
+### Correctable wear history
+Saved Looks now records a small wear-event history for new wear taps.
+
+- **I wore this** records the wear and increases the total.
+- Once a look has been worn, the main action becomes **+ Add another wear**.
+- **− Undo last wear** removes the most recently recorded wear.
+- The count can never fall below zero.
+- If the undone wear was created in V7.3+, the previous last-worn date is restored exactly.
+- Older pre-V7.3 wear counts are preserved. If one of those legacy counts is reduced, the old last-worn date is retained until the count reaches zero because the historical individual dates were never stored.
+
+This means accidental taps can now be corrected without corrupting the learning signal.
+
+### Navigation polish
+The bottom navigation now clearly highlights the active destination instead of every navigation item having equal visual weight.
+
+### Home polish
+- stronger primary stylist CTA,
+- softer secondary feature cards,
+- subtle trust/intelligence cues for Private wardrobe, Fit learning and Real wear memory,
+- refined hover/press feedback.
+
+### Saved Looks polish
+- stronger editorial card hierarchy,
+- improved generated visual presentation,
+- clearer wear-evidence panel,
+- cleaner primary vs secondary actions.
+
+### Loading / interaction polish
+- consistent shimmer treatment for loading states,
+- clearer field focus states,
+- softer motion and button press feedback,
+- more consistent elevated-card treatment.
+
+No destructive migration. Existing wardrobes, Saved Looks, old wear counts, trips, accounts, images and fit history remain intact.

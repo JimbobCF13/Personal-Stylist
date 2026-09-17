@@ -695,6 +695,7 @@ $("logoutBtn")?.addEventListener("click",async()=>{
 function go(id){
  document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
  $(id).classList.add("active");
+ document.querySelectorAll("nav [data-go]").forEach(x=>x.classList.toggle("nav-active",x.dataset.go===id));
  if(id!=="wardrobe" || !wardrobeRestorePending)scrollTo(0,0);
  if(id==="wardrobe")loadGarments(false);
  if(id==="shortlist")loadShortlist();
@@ -711,6 +712,8 @@ function go(id){
  if(id==="quickwardrobe")renderQuickWardrobeResults();
  if(id==="buildlook")renderBuildLookPicker();
 }
+document.querySelector('nav [data-go="home"]')?.classList.add("nav-active");
+
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-go]");
  if(!b)return;
@@ -2562,8 +2565,8 @@ async function markSavedLookWorn(id,button){
   const count=Number(updated.wore_count||1);
   if(button){
    button.classList.remove("saving-wear");
-   button.classList.add("worn","wear-confirmed");
-   button.textContent=`✓ Worn ${count}×`;
+   button.classList.add("wear-confirmed");
+   button.textContent=count>1?"+ Add another wear":"✓ Recorded";
   }
   showWearLearningToast(count);
   localStorage.removeItem(userCacheKey("savedLooks"));
@@ -2578,7 +2581,22 @@ async function markSavedLookWorn(id,button){
  }
 }
 
-function showWearLearningToast(count){
+async function undoSavedLookWear(id,button){
+ const original=button?.textContent||"− Undo last wear";
+ if(button){button.disabled=true;button.textContent="Undoing…"}
+ try{
+  const updated=await api(`/api/outfit-favourites/${id}/undo-wear`,{method:"POST"});
+  const count=Number(updated.wore_count||0);
+  showWearLearningToast(count,true);
+  localStorage.removeItem(userCacheKey("savedLooks"));
+  await loadSavedLooks();
+ }catch(err){
+  alert(err.message);
+  if(button){button.disabled=false;button.textContent=original}
+ }
+}
+
+function showWearLearningToast(count,undone=false){
  let toast=$("wearLearningToast");
  if(!toast){
   toast=document.createElement("div");
@@ -2586,7 +2604,9 @@ function showWearLearningToast(count){
   toast.className="wear-learning-toast";
   document.body.appendChild(toast);
  }
- toast.innerHTML=`<div><span>✓</span><div><b>Wear recorded</b><p>This look now carries more weight in your style learning because you've actually worn it${count>1?` ${count} times`:""}.</p></div></div>`;
+ toast.innerHTML=undone
+  ? `<div><span>↶</span><div><b>Last wear removed</b><p>The wear count is now ${count}. Your style-learning evidence has been corrected too.</p></div></div>`
+  : `<div><span>✓</span><div><b>Wear recorded</b><p>This look now carries more weight in your style learning because you've actually worn it${count>1?` ${count} times`:""}.</p></div></div>`;
  toast.classList.add("show");
  clearTimeout(window._wearToastTimer);
  window._wearToastTimer=setTimeout(()=>toast.classList.remove("show"),3200);
@@ -2663,8 +2683,9 @@ function renderSavedLook(row){
  const lastWorn=row.last_worn_at?new Date(row.last_worn_at).toLocaleDateString():"";
  const tags=(row.tags||[]).map(t=>`<span>${esc(t)}</span>`).join("");
  const meta=[row.occasion,row.season,worn?`${worn} wear${worn===1?"":"s"}`:"Not worn yet"].filter(Boolean);
- const woreButtonClass=worn>0?"ghost saved-wore-btn worn":"ghost saved-wore-btn";
- const woreButtonLabel=worn>0?`✓ Worn ${worn}×`:"I wore this";
+ const woreButtonClass="ghost saved-wore-btn";
+ const woreButtonLabel=worn>0?"+ Add another wear":"I wore this";
+ const undoWearButton=worn>0?`<button class="text-button undo-wear-btn" type="button" onclick="undoSavedLookWear(${row.id},this)">− Undo last wear</button>`:"";
  return `<article class="card saved-look-card ${row.is_pinned?"saved-look-pinned":""}">
   <div class="row between saved-look-title-row">
    <div><small>${row.is_pinned?"PINNED LOOK":"SAVED LOOK"}</small><h3>${esc(row.label||o.label||"Outfit")}</h3></div>
@@ -2676,7 +2697,7 @@ function renderSavedLook(row){
   <div class="saved-piece-strip">${strip}</div>
   ${o.why_it_works?`<p>${esc(o.why_it_works)}</p>`:""}
   ${row.notes?`<div class="saved-look-note"><b>Your note:</b> ${esc(row.notes)}</div>`:""}
-  ${worn>0?`<div class="saved-wear-status"><div><span>✓</span><b>You've worn this look ${worn} time${worn===1?"":"s"}</b></div>${lastWorn?`<small>Last worn ${esc(lastWorn)}</small>`:""}<p>This now counts as real wear evidence, so the stylist can give more weight to looks and pieces you actually use — not just ones you save.</p></div>`:""}
+  ${worn>0?`<div class="saved-wear-status"><div class="saved-wear-status-head"><div><span>✓</span><b>Worn ${worn} time${worn===1?"":"s"}</b></div>${undoWearButton}</div>${lastWorn?`<small>Last worn ${esc(lastWorn)}</small>`:""}<p>Real wears are stronger learning evidence than saved favourites, so this helps the stylist understand what genuinely works in your day-to-day wardrobe.</p></div>`:""}
   ${row.weather_context?`<div class="saved-weather"><b>Weather context:</b> ${esc(row.weather_context)}</div>`:""}
   ${row.request_text?`<small class="saved-request">Originally asked: ${esc(row.request_text)}</small>`:""}
   <div class="saved-look-actions saved-look-primary-actions">
