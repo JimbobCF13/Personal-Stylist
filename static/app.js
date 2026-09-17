@@ -1112,7 +1112,7 @@ async function init(){
  if(latestStylistSession)requestAnimationFrame(renderLatestStylistSession);
  Promise.allSettled([healthPromise,bootPromise,wardrobePromise,profilePromise]);
 }
-const MENSWEAR_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
+const MENSWEAR_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets & Coats","Knitwear","Sweatshirts & Hoodies","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
 const WOMENSWEAR_ORDER=["Dresses","Skirts","Jumpsuits & Playsuits","Blazers & Tailoring","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Blouses & Shirts","Tops & T-Shirts","Trousers & Jeans","Shorts","Activewear","Footwear","Bags","Jewellery","Accessories","Other"];
 let WARDROBE_ORDER=[...MENSWEAR_ORDER];
 let selectedWardrobeCategory="";
@@ -1123,8 +1123,8 @@ let wardrobeRestorePending=false;
 function normalisedCategory(c){
  const raw=String(c||"Other").trim().toLowerCase();
  if((authState.user?.styling_profile||"menswear")==="menswear"){
-  if(raw==="jackets & outerwear")return "Jackets";
-  if(raw==="overshirts")return "Overshirts & Shirt Jackets";
+  if(["jackets","coats","jackets & outerwear","outerwear","jackets & coats"].includes(raw))return "Jackets & Coats";
+  if(["overshirts","overshirt","shirt jackets","shirt jacket"].includes(raw))return "Overshirts & Shirt Jackets";
  }
  return WARDROBE_ORDER.find(x=>x.toLowerCase()===raw)||"Other";
 }
@@ -2386,6 +2386,16 @@ function currentVisualPathForOutfit(o){
  return preferred?.image_path||generic?.image_path||"";
 }
 
+function renderStylistRefineBar(show=true){
+ $("v4RefineBar")?.classList.toggle("hidden",!show);
+}
+
+function stylistResultHtml(x){
+ return `<div class="notice stylist-session-note"><b>Current stylist suggestions</b><span>Replace one you dislike, or refine the whole set below.</span></div>`+
+  `<div class="notice"><b>Stylist view:</b> ${esc(x.summary||"")}</div>`+
+  (x.outfits||[]).map((o,i)=>renderV4Outfit(o,i)).join("");
+}
+
 function renderLatestStylistSession(){
  if(!latestStylistSession)return;
  const box=$("v4Results");
@@ -2399,9 +2409,8 @@ function renderLatestStylistSession(){
   $("v4WeatherStatus").classList.remove("hidden");
   $("v4WeatherStatus").innerHTML=`<b>Forecast used:</b> ${esc(w.summary)}${w.styling_context?`<small>${esc(w.styling_context)}</small>`:""}`;
  }
- box.innerHTML=`<div class="notice stylist-session-note"><b>Current stylist suggestions</b><span>These stay here until you ask for a new set.</span></div>`+
-  `<div class="notice"><b>Stylist view:</b> ${esc(x.summary||"")}</div>`+
-  (x.outfits||[]).map((o,i)=>renderV4Outfit(o,i)).join("");
+ box.innerHTML=stylistResultHtml(x);
+ renderStylistRefineBar(Boolean((x.outfits||[]).length));
 }
 
 
@@ -2791,6 +2800,7 @@ function renderV4Outfit(o,index,isVariant=false,baseIndex=null){
    <button class="primary favourite-look-btn" type="button" onclick="saveFavouriteOutfit('${payload}',${index},this)">☆ Favourite</button>
    <button class="ghost reaction-btn positive" type="button" onclick="reactToOutfit('${payload}','Works for me',this)">✓ Works for me</button>
    <button class="ghost reaction-btn soft-negative" type="button" onclick="reactToOutfit('${payload}','Less like this',this)">↘ Less like this</button>
+   ${!isVariant?`<button class="ghost replace-look-btn" type="button" onclick="replaceStylistOutfit(${index},this)">↻ Replace this outfit</button>`:""}
    <button class="ghost" type="button" onclick="v4Regenerate('${payload}',${index},true,this)">Regenerate image</button>
    <button class="ghost" type="button" onclick="v4Visualise('${payload}',${index},false)">See on model</button>
    ${!isVariant?`<button class="ghost more-like-btn" type="button" onclick="v4MoreLike('${payload}',${index},this)">More like this</button>`:""}
@@ -2801,6 +2811,71 @@ function renderV4Outfit(o,index,isVariant=false,baseIndex=null){
   ${!isVariant?`<div id="v4More-${index}" class="v4-more-results">${renderStoredMoreLike(index)}</div>`:""}
  </div>`;
 }
+
+async function replaceStylistOutfit(index,button,feedback=""){
+ const session=latestStylistSession;
+ const outfits=session?.result?.outfits||[];
+ const base=outfits[index];
+ if(!base)return;
+ const original=button?.textContent||"↻ Replace this outfit";
+ if(button){button.disabled=true;button.textContent="Finding another…"}
+ const activity=`replace-look-${index}`;
+ beginAppActivity(activity,"Finding another option…",feedback||"Keeping your brief, but taking this outfit in a different direction.","working");
+ try{
+  const x=await api("/api/stylist-v4/replace-one",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    base_outfit:base,
+    request_text:session.request_text||"",
+    feedback:feedback||"",
+    weather_context:session.weather?.summary||"",
+    owned_only:Boolean(session.owned_only),
+    other_outfits:outfits.filter((_,i)=>i!==index)
+   })
+  });
+  x.outfit.rank=base.rank||index+1;
+  outfits[index]=x.outfit;
+  session.result.summary=x.summary||session.result.summary;
+  session.more_like={};
+  persistStylistSession();
+  v4VisualCache.clear();
+  persistVisualCache();
+  $("v4Results").innerHTML=stylistResultHtml(session.result);
+  renderStylistRefineBar(true);
+ }catch(err){alert(err.message)}
+ finally{endAppActivity(activity);if(button){button.disabled=false;button.textContent=original}}
+}
+
+async function refineStylistSet(text){
+ const refinement=String(text||"").trim();
+ if(!refinement || !latestStylistSession)return;
+ const session=latestStylistSession;
+ const request=[session.request_text,`REFINEMENT FOR THIS SET: ${refinement}`].filter(Boolean).join("\n\n");
+ const box=$("v4Results");
+ beginAppActivity("refine-set","Refining your options…",refinement,"working");
+ box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Restyling the set…</b><small>Keeping the original occasion and applying your new preference.</small></div></div>';
+ try{
+  const x=await api("/api/stylist-v4",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({request_text:request,anchor_garment_id:null,owned_only:Boolean(session.owned_only),max_options:3})
+  });
+  session.result=x;
+  session.refinement=refinement;
+  session.more_like={};
+  persistStylistSession();
+  v4VisualCache.clear();persistVisualCache();
+  box.innerHTML=stylistResultHtml(x);
+  renderStylistRefineBar(true);
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+ finally{endAppActivity("refine-set")}
+}
+
+$("v4ApplyRefine")?.addEventListener("click",()=>{
+ const input=$("v4RefineText");
+ refineStylistSet(input?.value||"");
+ if(input)input.value="";
+});
+document.querySelectorAll("[data-refine]").forEach(b=>b.addEventListener("click",()=>refineStylistSet(b.dataset.refine)));
 
 async function v4Visualise(encoded,index,useMyLikeness,options={}){
  const activityKey=`image-${index}-${useMyLikeness?"me":"model"}`;
@@ -3388,9 +3463,8 @@ if(runStylistV4Btn){
    };
    persistStylistSession();
 
-   box.innerHTML=`<div class="notice stylist-session-note"><b>Current stylist suggestions</b><span>These stay here until you ask for a new set.</span></div>`+
-    `<div class="notice"><b>Stylist view:</b> ${esc(x.summary||"")}</div>`+
-    (x.outfits||[]).map((o,i)=>renderV4Outfit(o,i)).join("");
+   box.innerHTML=stylistResultHtml(x);
+   renderStylistRefineBar(Boolean((x.outfits||[]).length));
 
    if(!(x.outfits||[]).length){
     box.innerHTML+='<div class="notice">The stylist completed the request but did not return any outfit options. Please try wording the request slightly differently.</div>';
@@ -3547,6 +3621,7 @@ function renderPackingLook(d,index){
    <button class="primary" type="button" onclick="packingVisualise(${index},false,this)">Show this look on me</button>
    <button class="ghost" type="button" onclick="packingVisualise(${index},true,this)">Regenerate this image</button>
    <button class="ghost" type="button" onclick="packingMoreLike(${index},this)">More like this look</button>
+   <button class="ghost" type="button" onclick="replacePackingLook(${index},this)">↻ Replace this look</button>
   </div>
   <div id="packingVisual-${index}" class="packing-visual"></div>
   <div id="packingMore-${index}" class="packing-more"></div>
@@ -3789,6 +3864,40 @@ async function packingVisualise(index,force=false,button=null,silent=false){
  }
 }
 
+async function replacePackingLook(index,button,feedback=""){
+ const d=currentPackingPlan?.outfit_plan?.[index];if(!d)return;
+ const original=button?.textContent||"↻ Replace this look";
+ if(button){button.disabled=true;button.textContent="Finding another…"}
+ const activity=`packing-replace-${index}`;
+ beginAppActivity(activity,"Replacing this trip look…",`${d.day||"Trip"} · ${d.occasion||""}`,"working");
+ try{
+  const base=packingOutfitObject(d);
+  const others=(currentPackingPlan.outfit_plan||[]).filter((_,i)=>i!==index).map(packingOutfitObject);
+  const x=await api("/api/stylist-v4/replace-one",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    base_outfit:base,
+    request_text:[currentPackingRequest?.trip_brief,currentTripContext?.dress_context].filter(Boolean).join(" "),
+    feedback:feedback||`Replace only the ${d.day||""} ${d.occasion||""} look. Keep it suitable for this exact day and trip.`,
+    weather_context:currentTripContext?.weather_summary||"",
+    owned_only:true,
+    other_outfits:others
+   })
+  });
+  const o=x.outfit;
+  currentPackingPlan.outfit_plan[index]={
+   ...d,
+   garment_ids:o.owned_garment_ids||[],
+   note:o.why_it_works||d.note,
+   reuse_note:o.style_note||d.reuse_note
+  };
+  packingVisualCache.clear();
+  renderPackingPlan(currentPackingPlan);
+  if(currentSavedTripId)await saveCurrentTrip(null);
+ }catch(err){alert(err.message)}
+ finally{endAppActivity(activity);if(button){button.disabled=false;button.textContent=original}}
+}
+
 async function packingMoreLike(index,button){
  const d=currentPackingPlan?.outfit_plan?.[index];
  if(!d)return;
@@ -3831,6 +3940,116 @@ async function packingMoreLike(index,button){
   if(button){button.disabled=false;button.textContent=original;}
  }
 }
+
+let currentWeekPlan=null;
+let currentWeekWeather=null;
+
+function weekOutfitObject(d){
+ return {
+  label:[d.day,d.occasion].filter(Boolean).join(" — ")||"Weekly outfit",
+  score:90,owned_garment_ids:d.garment_ids||[],
+  missing_piece:"",missing_piece_reason:"",
+  why_it_works:d.note||"",occasion_fit:d.occasion||"",
+  weather_fit:currentWeekWeather?.summary||"",
+  formality_fit:"",style_note:d.reuse_note||""
+ };
+}
+
+function renderWeekLook(d,index){
+ const pieces=(d.garment_ids||[]).map(id=>{
+  const g=garments.find(x=>x.id===id);
+  return g?`<div class="mini-garment"><img src="${garmentThumbUrl(g)}" loading="lazy" alt=""><span>${esc(g.garment_type||g.category)}</span></div>`:"";
+ }).join("");
+ return `<article class="pack-look-card week-look-card">
+  <div class="pack-look-head"><div><small>${esc(d.date||d.time_of_day||"")}</small><h5>${esc([d.day,d.occasion].filter(Boolean).join(" · "))}</h5></div><span class="look-number">${index+1}</span></div>
+  <div class="mini-strip pack-look-strip">${pieces}</div>
+  <p>${esc(d.note||"")}</p>${d.reuse_note?`<small class="reuse-note">↻ ${esc(d.reuse_note)}</small>`:""}
+  <div class="pack-look-actions">
+   <button class="primary" type="button" onclick="weekVisualise(${index},this)">Show this look on me</button>
+   <button class="ghost" type="button" onclick="replaceWeekLook(${index},this)">↻ Replace this day</button>
+  </div>
+  <div id="weekVisual-${index}" class="packing-visual"></div>
+ </article>`;
+}
+
+function renderWeekPlan(plan){
+ currentWeekPlan=plan;
+ const box=$("weekPlanResults");if(!box)return;
+ const looks=plan?.outfit_plan||[];
+ box.innerHTML=`<div class="notice packing-summary"><b>Your week at a glance</b><p>${esc(plan.summary||"")}</p>${plan.capsule_strategy?`<small>${esc(plan.capsule_strategy)}</small>`:""}</div>
+  <div class="week-plan-grid">${looks.map(renderWeekLook).join("")}</div>
+  ${plan.packing_tip?`<div class="card"><b>Prep once</b><p>${esc(plan.packing_tip)}</p></div>`:""}`;
+}
+
+async function weekVisualise(index,button){
+ const d=currentWeekPlan?.outfit_plan?.[index];if(!d)return;
+ const box=$(`weekVisual-${index}`);
+ const original=button?.textContent||"Show this look on me";
+ if(button){button.disabled=true;button.textContent="Creating…"}
+ try{
+  const x=await api("/api/outfit-visualisation",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({garment_ids:d.garment_ids||[],label:[d.day,d.occasion].filter(Boolean).join(" — "),
+    reason:d.note||"",occasion:d.occasion||"Workday",temperature_c:null,use_my_likeness:true,requested_extra_piece:""})
+  });
+  setDynamicImageHtml(box,`<div class="packing-generated"><img class="dynamic-ai-image" src="${x.image_path}" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt=""><small>${esc(x.notice||"")}</small></div>`);
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+ finally{if(button){button.disabled=false;button.textContent=original}}
+}
+
+async function replaceWeekLook(index,button){
+ const d=currentWeekPlan?.outfit_plan?.[index];if(!d)return;
+ const original=button?.textContent||"↻ Replace this day";
+ if(button){button.disabled=true;button.textContent="Finding another…"}
+ try{
+  const x=await api("/api/stylist-v4/replace-one",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    base_outfit:weekOutfitObject(d),
+    request_text:$("weekBrief")?.value||"",
+    feedback:`Replace only this ${d.day||"day"} outfit. Keep it suitable for ${d.occasion||"the planned day"}.`,
+    weather_context:currentWeekWeather?.summary||"",
+    owned_only:!$("weekShopping")?.checked,
+    other_outfits:(currentWeekPlan.outfit_plan||[]).filter((_,i)=>i!==index).map(weekOutfitObject)
+   })
+  });
+  const o=x.outfit;
+  currentWeekPlan.outfit_plan[index]={...d,garment_ids:o.owned_garment_ids||[],note:o.why_it_works||d.note,reuse_note:o.style_note||d.reuse_note};
+  renderWeekPlan(currentWeekPlan);
+ }catch(err){alert(err.message)}
+ finally{if(button){button.disabled=false;button.textContent=original}}
+}
+
+$("buildWeekPlan")?.addEventListener("click",async()=>{
+ const brief=($("weekBrief")?.value||"").trim();
+ if(!brief){alert("Tell me what your week looks like.");return}
+ const box=$("weekPlanResults");
+ const location=($("weekLocation")?.value||"").trim();
+ const start=$("weekStart")?.value||"";
+ const days=Number($("weekDays")?.value||5);
+ beginAppActivity("week-plan","Planning your week…","Balancing variety, practicality and what you actually wear.","working");
+ box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Planning the week…</b><small>Choosing a distinct outfit for each day.</small></div></div>';
+ try{
+  currentWeekWeather=null;
+  if(location){
+   try{
+    currentWeekWeather=await api("/api/weather-context",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({location,when:start?`week starting ${start}`:"this week"})});
+   }catch{}
+  }
+  const plan=await api("/api/plan-my-week",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    start_date:start,days,location,brief,
+    work_context:$("weekWorkContext")?.value||"",
+    dress_needs:$("weekDressNeeds")?.value||"",
+    weather_context:currentWeekWeather||{},
+    shopping_allowed:Boolean($("weekShopping")?.checked)
+   })
+  });
+  renderWeekPlan(plan);
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+ finally{endAppActivity("week-plan")}
+});
 
 $("makePackingPlan")?.addEventListener("click",async()=>{
  const box=$("packingResults");

@@ -1320,3 +1320,69 @@ This corrective release:
 - leaves the V7.3 wear-history controls and other polish unchanged.
 
 No database or data migration changes.
+
+
+## V7.4 — Flexible Styling & Weekly Planner
+
+### Replace one outfit
+Ask My Stylist now gives each main suggestion a **Replace this outfit** action.
+It generates one genuinely different replacement while preserving the original occasion, weather and constraints, and avoids duplicating the other suggestions already shown.
+
+Help Me Pack also adds **Replace this look** to each individual trip outfit, so one weak day/look can be changed without rebuilding the entire trip.
+
+Plan My Week has the same **Replace this day** behaviour.
+
+### Refine the whole stylist set
+Ask My Stylist gains a refinement bar after results are returned.
+
+Quick refinements:
+- Darker
+- More brown
+- Less formal
+- Smarter
+
+There is also free text for requests such as:
+- "more navy"
+- "different shoes"
+- "no jackets"
+- "more relaxed"
+- "less monochrome"
+
+The original styling brief is retained and the refinement is applied on top.
+
+### Plan My Week
+A new **Plan My Week** workflow brings the capsule-planning concept home.
+
+Users can provide:
+- week starting date,
+- 5 or 7 days,
+- location for weather,
+- natural-language description of the week's schedule,
+- work/daily context,
+- dress needs,
+- optional shopping permission.
+
+The planner creates one distinct outfit per day from the real wardrobe, balances variety with sensible reuse, considers Saved Looks and wear history, and supports personalised outfit visuals.
+
+This is deliberately separate from Help Me Pack: it plans a normal home/work week rather than pretending the user is travelling.
+
+No destructive migration. Existing wardrobes, accounts, Saved Looks, trips, wear history and visuals remain intact.
+
+
+## V7.4.1 — Menswear wardrobe taxonomy refinement
+
+The visible menswear wardrobe now uses three deliberate top-level tailoring/outerwear groups:
+
+- **Blazers & Tailoring** — blazers, sports coats, complete suits and explicitly identified matching suit components.
+- **Overshirts & Shirt Jackets** — kept separate because these can function as shirts, mid-layers or light outer layers.
+- **Jackets & Coats** — all genuine outerwear, including wax, rain/technical, denim/trucker, sherpa-lined, bomber, field, leather/suede, gilet, puffer, parka, mac, overcoat and winter coats.
+
+The detailed `garment_type`, `model_line`, material, fit, notes, season and formality fields remain intact, so simplifying the visible browse categories does not flatten the stylist's understanding.
+
+### Existing wardrobe migration
+Existing menswear records stored as `Jackets`, `Coats`, `Jackets & Outerwear` or similar legacy values are safely reclassified into `Jackets & Coats` when the wardrobe loads. This changes category metadata only; garment records and images are untouched.
+
+### Suit handling
+Complete suits and explicitly labelled suit components are grouped under **Blazers & Tailoring**. The underlying garment type still distinguishes suit jacket, matching trousers, waistcoat or complete suit so the stylist can reason about whether components can sensibly be worn separately.
+
+No destructive migration.

@@ -1776,3 +1776,26 @@ nav [data-go].nav-active:after{
   margin:10px auto 8px !important;
  }
 }
+
+
+/* V7.4 — flexible styling + weekly planner */
+.stylist-refine-bar{margin:12px 0;display:grid;gap:10px}
+.stylist-refine-bar.hidden{display:none}
+.stylist-refine-bar>div:first-child{display:grid;gap:3px}
+.stylist-refine-bar>div:first-child span{font-size:9px;color:#777}
+.refine-quick-row{display:flex;gap:6px;flex-wrap:wrap}
+.refine-quick-row button{border:1px solid var(--line);background:#f8f6f2;border-radius:999px;padding:7px 10px;font-size:9px}
+.refine-input-row{display:grid;grid-template-columns:1fr auto;gap:7px}
+.replace-look-btn{border-style:dashed!important}
+.week-planner-section{max-width:1040px;margin:0 auto}
+.week-planner-section>.row{align-items:flex-end;margin-bottom:12px}
+.week-planner-form{display:grid;gap:10px}
+.inline-check{display:flex!important;align-items:center;gap:8px;font-size:10px!important}
+.inline-check input{width:auto}
+.week-plan-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.week-look-card{margin:0;height:100%}
+.week-look-card .packing-generated img{max-height:520px;object-fit:contain}
+@media(max-width:720px){
+ .refine-input-row{grid-template-columns:1fr}
+ .week-plan-grid{grid-template-columns:1fr}
+}

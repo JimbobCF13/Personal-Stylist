@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.3.1">
+<link rel="stylesheet" href="/static/style.css?v=7.4.1">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.3.1</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.4.1</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -81,6 +81,10 @@
     <button class="home-card" data-go="packing">
      <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V5h6v2M9 11v5M15 11v5"/></svg></span>
      <span><small>TRAVEL</small><b>Help Me Pack</b><em>Build a compact capsule for your trip</em></span>
+    </button>
+    <button class="home-card" data-go="weekplanner">
+     <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M8 14h3M13 14h3M8 17h3"/></svg></span>
+     <span><small>WEEK AHEAD</small><b>Plan My Week</b><em>Choose work and everyday outfits before the week begins</em></span>
     </button>
     <button class="home-card" data-go="fitintel">
      <span class="home-line-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14M8 3v4M16 3v4M7 10h10M9 10v10M15 10v10"/><path d="M9 15h6"/></svg></span>
@@ -284,6 +288,16 @@
    <div id="v4WeatherStatus" class="stylist-weather-status hidden"></div>
    <button id="runStylistV4" class="primary full" type="button">Style me</button>
   </div>
+  <div id="v4RefineBar" class="card stylist-refine-bar hidden">
+   <div><small class="eyebrow">REFINE THE SET</small><b>Want a different direction?</b><span>Change all current suggestions without rewriting your original brief.</span></div>
+   <div class="refine-quick-row">
+    <button type="button" data-refine="Give me darker options">Darker</button>
+    <button type="button" data-refine="Use more brown and warm neutral tones">More brown</button>
+    <button type="button" data-refine="Make the options less formal and more relaxed">Less formal</button>
+    <button type="button" data-refine="Make the options smarter and more polished">Smarter</button>
+   </div>
+   <div class="refine-input-row"><input id="v4RefineText" placeholder="e.g. More navy, different shoes, no jackets…"><button id="v4ApplyRefine" class="ghost" type="button">Refine suggestions</button></div>
+  </div>
   <div id="v4Results"></div>
  </div>
 </section>
@@ -337,6 +351,29 @@
 </section>
 
 
+
+<section id="weekplanner" class="screen">
+ <div class="section week-planner-section">
+  <div class="row between"><div><small class="eyebrow">WEEKLY WARDROBE</small><h3>Plan My Week</h3><p class="muted-copy">Plan work and everyday outfits in one go — no suitcase required.</p></div><button class="ghost" data-go="savedlooks" type="button">★ Saved Looks</button></div>
+  <div class="card form week-planner-form">
+   <label>WHAT DOES YOUR WEEK LOOK LIKE?
+    <textarea id="weekBrief" rows="5" placeholder="e.g. Monday and Tuesday in the office, client meeting Wednesday, working from home Thursday and casual office Friday. I want variety without overthinking it."></textarea>
+   </label>
+   <div class="three">
+    <label>WEEK STARTING<input id="weekStart" type="date"></label>
+    <label>DAYS<select id="weekDays"><option value="5">5 days</option><option value="7">7 days</option></select></label>
+    <label>LOCATION<input id="weekLocation" placeholder="Optional — for weather"></label>
+   </div>
+   <div class="two">
+    <label>WORK / DAILY CONTEXT<input id="weekWorkContext" placeholder="e.g. office, commute, WFH, school run"></label>
+    <label>DRESS NEEDS<input id="weekDressNeeds" placeholder="e.g. business casual, one smart meeting"></label>
+   </div>
+   <label class="inline-check"><input id="weekShopping" type="checkbox"> Allow a genuinely useful missing item if needed</label>
+   <button id="buildWeekPlan" class="primary full" type="button">Plan my week</button>
+  </div>
+  <div id="weekPlanResults"></div>
+ </div>
+</section>
 
 <section id="packing" class="screen">
  <div class="section"><h3>Help Me Pack</h3>
@@ -580,5 +617,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.3.1"></script>
+<script src="/static/app.js?v=7.4.1"></script>
 </body></html>

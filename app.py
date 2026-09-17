@@ -243,7 +243,7 @@ def private_model_photo(filename:str): return FileResponse(safe_media_path("mode
 
 
 MENSWEAR_CATEGORY_ORDER = [
-    "Blazers & Tailoring", "Overshirts & Shirt Jackets", "Jackets", "Coats",
+    "Blazers & Tailoring", "Overshirts & Shirt Jackets", "Jackets & Coats",
     "Knitwear", "Sweatshirts & Hoodies", "Shirts", "Polos & T-Shirts",
     "Trousers", "Shorts", "Footwear", "Accessories", "Other",
 ]
@@ -297,6 +297,9 @@ MENSWEAR PROFILE:
 - Style as a contemporary men's personal stylist.
 - Pay attention to shoulder/chest fit, trouser rise/leg, sleeve/body length, layering, footwear and level of tailoring.
 - Use the user's wardrobe and fit evidence rather than generic brand assumptions.
+- The visible category "Jackets & Coats" intentionally groups true outerwear together, but garment_type/model_line/notes remain decisive: distinguish wax, rain/technical, denim/trucker, sherpa-lined, bomber, field, leather, parka, mac, overcoat and winter outerwear by function, warmth, weather suitability and formality.
+- "Overshirts & Shirt Jackets" is deliberately separate because those pieces may function as a shirt, mid-layer or light outer layer.
+- "Blazers & Tailoring" contains blazers, sports coats and suits/suit components. Use garment_type/model_line to distinguish complete suits, suit jackets, matching suit trousers and waistcoats, and only suggest separating matching suit pieces when the fabric/cut/context makes that sensible.
 """
 
 
@@ -350,21 +353,28 @@ def canonical_wardrobe_category(
 
     footwear = ["footwear","shoe","shoes","sneaker","sneakers","trainer","trainers","loafer","loafers","boot","boots","derby","derbies","brogue","brogues","oxford shoe","monk strap","espadrille","slipper"]
     shorts = ["shorts","swim short","swim shorts"]
+    suit_components = ["suit","two-piece suit","three-piece suit","2 piece suit","3 piece suit","suit jacket","suit trousers","suit pants","matching suit trousers","waistcoat","waistcoats"]
     trousers = ["trouser","trousers","chino","chinos","jean","jeans","jogger","joggers","cargo trouser","cargo pants","pants"]
     overshirts = ["overshirt","overshirts","shirt jacket","shirt-jacket","shirtjacket","shacket","shackets"]
-    tailoring = ["blazer","blazers","sport coat","sports coat","sports jacket","suit jacket","dinner jacket","tuxedo jacket","tailored jacket","waistcoat","waistcoats"]
-    coats = ["overcoat","topcoat","trench coat","trenchcoat","raincoat","rain coat","mac coat","parka","car coat","pea coat","peacoat","duffle coat","duffel coat","greatcoat","coat","coats"]
-    jackets = ["jacket","jackets","bomber","harrington","field jacket","chore jacket","denim jacket","leather jacket","suede jacket","gilet","gilets","puffer jacket","quilted jacket","windbreaker"]
+    tailoring = ["blazer","blazers","sport coat","sports coat","sports jacket","suit jacket","dinner jacket","tuxedo jacket","tailored jacket","waistcoat","waistcoats","suit"]
+    coats = ["overcoat","topcoat","trench coat","trenchcoat","raincoat","rain coat","mac","mac coat","parka","car coat","pea coat","peacoat","duffle coat","duffel coat","greatcoat","winter coat","coat","coats"]
+    jackets = ["jacket","jackets","bomber","harrington","field jacket","chore jacket","denim jacket","trucker","trucker jacket","sherpa","sherpa jacket","wax jacket","waxed jacket","technical jacket","rain jacket","shell jacket","leather jacket","suede jacket","gilet","gilets","puffer jacket","quilted jacket","windbreaker"]
     sweatshirts = ["sweatshirt","sweatshirts","sweat shirt","crew-neck sweatshirt","crew neck sweatshirt","quarter-zip sweatshirt","quarter zip sweatshirt","hoodie","hoodies","hooded sweatshirt"]
     shirts = ["shirt","shirts","oxford shirt","dress shirt","casual shirt","linen shirt","utility shirt","work shirt"]
     accessories = ["accessory","accessories","tie","ties","belt","belts","hat","hats","cap","caps","beanie","scarf","scarves","glove","gloves","bag","bags","watch","watches"]
 
     if any(w in primary for w in footwear): return "Footwear"
     if any(w in primary for w in shorts): return "Shorts"
+
+    # Keep complete suits and explicitly identified matching suit components together
+    # in the visible tailoring section. garment_type/model_line still tells the stylist
+    # whether it is the jacket, trousers, waistcoat or a complete suit.
+    if any(w in primary for w in suit_components): return "Blazers & Tailoring"
+
     if any(w in primary for w in trousers): return "Trousers"
     if any(w in primary for w in overshirts): return "Overshirts & Shirt Jackets"
     if any(w in primary for w in tailoring): return "Blazers & Tailoring"
-    if any(w in primary for w in coats): return "Coats"
+    if any(w in primary for w in coats): return "Jackets & Coats"
     if any(w in primary for w in sweatshirts): return "Sweatshirts & Hoodies"
 
     # Retailer naming is not always the same as wardrobe function.
@@ -423,7 +433,7 @@ def canonical_wardrobe_category(
     if generic_jacket and any(s in support for s in tailoring_signals):
         return "Blazers & Tailoring"
 
-    if any(w in primary for w in jackets): return "Jackets"
+    if any(w in primary for w in jackets): return "Jackets & Coats"
 
     if is_polo or any(w in primary for w in ["t-shirt","t shirt","tee","tees","tshirt"]):
         return "Polos & T-Shirts"
@@ -432,8 +442,8 @@ def canonical_wardrobe_category(
 
     if any(w in raw for w in overshirts): return "Overshirts & Shirt Jackets"
     if any(w in raw for w in tailoring): return "Blazers & Tailoring"
-    if any(w in raw for w in coats): return "Coats"
-    if any(w in raw for w in jackets): return "Jackets"
+    if any(w in raw for w in coats): return "Jackets & Coats"
+    if any(w in raw for w in jackets): return "Jackets & Coats"
     if any(w in raw for w in footwear): return "Footwear"
     if any(w in raw for w in shorts): return "Shorts"
     if any(w in raw for w in trousers): return "Trousers"
@@ -1121,6 +1131,22 @@ def garments():
     changed=False
 
     for row in rows:
+        # Keep the visible wardrobe taxonomy canonical as the app evolves.
+        # This is a safe metadata-only migration: no garment/image is deleted.
+        canonical_category=canonical_wardrobe_category(
+            category=row.get("category") or "",
+            garment_type=row.get("garment_type") or "",
+            model_line=row.get("model_line") or "",
+            fit_cut=row.get("fit_cut") or "",
+            notes=row.get("notes") or "",
+            brand=row.get("brand") or "",
+            material=row.get("material") or "",
+        )
+        if canonical_category and canonical_category != (row.get("category") or ""):
+            row["category"]=canonical_category
+            con.execute("UPDATE garments SET category=? WHERE id=?",(canonical_category,row["id"]))
+            changed=True
+
         display=row.get("image_path") or ""
         original=row.get("original_image_path") or ""
 
@@ -2917,6 +2943,104 @@ PACKING_SCHEMA = {
  "additionalProperties":False
 }
 
+class WeekPlanRequest(BaseModel):
+    start_date: str = ""
+    days: int = 5
+    location: str = ""
+    brief: str = ""
+    work_context: str = ""
+    dress_needs: str = ""
+    weather_context: dict = {}
+    shopping_allowed: bool = False
+
+@app.post("/api/plan-my-week")
+def plan_my_week(req: WeekPlanRequest):
+    con=db()
+    garments=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    feedback=[dict(r) for r in con.execute("SELECT rating,outfit_json,created_at FROM feedback ORDER BY id DESC LIMIT 30").fetchall()]
+    favourites=[dict(r) for r in con.execute(
+      "SELECT label,outfit_json,request_text,weather_context,wore_count,last_worn_at FROM outfit_favourites ORDER BY id DESC LIMIT 30"
+    ).fetchall()]
+    con.close()
+    if len(garments)<3:
+        raise HTTPException(400,"Add at least three wardrobe items before planning a week.")
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(503,"Plan My Week needs the AI stylist connection.")
+
+    valid_ids={g["id"] for g in garments}
+    compact=[{k:g.get(k) for k in [
+      "id","category","garment_type","brand","model_line","labelled_size","colour","material",
+      "pattern","fit_cut","fit_feedback","season","formality"
+    ]} for g in garments]
+    days=max(1,min(int(req.days or 5),7))
+    instructions="""You are a personal stylist planning a normal week at home/work, NOT a travel packing list.
+
+Create one distinct, practical outfit for each requested day using the user's ACTUAL wardrobe.
+The purpose is to remove daily decision-making while keeping the week coherent and varied.
+
+Rules:
+- Return exactly the requested number of day looks when wardrobe coverage allows.
+- Use only supplied garment IDs.
+- Respect work context, dress requirements, location/weather, fit history, saved looks and actual wear evidence.
+- Reuse versatile shoes, coats or trousers where sensible, but do not make every day feel identical.
+- Avoid repeating the exact same full outfit.
+- Treat Saved Looks with real wear counts as stronger positive evidence than merely saved looks.
+- Do not assume every workday has the same formality.
+- If shopping_allowed is false, missing_items must be empty.
+- If shopping_allowed is true, mention only genuine gaps, never create shopping for novelty.
+- date should be YYYY-MM-DD when start_date is supplied.
+- time_of_day should normally be Daytime or Workday.
+- occasion should be a short useful label such as Office, Client meeting, Work from home, Casual Friday, Dinner after work.
+- packing_list should contain the unique wardrobe garments used across the week; why_pack should instead explain why the item is useful in the weekly rotation.
+- packing_tip should be one concise preparation tip for the week.
+"""
+    context={
+      "week":{"start_date":req.start_date,"days":days,"location":req.location,"brief":req.brief,
+              "work_context":req.work_context,"dress_needs":req.dress_needs,
+              "shopping_allowed":req.shopping_allowed},
+      "weather_context":req.weather_context or {},
+      "profile":profile,"wardrobe":compact,"recent_feedback":feedback,"saved_looks":favourites
+    }
+    try:
+        response=OpenAI().responses.create(
+          model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+          reasoning={"effort":"low"},
+          instructions=instructions+styling_profile_guidance(),
+          input=json.dumps(context,ensure_ascii=False),
+          text={"format":{"type":"json_schema","name":"weekly_outfit_plan","schema":PACKING_SCHEMA,"strict":True}}
+        )
+        result=json.loads(response.output_text)
+    except Exception as exc:
+        raise HTTPException(502,f"I couldn't plan the week: {str(exc)[:220]}")
+
+    clean=[]
+    for n,o in enumerate(result.get("outfit_plan",[]),start=1):
+        ids=[]
+        for value in o.get("garment_ids",[]):
+            try: gid=int(value)
+            except Exception: continue
+            if gid in valid_ids and gid not in ids: ids.append(gid)
+        if not ids: continue
+        o["garment_ids"]=ids
+        o["look_id"]=str(o.get("look_id") or f"week-look-{n}")
+        clean.append(o)
+        if len(clean)>=days: break
+    result["outfit_plan"]=clean
+
+    used={gid for o in clean for gid in o.get("garment_ids",[])}
+    result["packing_list"]=[
+      x for x in result.get("packing_list",[])
+      if int(x.get("garment_id",0) or 0) in used
+    ]
+    result["week_context"]={
+      "start_date":req.start_date,"days":days,"location":req.location,
+      "brief":req.brief,"work_context":req.work_context,"dress_needs":req.dress_needs,
+      "weather_context":req.weather_context or {}
+    }
+    return result
+
+
 @app.post("/api/help-me-pack")
 def help_me_pack(req: PackingRequest):
     con=db()
@@ -4139,6 +4263,91 @@ def stylist_v4(req: StylistV4Request):
     result["outfits"] = result.get("outfits", [])[:max_options]
     return result
 
+
+
+class ReplaceOutfitRequest(BaseModel):
+    base_outfit: dict
+    request_text: str = ""
+    feedback: str = ""
+    weather_context: str = ""
+    owned_only: bool = False
+    other_outfits: list[dict] = []
+
+@app.post("/api/stylist-v4/replace-one")
+def stylist_v4_replace_one(req: ReplaceOutfitRequest):
+    if not isinstance(req.base_outfit,dict):
+        raise HTTPException(400,"That outfit could not be read.")
+    con=db()
+    wardrobe=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    feedback_rows=[dict(r) for r in con.execute("SELECT rating,outfit_json FROM feedback ORDER BY id DESC LIMIT 30").fetchall()]
+    con.close()
+    if not wardrobe:
+        raise HTTPException(400,"Add some wardrobe items first.")
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(503,"OpenAI is not connected.")
+
+    valid_ids={g["id"] for g in wardrobe}
+    compact=[{k:g.get(k) for k in [
+        "id","category","garment_type","brand","model_line","labelled_size","colour","material",
+        "pattern","fit_cut","fit_feedback","season","formality"
+    ]} for g in wardrobe]
+
+    instructions="""You are replacing ONE outfit the user does not want.
+
+Return exactly ONE strong replacement, not a set of options.
+
+Rules:
+- Keep the original request, occasion, weather and practical constraints.
+- The replacement must be meaningfully different from the rejected/base outfit.
+- Also avoid simply duplicating the other outfits already shown.
+- Respect any user refinement such as darker, lighter, more brown, less formal, smarter, more relaxed, different shoes, etc.
+- Use only supplied wardrobe IDs in owned_garment_ids.
+- Prefer the user's wardrobe. If owned_only is true, missing_piece must be blank.
+- If shopping is allowed, suggest at most one genuinely useful missing item.
+- Keep the result coherent as one complete outfit.
+- Score it 0–100 and keep explanations concise.
+"""
+    context={
+      "original_request":(req.request_text or "").strip(),
+      "user_refinement":(req.feedback or "").strip(),
+      "weather_context":(req.weather_context or "").strip(),
+      "owned_only":bool(req.owned_only),
+      "rejected_outfit":req.base_outfit,
+      "other_outfits_already_shown":req.other_outfits[:6],
+      "profile":profile,
+      "wardrobe":compact,
+      "recent_feedback":feedback_rows
+    }
+    try:
+        response=OpenAI().responses.create(
+          model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+          reasoning={"effort":"low"},
+          instructions=instructions+styling_profile_guidance(),
+          input=json.dumps(context,ensure_ascii=False),
+          text={"format":{"type":"json_schema","name":"replacement_outfit","schema":STYLIST_V4_SCHEMA,"strict":True}}
+        )
+        data=json.loads(response.output_text)
+    except Exception as exc:
+        raise HTTPException(502,f"I couldn't create a replacement outfit: {str(exc)[:220]}")
+
+    base_sig=tuple(sorted(int(x) for x in (req.base_outfit.get("owned_garment_ids") or []) if str(x).isdigit()))
+    other_sigs={
+      tuple(sorted(int(x) for x in (o.get("owned_garment_ids") or []) if str(x).isdigit()))
+      for o in (req.other_outfits or [])
+    }
+    for outfit in data.get("outfits",[]):
+        ids=[]
+        for value in outfit.get("owned_garment_ids",[]):
+            try: gid=int(value)
+            except Exception: continue
+            if gid in valid_ids and gid not in ids: ids.append(gid)
+        sig=tuple(sorted(ids))
+        if ids and sig!=base_sig and sig not in other_sigs:
+            outfit["owned_garment_ids"]=ids
+            outfit["rank"]=1
+            return {"summary":data.get("summary") or "One replacement option.","outfit":outfit}
+    raise HTTPException(502,"I couldn't find a sufficiently different replacement from the current options. Try adding a short preference such as 'darker' or 'more relaxed'.")
 
 
 class StylistMoreLikeRequest(BaseModel):
