@@ -3935,16 +3935,81 @@ function renderPackingLook(d,index){
   <p>${esc(d.note||"")}</p>
   ${d.reuse_note?`<small class="reuse-note">↻ ${esc(d.reuse_note)}</small>`:""}
   <div class="pack-look-actions">
-   <button class="primary" type="button" onclick="packingVisualise(${index},false,this)">Show this look on me</button>
-   <button class="ghost" type="button" onclick="packingVisualise(${index},true,this)">Regenerate this image</button>
-   <button class="ghost" type="button" onclick="packingMoreLike(${index},this)">More like this look</button>
-   <button class="ghost" type="button" onclick="replacePackingLook(${index},this)">↻ Replace this look</button>
+   <button class="primary refine-look-main" type="button" onclick="togglePackingRefine(${index})">Refine this look</button>
+   <button class="ghost" type="button" onclick="packingVisualise(${index},true,this)">Regenerate image</button>
+   <button class="ghost" type="button" onclick="packingMoreLike(${index},this)">More like this</button>
+   <button class="ghost" type="button" onclick="replacePackingLook(${index},this)">↻ Replace look</button>
+  </div>
+  <div id="packingRefine-${index}" class="packing-refine-panel hidden">
+   <div class="refine-look-copy"><small>MAKE A SMALL CHANGE</small><b>Keep this outfit, tweak one thing</b></div>
+   <div class="refine-look-quick">
+    <button type="button" onclick="refinePackingLook(${index},'Add a blazer or smart jacket that works with this outfit',this)">Add a blazer</button>
+    <button type="button" onclick="refinePackingLook(${index},'Make this outfit slightly smarter while keeping its core pieces',this)">Make smarter</button>
+    <button type="button" onclick="refinePackingLook(${index},'Add one useful layer while keeping the existing outfit',this)">Add a layer</button>
+    <button type="button" onclick="refinePackingLook(${index},'Swap only the footwear for another suitable pair from my wardrobe',this)">Swap shoes</button>
+   </div>
+   <div class="refine-look-input">
+    <input id="packingRefineInput-${index}" placeholder="e.g. Add my grey blazer">
+    <button class="secondary" type="button" onclick="refinePackingLook(${index},$('packingRefineInput-${index}').value,this)">Apply</button>
+   </div>
   </div>
   <div id="packingVisual-${index}" class="packing-visual"></div>
   <div id="packingMore-${index}" class="packing-more"></div>
  </article>`;
 }
 
+
+
+function togglePackingRefine(index){
+ const panel=$(`packingRefine-${index}`);
+ if(!panel)return;
+ panel.classList.toggle("hidden");
+ if(!panel.classList.contains("hidden")){
+  setTimeout(()=>$(`packingRefineInput-${index}`)?.focus(),60);
+ }
+}
+
+async function refinePackingLook(index,refinement,button){
+ const text=String(refinement||"").trim();
+ if(!text){$(`packingRefineInput-${index}`)?.focus();return}
+ const d=currentPackingPlan?.outfit_plan?.[index];if(!d)return;
+ const original=button?.textContent||"Apply";
+ if(button){button.disabled=true;button.textContent="Refining…"}
+ const activity=`packing-refine-${index}`;
+ beginAppActivity(activity,"Refining this look…",text,"working");
+ try{
+  const x=await api("/api/stylist-v4/refine-one",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    base_outfit:packingOutfitObject(d),
+    refinement:text,
+    request_text:[currentPackingRequest?.trip_brief,currentTripContext?.dress_context].filter(Boolean).join(" "),
+    weather_context:currentTripContext?.weather_summary||"",
+    owned_only:true
+   })
+  });
+  const o=x.outfit||{};
+  currentPackingPlan.outfit_plan[index]={
+   ...d,
+   garment_ids:o.owned_garment_ids||d.garment_ids||[],
+   note:o.why_it_works||d.note,
+   reuse_note:o.style_note||d.reuse_note
+  };
+
+  // Only repaint the changed look. Do not regenerate every trip image.
+  packingVisualCache.clear();
+  const cards=document.querySelectorAll(".pack-look-card");
+  const card=cards[index];
+  if(card)card.outerHTML=renderPackingLook(currentPackingPlan.outfit_plan[index],index);
+  await packingVisualise(index,true,null,false);
+  if(currentSavedTripId)await saveCurrentTrip(null);
+ }catch(err){
+  alert(err.message);
+ }finally{
+  endAppActivity(activity);
+  if(button){button.disabled=false;button.textContent=original}
+ }
+}
 
 function packingChecklistFromPlan(plan){
  const checked=currentTripChecklist||{};

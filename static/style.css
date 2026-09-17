@@ -2779,3 +2779,255 @@ input:focus,select:focus,textarea:focus,#search:focus,#filter:focus{
  .garments{grid-template-columns:1fr 1fr}
  .garment img{height:164px}
 }
+
+
+/* =========================================================
+   V7.9.1 — PREMIUM INTERACTION + OUTFIT REFINEMENT
+   ========================================================= */
+
+/* Form fields feel like designed controls rather than browser defaults */
+.premium-field-group{
+ margin:18px 0 10px;
+ padding:16px;
+ border:1px solid rgba(76,64,54,.10);
+ border-radius:18px;
+ background:rgba(247,243,237,.68);
+}
+.premium-field-row{gap:10px}
+.premium-field-row+ .premium-field-row{
+ margin-top:12px;padding-top:12px;border-top:1px solid rgba(76,64,54,.07)
+}
+.premium-field-row label{
+ position:relative;
+ display:grid;
+ gap:6px;
+ margin:0;
+ color:#776b62;
+}
+.premium-field-row label>small{
+ margin-left:4px;
+ color:#aaa096;
+ font-weight:500;
+ text-transform:none;
+ letter-spacing:0;
+}
+.premium-field-row input,
+.premium-field-row select{
+ min-height:50px!important;
+ margin-top:0!important;
+ border-radius:14px!important;
+ background:#fffdf9!important;
+ border:1px solid rgba(76,64,54,.13)!important;
+ font-size:12px!important;
+ font-weight:560;
+ color:#2c2723;
+}
+.premium-field-row select{
+ appearance:none;
+ -webkit-appearance:none;
+ padding-right:38px!important;
+ background-image:
+  linear-gradient(45deg,transparent 50%,#817268 50%),
+  linear-gradient(135deg,#817268 50%,transparent 50%)!important;
+ background-position:
+  calc(100% - 17px) 22px,
+  calc(100% - 12px) 22px!important;
+ background-size:5px 5px,5px 5px!important;
+ background-repeat:no-repeat!important;
+}
+.premium-field-row input[type="date"]{
+ appearance:none;
+ -webkit-appearance:none;
+ padding-right:12px!important;
+}
+.premium-field-row input[type="date"]::-webkit-calendar-picker-indicator{
+ opacity:.58;
+ cursor:pointer;
+}
+
+/* Refined voice control */
+.trip-voice-button{
+ position:absolute;
+ right:11px;
+ bottom:11px;
+ min-height:54px;
+ min-width:205px;
+ padding:8px 12px 8px 9px;
+ display:flex;
+ align-items:center;
+ gap:10px;
+ border:1px solid rgba(76,64,54,.14);
+ border-radius:999px;
+ background:rgba(255,253,249,.94);
+ color:#2b2622;
+ box-shadow:0 9px 24px rgba(42,34,28,.08);
+ cursor:pointer;
+}
+.trip-voice-button:hover{
+ background:#fff;
+ border-color:rgba(76,64,54,.23);
+ transform:translateY(-1px);
+}
+.trip-voice-button .voice-orb{
+ width:36px;height:36px;flex:0 0 36px;
+ display:grid;place-items:center;
+ border-radius:50%;
+ background:#201d1a;
+ color:#fff;
+ font-size:10px;
+ box-shadow:0 5px 14px rgba(30,26,23,.13);
+}
+.trip-voice-button>span:last-child{
+ display:grid;text-align:left;gap:2px
+}
+.trip-voice-button b{
+ font-family:var(--ui-font);
+ font-size:10px;
+ font-weight:760;
+ letter-spacing:0;
+}
+.trip-voice-button small{
+ font-size:7px;
+ font-weight:550;
+ color:#8e837a;
+ letter-spacing:.015em;
+ text-transform:none;
+}
+
+/* Custom checkbox treatment used throughout forms */
+.inline-check{
+ min-height:44px;
+ padding:9px 11px!important;
+ border:1px solid rgba(76,64,54,.10);
+ border-radius:13px;
+ background:rgba(255,253,249,.62);
+ color:#61574f!important;
+}
+.inline-check input[type="checkbox"]{
+ appearance:none;
+ -webkit-appearance:none;
+ width:18px!important;height:18px!important;
+ min-width:18px;
+ margin:0!important;
+ padding:0!important;
+ border:1px solid rgba(76,64,54,.28)!important;
+ border-radius:5px!important;
+ background:#fff!important;
+ display:grid;
+ place-content:center;
+}
+.inline-check input[type="checkbox"]::before{
+ content:"";
+ width:8px;height:8px;
+ transform:scale(0);
+ transition:transform .12s ease;
+ border-radius:2px;
+ background:#fff;
+}
+.inline-check input[type="checkbox"]:checked{
+ background:#211e1b!important;
+ border-color:#211e1b!important;
+}
+.inline-check input[type="checkbox"]:checked::before{transform:scale(1)}
+
+/* Trip outfit controls: image is automatic, actions are now useful */
+.pack-look-actions{
+ display:flex;
+ flex-wrap:wrap;
+ gap:6px;
+ margin-top:13px;
+ padding-top:12px;
+ border-top:1px solid rgba(76,64,54,.07);
+}
+.pack-look-actions button{
+ min-height:36px;
+ padding:8px 12px;
+ font-size:8px;
+}
+.pack-look-actions .refine-look-main{
+ background:#211e1b;
+ border-color:#211e1b;
+ color:#fff;
+}
+.packing-refine-panel{
+ margin-top:9px;
+ padding:13px;
+ border-radius:15px;
+ border:1px solid rgba(76,64,54,.10);
+ background:linear-gradient(135deg,#f1ebe4,#f8f5f0);
+}
+.refine-look-copy{
+ display:grid;
+ gap:3px;
+ margin-bottom:9px;
+}
+.refine-look-copy small{
+ font-size:7px;
+ letter-spacing:.15em;
+ color:#917b6c;
+ font-weight:780;
+}
+.refine-look-copy b{
+ font-family:var(--display-font);
+ font-weight:500;
+ font-size:16px;
+ letter-spacing:-.025em;
+}
+.refine-look-quick{
+ display:flex;
+ flex-wrap:wrap;
+ gap:5px;
+}
+.refine-look-quick button{
+ min-height:32px;
+ padding:6px 10px;
+ border-radius:999px;
+ border:1px solid rgba(76,64,54,.12);
+ background:rgba(255,255,255,.62);
+ color:#514942;
+ font-size:8px;
+ font-weight:680;
+}
+.refine-look-quick button:hover{background:#fff}
+.refine-look-input{
+ display:grid;
+ grid-template-columns:1fr auto;
+ gap:7px;
+ margin-top:9px;
+}
+.refine-look-input input{
+ min-height:42px;
+ margin:0;
+ border-radius:999px;
+ padding:10px 14px;
+ background:#fffdf9;
+}
+.refine-look-input button{min-width:74px}
+
+/* Improve standard form grids across the redesigned product */
+.pack-more-grid label,
+.brief-more-grid label,
+.week-planner-form label,
+.security-password-form label{
+ display:grid;
+ gap:6px;
+}
+.pack-more-grid input,.pack-more-grid select,.pack-more-grid textarea,
+.brief-more-grid input,.brief-more-grid select,
+.week-planner-form input,.week-planner-form select,.week-planner-form textarea{
+ margin-top:0!important;
+ background:#fffdf9!important;
+}
+
+@media(max-width:700px){
+ .premium-field-group{padding:12px}
+ .trip-voice-button{
+  position:static;
+  width:100%;
+  margin-top:9px;
+  justify-content:flex-start;
+ }
+ .pack-brief-wrap textarea{padding-bottom:14px!important}
+ .refine-look-input{grid-template-columns:1fr}
+ .refine-look-input button{width:100%}
+}

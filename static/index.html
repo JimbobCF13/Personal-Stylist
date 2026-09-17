@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.9">
+<link rel="stylesheet" href="/static/style.css?v=7.9.1">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.9</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.9.1</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -400,18 +400,18 @@
    <label>YOUR TRIP
     <div class="dictation-wrap pack-brief-wrap">
      <textarea id="pack_brief" rows="6" placeholder="e.g. I’m going to San Francisco from 3–10 October for lectures, business lunches and dinners, some sightseeing and one smarter evening. I’ll be walking a lot and I want to pack fairly light."></textarea>
-     <button id="packSmartDictate" class="primary smart-dictate-btn pack-brief-dictate" type="button">🎙️ Dictate trip</button>
+     <button id="packSmartDictate" class="trip-voice-button smart-dictate-btn pack-brief-dictate" type="button"><span class="voice-orb" aria-hidden="true">◉</span><span><b>Tell me about your trip</b><small>Speak instead of typing</small></span></button>
     </div>
    </label>
    <div id="packSmartDictationStatus" class="dictation-status hidden" aria-live="polite"></div>
 
-   <div class="pack-essentials">
-    <div class="three">
+   <div class="pack-essentials premium-field-group">
+    <div class="three premium-field-row trip-date-row">
      <label>DEPART <small>optional</small><input id="pack_start_date" type="date"></label>
      <label>RETURN <small>optional</small><input id="pack_end_date" type="date"></label>
      <label>DAYS <small>optional</small><input id="pack_days" type="number" min="1" max="60" value="5"></label>
     </div>
-    <div class="three">
+    <div class="three premium-field-row trip-options-row">
      <label>LAUNDRY<select id="pack_laundry"><option>No</option><option>Yes</option><option>Possibly</option></select></label>
      <label>LUGGAGE<select id="pack_luggage"><option value="">Not specified</option><option>Hand luggage only</option><option>Cabin case</option><option>Checked suitcase</option><option>Large checked suitcase</option></select></label>
      <label>CAN SUGGEST MISSING ITEMS?<select id="pack_shopping"><option>Yes</option><option>No</option></select></label>
@@ -657,5 +657,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.9"></script>
+<script src="/static/app.js?v=7.9.1"></script>
 </body></html>

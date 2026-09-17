@@ -4783,6 +4783,117 @@ Rules:
     raise HTTPException(502,"I couldn't find a sufficiently different replacement from the current options. Try adding a short preference such as 'darker' or 'more relaxed'.")
 
 
+
+class RefineOutfitRequest(BaseModel):
+    base_outfit: dict
+    refinement: str
+    request_text: str = ""
+    weather_context: str = ""
+    owned_only: bool = True
+
+@app.post("/api/stylist-v4/refine-one")
+def stylist_v4_refine_one(req: RefineOutfitRequest):
+    if not isinstance(req.base_outfit,dict):
+        raise HTTPException(400,"That outfit could not be read.")
+    refinement=(req.refinement or "").strip()
+    if not refinement:
+        raise HTTPException(400,"Tell me what you want to change about this look.")
+
+    con=db()
+    wardrobe=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
+    profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
+    saved_looks=saved_style_evidence(con,30)
+    con.close()
+    if not wardrobe:
+        raise HTTPException(400,"Add some wardrobe items first.")
+    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+        raise HTTPException(503,"OpenAI is not connected.")
+
+    valid_ids={int(g["id"]) for g in wardrobe}
+    base_ids=[]
+    for value in req.base_outfit.get("owned_garment_ids") or []:
+        try: gid=int(value)
+        except Exception: continue
+        if gid in valid_ids and gid not in base_ids:
+            base_ids.append(gid)
+    if not base_ids:
+        raise HTTPException(400,"The current outfit no longer contains available wardrobe items.")
+
+    compact=[{k:g.get(k) for k in [
+        "id","category","garment_type","brand","model_line","labelled_size","colour","material",
+        "pattern","fit_cut","fit_feedback","season","formality"
+    ]} for g in wardrobe]
+
+    instructions="""You are refining ONE existing outfit, not replacing it.
+
+Make the smallest useful change that satisfies the user's instruction.
+
+Rules:
+- Treat the supplied base outfit as the look to preserve.
+- If the user asks to ADD something (for example 'add a grey blazer' or 'add a layer'),
+  keep every existing owned garment unless there is a genuine clothing conflict, and add the best matching owned item.
+- If the user asks to SWAP one element, change only that element wherever possible.
+- If the user asks to make it smarter, more casual, warmer, darker, lighter, etc., preserve most of the outfit
+  and alter only the minimum number of pieces needed.
+- Use only supplied wardrobe IDs in owned_garment_ids.
+- Do not invent ownership.
+- If owned_only is true, missing_piece must be blank.
+- If the requested item is not owned and owned_only is true, make the closest useful owned refinement and explain it briefly.
+- Preserve the occasion, weather suitability and overall character unless the refinement explicitly changes them.
+- Return exactly ONE refined outfit.
+- Keep explanations concise and specific.
+"""
+    context={
+      "original_request":(req.request_text or "").strip(),
+      "refinement":refinement,
+      "weather_context":(req.weather_context or "").strip(),
+      "owned_only":bool(req.owned_only),
+      "base_outfit":req.base_outfit,
+      "base_owned_ids":base_ids,
+      "profile":profile,
+      "wardrobe":compact,
+      "saved_looks":saved_looks
+    }
+    try:
+        response=OpenAI().responses.create(
+          model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
+          reasoning={"effort":"low"},
+          instructions=instructions+styling_profile_guidance(),
+          input=json.dumps(context,ensure_ascii=False),
+          text={"format":{"type":"json_schema","name":"refined_outfit","schema":STYLIST_V4_SCHEMA,"strict":True}}
+        )
+        data=json.loads(response.output_text)
+    except Exception as exc:
+        raise HTTPException(502,f"I couldn't refine that outfit: {str(exc)[:220]}")
+
+    adding=bool(re.search(r"\b(add|layer|put on|wear with|include)\b",refinement.lower()))
+    base_set=set(base_ids)
+    for outfit in data.get("outfits",[]):
+        ids=[]
+        for value in outfit.get("owned_garment_ids",[]):
+            try: gid=int(value)
+            except Exception: continue
+            if gid in valid_ids and gid not in ids:
+                ids.append(gid)
+        if not ids:
+            continue
+        overlap=len(base_set & set(ids))
+        # "Add" should preserve the whole base look. Other refinements should
+        # preserve all but at most one existing piece.
+        if adding and not base_set.issubset(set(ids)):
+            continue
+        if not adding and overlap < max(1,len(base_ids)-1):
+            continue
+        outfit["owned_garment_ids"]=ids
+        outfit["rank"]=1
+        if req.owned_only:
+            outfit["missing_piece"]=""
+            outfit["missing_piece_reason"]=""
+        return {"summary":data.get("summary") or "Refined this look.","outfit":outfit}
+
+    raise HTTPException(502,"I couldn't make that change without losing too much of the original outfit. Try a slightly more specific instruction.")
+
+
 class StylistMoreLikeRequest(BaseModel):
     base_outfit: dict
     request_text: str = ""

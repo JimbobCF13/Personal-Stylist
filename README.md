@@ -1678,3 +1678,48 @@ The V7.6.3 laptop-friendly image constraints are explicitly preserved. V7.9 does
 
 ### Behaviour and data safety
 No feature logic was intentionally removed or changed. No destructive migration.
+
+
+## V7.9.1 — Premium Interaction + Outfit Refinement
+
+### Premium form controls
+The functional-looking browser inputs received another design pass, especially Help Me Pack:
+- grouped departure / return / days controls
+- refined select/dropdown styling
+- cleaner date inputs
+- redesigned checkbox treatment
+- more deliberate spacing and labels
+- supporting optional fields now match the V7.9 premium visual system
+
+### Voice control
+`Dictate trip` is replaced visually by **Tell me about your trip** with a quieter microphone/orb treatment and supporting copy. The underlying dictation workflow is unchanged.
+
+### Packing image action cleanup
+Help Me Pack already generates outfit visuals automatically, so the redundant **Show this look on me** button has been removed from packing look cards.
+
+Actions are now:
+- Refine this look
+- Regenerate image
+- More like this
+- Replace look
+
+### Refine this look
+Each packing outfit now has a minimal-change refinement workflow.
+
+Quick actions:
+- Add a blazer
+- Make smarter
+- Add a layer
+- Swap shoes
+
+Users can also write a custom instruction such as:
+- `Add my grey blazer`
+- `Use the navy sports coat instead`
+- `Make this warmer`
+- `Swap the loafers for trainers`
+
+The new `/api/stylist-v4/refine-one` route preserves the existing outfit and makes the smallest useful change. An `add` request is specifically required to retain all current owned garment IDs and add to them, rather than silently replacing the look.
+
+After refinement, only that outfit card/image is regenerated — the rest of the trip visuals are left alone.
+
+No destructive migration.
