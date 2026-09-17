@@ -1483,3 +1483,21 @@ Progress is calculated from real server data. Stylist usage uses a small additiv
 Existing users are recognised from their current data rather than being treated as new accounts.
 
 No destructive migration.
+
+
+## V7.6.1 — Build Around anchor fix
+
+A deliberate **Build around** click now takes priority over restoration of the previous Ask My Stylist session.
+
+### Root cause
+When Build Around navigated to Ask My Stylist, the app scheduled restoration of the previous stylist session on the next animation frame. The clicked garment was selected correctly at first, but the old saved request could then repaint over the new brief — making it appear that the wrong garment had been selected.
+
+### Fix
+- Build Around now sets an explicit one-shot navigation intent before opening Ask My Stylist.
+- Previous-session restoration is suppressed for that navigation.
+- The clicked garment ID is selected after the anchor list is populated.
+- A fresh brief is always written for the clicked item, including colour, brand, model/line and garment type when available.
+- Old stylist results/refinement controls are cleared so they cannot be mistaken for results belonging to the newly selected garment.
+- The normal previous-session restoration behaviour remains unchanged when opening Ask My Stylist normally.
+
+No data migration and no user data changes.

@@ -702,7 +702,7 @@ function go(id){
  if(id==="shortlist")loadShortlist();
  if(id==="savedlooks")loadSavedLooks();
  if(id==="packing")loadSavedTrips();
- if(id==="stylistv4"&&latestStylistSession)requestAnimationFrame(renderLatestStylistSession);
+ if(id==="stylistv4"&&latestStylistSession&&pendingBuildAroundGarmentId===null)requestAnimationFrame(renderLatestStylistSession);
  if(id==="garmentdetail"&&detailGarmentId)loadGarmentDetail(detailGarmentId);
  if(id==="outfits")populateAnchor();
  if(id==="stylistv4")populateV4Anchor();
@@ -1182,6 +1182,7 @@ let selectedWardrobeCategory="";
 let wardrobeReturnGarmentId=null;
 let wardrobeReturnCategory="";
 let wardrobeRestorePending=false;
+let pendingBuildAroundGarmentId=null;
 
 function normalisedCategory(c){
  const raw=String(c||"Other").trim().toLowerCase();
@@ -1345,7 +1346,7 @@ function handleWardrobeImageError(img){
  }
 }
 
-function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=(g.image_path && g.image_available!==false)?`<img class="garment-photo" src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" data-base-src="${garmentThumbUrl(g)}" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="handleWardrobeImageError(this)">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}" data-garment-id="${g.id}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
+function garmentCard(g){const cleaning=cleanupInProgress.has(g.id);const label=esc((g.brand?g.brand+" ":"")+(g.garment_type||"Garment"));const image=(g.image_path && g.image_available!==false)?`<img class="garment-photo" src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" data-base-src="${garmentThumbUrl(g)}" data-original-src="${esc(g.original_image_path||"")}" data-retry-count="0" alt="${label}" onclick="openGarment(${g.id})" title="Open garment" onerror="handleWardrobeImageError(this)">`:`<button class="garment-no-photo" onclick="openGarment(${g.id})" type="button"><span>No photo yet</span><small>Open garment</small></button>`;return `<div class="garment${cleaning?" is-cleaning":""}" data-garment-id="${g.id}"><div class="garment-photo-wrap">${image}${cleaning?`<div class="cleanup-overlay"><span class="cleanup-spinner"></span><b>Cleaning up photo…</b><small>Preparing your catalogue image.</small></div>`:""}</div><div class="meta"><b>${label}</b><small>${esc([g.colour,g.material,g.labelled_size].filter(Boolean).join(" · "))}</small><div><span class="pill">${esc(g.fit_feedback||"Fit unknown")}</span></div><div class="row" style="margin-top:9px"><button class="secondary" type="button" onclick="buildAround(${g.id})">Build around</button><button class="ghost" onclick="editGarment(${g.id})">Edit</button>${g.image_path?`<button class="ghost cleanup-btn" onclick="cleanupPhoto(${g.id})">${cleaning?"Cleaning…":"Clean up photo"}</button>`:""}${g.original_image_path&&g.image_path!==g.original_image_path?`<button class="ghost" onclick="restoreOriginal(${g.id})">Original photo</button>`:""}<button class="danger" onclick="del(${g.id})">Delete</button></div></div></div>`;}
 function categorySlug(cat){
  return String(cat||"other").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 }
@@ -1789,7 +1790,43 @@ $("saveEdit").addEventListener("click",async()=>{
 });
 
 async function del(id){if(confirm("Remove this garment?")){await api(`/api/garments/${id}`,{method:"DELETE"});await loadGarments()}}
-function buildAround(id){go("stylistv4");populateV4Anchor();$("v4Anchor").value=String(id);const g=garments.find(x=>x.id===id);if(g&&!$("v4Request").value.trim())$("v4Request").value=`Build me an outfit around my ${(g.brand?g.brand+" ":"")+(g.garment_type||g.category||"garment")}.`; }
+function buildAround(id){
+ const gid=Number(id);
+ const g=garments.find(x=>Number(x.id)===gid);
+ if(!g){
+  alert("I couldn't find that wardrobe item. Refresh your wardrobe and try again.");
+  return;
+ }
+
+ // A deliberate Build Around click must take priority over restoration of the
+ // previous Ask My Stylist session. Set the intent before navigation so go()
+ // knows not to repaint an older request/result over this garment.
+ pendingBuildAroundGarmentId=gid;
+ go("stylistv4");
+ populateV4Anchor();
+
+ const anchor=$("v4Anchor");
+ if(anchor && [...anchor.options].some(o=>Number(o.value)===gid)){
+  anchor.value=String(gid);
+ }
+
+ const descriptor=[
+  g.colour,
+  g.brand,
+  g.model_line,
+  g.garment_type||g.category||"garment"
+ ].filter(Boolean).join(" ");
+ $("v4Request").value=`Build me an outfit around my ${descriptor}.`;
+
+ // Old results belong to the previous anchor/request, so don't leave them on
+ // screen where they could look like they belong to the newly selected item.
+ $("v4Results").innerHTML="";
+ renderStylistRefineBar(false);
+ if($("v4WeatherStatus"))$("v4WeatherStatus").classList.add("hidden");
+
+ // Release the one-shot navigation guard only after the current paint cycle.
+ requestAnimationFrame(()=>{pendingBuildAroundGarmentId=null;});
+}
 function clearGarmentFields(){
  const ids=["category","garment_type","brand","model_line","labelled_size","colour","material","pattern","fit_cut","season","formality","notes"];
  ids.forEach(id=>$(id).value="");
