@@ -1211,3 +1211,15 @@ Opening a saved trip restores its form fields, research, outfit plan and checkli
 A saved/current trip has **Refresh weather**, which reruns destination/weather research while leaving the existing capsule/outfit plan intact. If the trip is already saved, the refreshed context is saved back to that trip.
 
 No destructive migration. Existing wardrobes, Saved Looks, generated outfit visuals and user accounts remain unchanged.
+
+
+## V7.1.1 — Clearer "I wore this" feedback
+
+- The button is now neutral before a look has been worn, avoiding the impression that it is already selected.
+- After recording a wear it changes visibly to **Worn X×**.
+- Saved Look cards now show a dedicated wear-status panel with:
+  - wear count,
+  - last-worn date,
+  - an explanation that real wear is stronger learning evidence than simply saving a look.
+- A short confirmation toast appears after each click explaining that the wear has been recorded and is influencing future style learning.
+- Existing wear counts and history are preserved.

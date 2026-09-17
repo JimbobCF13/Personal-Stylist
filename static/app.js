@@ -2551,12 +2551,44 @@ async function saveSavedLookDetails(id,button){
 
 async function markSavedLookWorn(id,button){
  const original=button?.textContent||"I wore this";
- if(button){button.disabled=true;button.textContent="Saving…"}
+ if(button){
+  button.disabled=true;
+  button.classList.add("saving-wear");
+  button.textContent="Saving wear…";
+ }
  try{
-  await api(`/api/outfit-favourites/${id}/wore`,{method:"POST"});
+  const updated=await api(`/api/outfit-favourites/${id}/wore`,{method:"POST"});
+  const count=Number(updated.wore_count||1);
+  if(button){
+   button.classList.remove("saving-wear");
+   button.classList.add("worn","wear-confirmed");
+   button.textContent=`✓ Worn ${count}×`;
+  }
+  showWearLearningToast(count);
   localStorage.removeItem(userCacheKey("savedLooks"));
-  await loadSavedLooks();
- }catch(err){alert(err.message);if(button){button.disabled=false;button.textContent=original}}
+  setTimeout(()=>loadSavedLooks(),700);
+ }catch(err){
+  alert(err.message);
+  if(button){
+   button.disabled=false;
+   button.classList.remove("saving-wear");
+   button.textContent=original;
+  }
+ }
+}
+
+function showWearLearningToast(count){
+ let toast=$("wearLearningToast");
+ if(!toast){
+  toast=document.createElement("div");
+  toast.id="wearLearningToast";
+  toast.className="wear-learning-toast";
+  document.body.appendChild(toast);
+ }
+ toast.innerHTML=`<div><span>✓</span><div><b>Wear recorded</b><p>This look now carries more weight in your style learning because you've actually worn it${count>1?` ${count} times`:""}.</p></div></div>`;
+ toast.classList.add("show");
+ clearTimeout(window._wearToastTimer);
+ window._wearToastTimer=setTimeout(()=>toast.classList.remove("show"),3200);
 }
 
 async function toggleSavedLookPinned(id,button){
@@ -2630,6 +2662,8 @@ function renderSavedLook(row){
  const lastWorn=row.last_worn_at?new Date(row.last_worn_at).toLocaleDateString():"";
  const tags=(row.tags||[]).map(t=>`<span>${esc(t)}</span>`).join("");
  const meta=[row.occasion,row.season,worn?`${worn} wear${worn===1?"":"s"}`:"Not worn yet"].filter(Boolean);
+ const woreButtonClass=worn>0?"ghost saved-wore-btn worn":"ghost saved-wore-btn";
+ const woreButtonLabel=worn>0?`✓ Worn ${worn}×`:"I wore this";
  return `<article class="card saved-look-card ${row.is_pinned?"saved-look-pinned":""}">
   <div class="row between saved-look-title-row">
    <div><small>${row.is_pinned?"PINNED LOOK":"SAVED LOOK"}</small><h3>${esc(row.label||o.label||"Outfit")}</h3></div>
@@ -2641,12 +2675,12 @@ function renderSavedLook(row){
   <div class="saved-piece-strip">${strip}</div>
   ${o.why_it_works?`<p>${esc(o.why_it_works)}</p>`:""}
   ${row.notes?`<div class="saved-look-note"><b>Your note:</b> ${esc(row.notes)}</div>`:""}
-  ${lastWorn?`<small class="saved-last-worn">Last worn ${esc(lastWorn)}</small>`:""}
+  ${worn>0?`<div class="saved-wear-status"><div><span>✓</span><b>You've worn this look ${worn} time${worn===1?"":"s"}</b></div>${lastWorn?`<small>Last worn ${esc(lastWorn)}</small>`:""}<p>This now counts as real wear evidence, so the stylist can give more weight to looks and pieces you actually use — not just ones you save.</p></div>`:""}
   ${row.weather_context?`<div class="saved-weather"><b>Weather context:</b> ${esc(row.weather_context)}</div>`:""}
   ${row.request_text?`<small class="saved-request">Originally asked: ${esc(row.request_text)}</small>`:""}
   <div class="saved-look-actions saved-look-primary-actions">
    <button class="primary" type="button" onclick="useSavedLookAgain('${payload}',${row.id})">Wear / style again</button>
-   <button class="ghost saved-wore-btn" type="button" onclick="markSavedLookWorn(${row.id},this)">✓ I wore this</button>
+   <button class="${woreButtonClass}" type="button" onclick="markSavedLookWorn(${row.id},this)">${woreButtonLabel}</button>
    <button class="ghost" type="button" onclick="toggleSavedLookEdit(${row.id})">Edit details</button>
   </div>
   <div class="saved-look-actions">
