@@ -1,5 +1,5 @@
 
-import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re, tempfile, hashlib, hmac, secrets
+import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re, tempfile, hashlib, hmac, secrets, zipfile, shutil
 from contextvars import ContextVar
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -979,6 +979,152 @@ def admin_system_status():
 def account_details():
     u=current_user()
     return {"user":u}
+
+
+def _safe_export_name(value:str) -> str:
+    cleaned=re.sub(r"[^A-Za-z0-9_-]+","-",str(value or "").strip()).strip("-")
+    return cleaned[:60] or "account"
+
+def _table_exists(con, name:str) -> bool:
+    row=con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(name,)).fetchone()
+    return bool(row)
+
+def _export_table(con, name:str):
+    if not _table_exists(con,name):
+        return []
+    return [dict(r) for r in con.execute(f'SELECT * FROM "{name}"').fetchall()]
+
+def account_data_manifest():
+    """Return only the signed-in user's own portable data. Never includes credentials."""
+    u=current_user() or {}
+    con=db()
+    tables=[
+      "profile","garments","feedback","outfit_favourites","outfit_wear_events",
+      "model_photos","saved_trips","shopping_shortlist","setup_events"
+    ]
+    payload={
+      "export_format":"get-dressed-portable-backup-v1",
+      "exported_at":utc_now().isoformat(),
+      "app_version":"7.7",
+      "account":{
+        "id":u.get("id"),
+        "email":u.get("email"),
+        "display_name":u.get("display_name"),
+        "styling_profile":u.get("styling_profile"),
+        "created_at":u.get("created_at"),
+      },
+      "tables":{}
+    }
+    for table in tables:
+        payload["tables"][table]=_export_table(con,table)
+    con.close()
+    return payload
+
+def account_data_summary():
+    con=db()
+    def count(name):
+        return int(con.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0] or 0) if _table_exists(con,name) else 0
+    summary={
+      "wardrobe_items":count("garments"),
+      "saved_looks":count("outfit_favourites"),
+      "fit_reviews":int(con.execute(
+        "SELECT COUNT(*) FROM garments WHERE COALESCE(fit_review_status,'')='confirmed'"
+      ).fetchone()[0] or 0) if _table_exists(con,"garments") else 0,
+      "saved_trips":count("saved_trips"),
+      "model_photos":count("model_photos"),
+      "shortlist_items":count("shopping_shortlist"),
+    }
+    con.close()
+    root=active_user_root()
+    media_bytes=0
+    media_files=0
+    for folder_name in ["uploads","cleaned","generated","model_photos"]:
+        folder=root/folder_name
+        if not folder.exists(): continue
+        for p in folder.rglob("*"):
+            try:
+                if p.is_file():
+                    media_files+=1
+                    media_bytes+=p.stat().st_size
+            except Exception:
+                pass
+    summary["media_files"]=media_files
+    summary["media_bytes"]=media_bytes
+    return summary
+
+@app.get("/api/account/data-summary")
+def get_account_data_summary():
+    return account_data_summary()
+
+@app.get("/api/account/export")
+def export_account_data(background_tasks: BackgroundTasks):
+    """Create an on-demand, read-only backup ZIP for the signed-in account."""
+    u=current_user() or {}
+    root=active_user_root()
+    tmp_dir=Path(tempfile.mkdtemp(prefix="get_dressed_export_"))
+    safe_name=_safe_export_name(u.get("display_name") or u.get("email") or "account")
+    stamp=utc_now().strftime("%Y-%m-%d")
+    out=tmp_dir/f"get-dressed-{safe_name}-{stamp}.zip"
+
+    try:
+        manifest=account_data_manifest()
+        summary=account_data_summary()
+
+        # Produce a consistent SQLite snapshot using SQLite's backup API rather than
+        # copying a live WAL-backed database file.
+        snapshot=tmp_dir/"stylist.db"
+        source=db()
+        target=sqlite3.connect(snapshot)
+        try:
+            source.backup(target)
+        finally:
+            target.close()
+            source.close()
+
+        with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED,allowZip64=True) as z:
+            z.writestr(
+              "README.txt",
+              "Get Dressed account backup\n"
+              f"Exported: {manifest['exported_at']}\n"
+              "Contains only this signed-in account's wardrobe/profile/style data and media.\n"
+              "It does not contain passwords, session tokens, invite codes, or other users' data.\n"
+              "portable-data.json is the migration-friendly readable snapshot.\n"
+              "stylist.db is a consistent SQLite snapshot for technical recovery.\n"
+            )
+            z.writestr("portable-data.json",json.dumps(manifest,ensure_ascii=False,indent=2,default=str))
+            z.writestr("summary.json",json.dumps(summary,ensure_ascii=False,indent=2,default=str))
+            z.write(snapshot,"stylist.db")
+
+            for folder_name in ["uploads","cleaned","generated","model_photos"]:
+                folder=root/folder_name
+                if not folder.exists():
+                    continue
+                for p in folder.rglob("*"):
+                    if not p.is_file():
+                        continue
+                    try:
+                        resolved=p.resolve()
+                        if not resolved.is_relative_to(root.resolve()):
+                            continue
+                        arc=Path("media")/folder_name/p.relative_to(folder)
+                        z.write(p,arc.as_posix())
+                    except Exception:
+                        continue
+    except Exception:
+        shutil.rmtree(tmp_dir,ignore_errors=True)
+        raise
+
+    background_tasks.add_task(shutil.rmtree,tmp_dir,True)
+    return FileResponse(
+      out,
+      filename=out.name,
+      media_type="application/zip",
+      headers={
+        "Cache-Control":"no-store, private",
+        "X-Content-Type-Options":"nosniff"
+      }
+    )
+
 
 @app.post("/api/account/invites")
 def create_invite():

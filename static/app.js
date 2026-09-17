@@ -600,8 +600,64 @@ async function loadAccount(){
  $("adminUsersCard").classList.toggle("hidden",u.role!=="admin");
  $("adminFeedbackCard").classList.toggle("hidden",u.role!=="admin");
  $("adminSystemCard").classList.toggle("hidden",u.role!=="admin");
+ loadAccountDataSummary();
  if(u.role==="admin")await Promise.all([loadInvites(),loadAdminUsers(),loadAdminFeedback(),loadSystemStatus()]);
 }
+
+
+function readableBytes(bytes){
+ const n=Number(bytes||0);
+ if(n<1024)return `${n} B`;
+ if(n<1024*1024)return `${(n/1024).toFixed(1)} KB`;
+ if(n<1024*1024*1024)return `${(n/(1024*1024)).toFixed(1)} MB`;
+ return `${(n/(1024*1024*1024)).toFixed(2)} GB`;
+}
+
+async function loadAccountDataSummary(){
+ const box=$("accountDataSummary");
+ if(!box)return;
+ try{
+  const x=await api("/api/account/data-summary");
+  box.innerHTML=`
+   <span><b>${x.wardrobe_items||0}</b><small>Wardrobe</small></span>
+   <span><b>${x.saved_looks||0}</b><small>Saved looks</small></span>
+   <span><b>${x.saved_trips||0}</b><small>Trips</small></span>
+   <span><b>${x.media_files||0}</b><small>Media · ${esc(readableBytes(x.media_bytes||0))}</small></span>`;
+ }catch(err){
+  box.innerHTML=`<small>${esc(err.message)}</small>`;
+ }
+}
+
+$("downloadAccountBackup")?.addEventListener("click",async()=>{
+ const btn=$("downloadAccountBackup");
+ const status=$("accountBackupStatus");
+ const original=btn.textContent;
+ btn.disabled=true;
+ btn.textContent="Preparing backup…";
+ if(status)status.textContent="Building a private snapshot of your data and media.";
+ try{
+  const res=await fetch("/api/account/export",{credentials:"same-origin"});
+  if(!res.ok){
+   let msg="Backup could not be created.";
+   try{const j=await res.json();msg=j.detail||msg}catch{}
+   throw new Error(msg);
+  }
+  const blob=await res.blob();
+  const disposition=res.headers.get("content-disposition")||"";
+  const match=disposition.match(/filename="?([^";]+)"?/i);
+  const filename=match?.[1]||`get-dressed-backup-${new Date().toISOString().slice(0,10)}.zip`;
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  if(status)status.textContent="Backup downloaded. Your live wardrobe was not changed.";
+ }catch(err){
+  if(status)status.textContent=err.message;
+ }finally{
+  btn.disabled=false;btn.textContent=original;
+ }
+});
 
 function formatLastActive(value){
  if(!value)return "Never";

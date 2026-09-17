@@ -1549,3 +1549,45 @@ Applies consistently to:
 Desktop and laptop visuals are centred, use `object-fit: contain`, and cap their height relative to the browser viewport. Mobile remains full-width with a sensible viewport-height cap.
 
 No image files are altered and there is no data migration.
+
+
+## V7.7 — Data Safety & Portability
+
+V7.7 adds a private, per-account backup system before any future managed-database or object-storage migration.
+
+### My Account → Backup & portability
+Each signed-in user can download a ZIP containing only their own data:
+- profile and sizing preferences
+- wardrobe records
+- quick and detailed fit learning
+- outfit reactions
+- Saved Looks
+- wear-event history
+- saved trips and checklists
+- shopping shortlist
+- setup progress events
+- model photos
+- uploaded garment images
+- cleaned catalogue images
+- generated outfit images
+
+### Backup contents
+Each ZIP contains:
+- `portable-data.json` — human-readable / migration-friendly structured data
+- `summary.json` — counts and media size
+- `stylist.db` — a consistent SQLite snapshot created via SQLite's backup API
+- `media/` — the user's own stored image files
+- `README.txt`
+
+### Privacy and safety
+The export does **not** include:
+- password hashes
+- session tokens
+- invite codes
+- the shared accounts database
+- tester feedback belonging to other users
+- any other user's wardrobe or media
+
+The export is read-only: creating a backup does not mutate or delete the live wardrobe. Temporary server-side export files are deleted after the download response is served.
+
+This is intentionally a portability/recovery foundation before a later Postgres/object-storage migration.

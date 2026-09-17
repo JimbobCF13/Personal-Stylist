@@ -1928,3 +1928,21 @@ nav [data-go].nav-active:after{
   max-height:64vh !important;
  }
 }
+
+
+/* V7.7 — data safety & portability */
+.account-data-card{margin-top:12px}
+.account-data-card h4{margin:2px 0 5px}
+.account-data-summary{
+ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:12px 0
+}
+.account-data-summary>span{
+ min-width:0;padding:10px;border:1px solid var(--line);border-radius:12px;background:#faf8f5;
+ display:grid;gap:3px
+}
+.account-data-summary b{font-size:14px}
+.account-data-summary small{font-size:8px;color:#7a736c;overflow-wrap:anywhere}
+.account-backup-status{display:block;margin-top:8px;line-height:1.4;color:#746d66}
+@media(max-width:620px){
+ .account-data-summary{grid-template-columns:1fr 1fr}
+}
