@@ -1223,3 +1223,45 @@ No destructive migration. Existing wardrobes, Saved Looks, generated outfit visu
   - an explanation that real wear is stronger learning evidence than simply saving a look.
 - A short confirmation toast appears after each click explaining that the wear has been recorded and is influencing future style learning.
 - Existing wear counts and history are preserved.
+
+
+## V7.2 — Get Her Dressed refinement
+
+This phase deepens womenswear behaviour while keeping the same shared platform and preserving Get Him Dressed behaviour.
+
+### Womenswear styling intelligence
+The stylist now reasons more explicitly about:
+- complete-outfit silhouette and proportion,
+- bust/chest, waist, hip and torso fit separately,
+- trouser/jean rise, seat/thigh and leg shape,
+- skirt sitting point and hem length,
+- dress/jumpsuit torso and overall length,
+- structured vs relaxed tailoring,
+- neckline, sleeve volume and layering,
+- footwear practicality and hem/trouser interaction,
+- bags and jewellery as purposeful styling elements rather than automatic additions,
+- distinct occasion types such as wedding guest, cocktail/party, formal evening, work event and daytime event.
+
+It explicitly avoids body-shape stereotypes and does not default to dresses or heels.
+
+### Womenswear profile preferences
+Optional Get Her Dressed profile fields now include:
+- preferred trouser/jean rise,
+- preferred hem/garment length,
+- heel preference,
+- bag/jewellery/accessory notes.
+
+These feed future styling and shopping context and can also be captured by smart dictation.
+
+### Wardrobe taxonomy
+Womenswear now has a dedicated **Jewellery** category separate from general Accessories.
+
+### Visualisation fix
+The retailer-product Try On Me workflow had one legacy prompt that still said "menswear visualisation".
+It is now profile-aware and uses the correct Get Him / Get Her audience and model context.
+
+### Occasion vocabulary
+Styling forms and dictation now recognise more useful event types:
+Wedding guest, Cocktail / party, Formal evening, Work event and Daytime event.
+
+No destructive migration. Existing menswear and womenswear accounts, wardrobes, images, Saved Looks, trips and fit history remain intact.

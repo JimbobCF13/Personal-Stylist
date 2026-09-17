@@ -1595,3 +1595,16 @@ body[data-styling-profile="womenswear"] .onboarding-icon{
 }
 .wear-learning-toast b{font-size:11px}
 .wear-learning-toast p{font-size:9px;line-height:1.45;margin:3px 0 0;color:#d3ddd1}
+
+
+/* V7.2 — deeper Get Her Dressed refinement */
+.womenswear-pref-heading{display:block;margin:12px 0 3px}
+body[data-styling-profile="womenswear"] .womenswear-size-fields{
+ border-top:1px solid var(--line);padding-top:12px;margin-top:5px
+}
+body[data-styling-profile="womenswear"] .home-hero h2{
+ letter-spacing:-.055em;
+}
+body[data-styling-profile="womenswear"] .saved-look-tags span{
+ border:1px solid rgba(109,88,98,.10)
+}

@@ -251,7 +251,7 @@ WOMENSWEAR_CATEGORY_ORDER = [
     "Dresses", "Skirts", "Jumpsuits & Playsuits", "Blazers & Tailoring",
     "Jackets", "Coats", "Knitwear", "Sweatshirts & Hoodies",
     "Blouses & Shirts", "Tops & T-Shirts", "Trousers & Jeans", "Shorts",
-    "Activewear", "Footwear", "Bags", "Accessories", "Other",
+    "Activewear", "Footwear", "Bags", "Jewellery", "Accessories", "Other",
 ]
 WARDROBE_CATEGORY_ORDER = MENSWEAR_CATEGORY_ORDER
 
@@ -277,12 +277,20 @@ def styling_profile_guidance():
     if is_womenswear():
         return """
 WOMENSWEAR PROFILE:
-- Style as a contemporary women's personal stylist, without stereotypes or assumptions about age/body shape.
-- Consider dresses, skirts, jumpsuits, tailoring, trousers/jeans, knitwear, outerwear, footwear, bags and accessories where appropriate.
-- Pay attention to silhouette, proportion, hem/leg length, rise, waist/hip fit, neckline, sleeve length, layering, footwear height and bag/accessory balance.
-- For occasionwear, distinguish cocktail, formal, wedding/event, business and smart-casual needs without assuming heels or dresses are required.
-- Use the user's stated preferences and wardrobe evidence first. Do not prescribe traditionally feminine styling unless the user actually prefers it.
-- For shopping/sizing, women's numeric/letter sizes vary significantly by brand and line; treat exact fit history as higher-value evidence than generic size labels.
+- Act as a contemporary women's personal stylist, without assumptions about age, body shape, femininity, modesty or preferred level of dressiness.
+- Build from the user's real wardrobe and stated preferences first. Dresses, skirts and heels are options, never defaults.
+- Evaluate silhouette and proportion as a complete outfit: where a waist is defined or relaxed, balance between fitted/straight/wide pieces, hem position, trouser rise, jacket length, sleeve volume and footwear weight.
+- Distinguish top size, bottom size, dress size, shoe size and bra size. Women's sizing varies sharply by brand, line and fabrication; exact personal fit evidence outranks generic size charts.
+- For dresses and jumpsuits, reason separately about bust/chest, waist, hips, torso length, overall length, neckline and sleeve/strap fit.
+- For trousers and jeans, consider rise, waistband, hips/seat, thigh, leg shape and inseam. Do not treat a waist measurement alone as enough to predict fit.
+- For skirts, consider waist/hip relationship, intended sitting point and hem length.
+- For tailoring, distinguish structured vs relaxed shoulders, bust closure, waist suppression, jacket length and trouser/skirt proportion.
+- For knitwear/tops, consider neckline, shoulder line, bust ease, body length, sleeve shape and layering.
+- Footwear should account for practical walking, trouser/hem length and user heel preference. Never assume heels are needed for smartness.
+- Bags and jewellery should be treated as purposeful styling tools: scale, hardware, formality, colour and visual balance should support the outfit rather than being added automatically.
+- Occasionwear should distinguish wedding guest, cocktail/party, formal evening, work event, smart dinner, daytime event and business needs. Avoid generic 'occasionwear' advice.
+- When a user has not stated a preference, offer a strong contemporary option without inventing a body-shape rule or gender stereotype.
+- If an accessory or jewellery item materially completes a look and the user owns one, use its real garment ID. Do not invent ownership.
 """
     return """
 MENSWEAR PROFILE:
@@ -324,8 +332,9 @@ def canonical_wardrobe_category(
             ("Shorts", ["shorts","cycling shorts"]),
             ("Activewear", ["sports bra","gym top","gym leggings","running tights","activewear","yoga pants","tennis skirt"]),
             ("Footwear", ["shoe","shoes","trainer","trainers","sneaker","sneakers","loafer","loafers","boot","boots","heel","heels","pump","pumps","sandal","sandals","flat","flats","espadrille"]),
-            ("Bags", ["handbag","handbags","bag","bags","tote","crossbody","clutch","shoulder bag"]),
-            ("Accessories", ["belt","belts","hat","hats","cap","caps","beanie","scarf","scarves","glove","gloves","jewellery","jewelry","necklace","bracelet","earring","earrings","watch","watches"]),
+            ("Bags", ["handbag","handbags","bag","bags","tote","crossbody","clutch","shoulder bag","bucket bag","satchel"]),
+            ("Jewellery", ["jewellery","jewelry","necklace","pendant","bracelet","bangle","earring","earrings","ring","rings","brooch"]),
+            ("Accessories", ["belt","belts","hat","hats","cap","caps","beanie","scarf","scarves","glove","gloves","watch","watches","sunglasses","hair accessory","hairband"]),
         ]
         for cat,terms in women_rules:
             if any(term in primary for term in terms):
@@ -565,6 +574,10 @@ def init_db():
         "ALTER TABLE profile ADD COLUMN usual_dress_size TEXT DEFAULT ''",
         "ALTER TABLE profile ADD COLUMN usual_shoe_size TEXT DEFAULT ''",
         "ALTER TABLE profile ADD COLUMN bra_size TEXT DEFAULT ''",
+        "ALTER TABLE profile ADD COLUMN preferred_rise TEXT DEFAULT ''",
+        "ALTER TABLE profile ADD COLUMN preferred_hem_length TEXT DEFAULT ''",
+        "ALTER TABLE profile ADD COLUMN heel_preference TEXT DEFAULT ''",
+        "ALTER TABLE profile ADD COLUMN accessory_notes TEXT DEFAULT ''",
         "ALTER TABLE outfit_favourites ADD COLUMN tags_json TEXT DEFAULT '[]'",
         "ALTER TABLE outfit_favourites ADD COLUMN occasion TEXT DEFAULT ''",
         "ALTER TABLE outfit_favourites ADD COLUMN season TEXT DEFAULT ''",
@@ -1011,16 +1024,21 @@ class Profile(BaseModel):
     usual_dress_size: Optional[str]=""
     usual_shoe_size: Optional[str]=""
     bra_size: Optional[str]=""
+    preferred_rise: Optional[str]=""
+    preferred_hem_length: Optional[str]=""
+    heel_preference: Optional[str]=""
+    accessory_notes: Optional[str]=""
 
 @app.put("/api/profile")
 def save_profile(p: Profile):
     con = db()
     con.execute("""UPDATE profile SET name=?,height_cm=?,chest_cm=?,waist_cm=?,hips_cm=?,thigh_cm=?,
         inseam_cm=?,sleeve_cm=?,neck_cm=?,preferred_fit=?,style_notes=?,brand_notes=?,
-        usual_top_size=?,usual_bottom_size=?,usual_dress_size=?,usual_shoe_size=?,bra_size=? WHERE id=1""",
+        usual_top_size=?,usual_bottom_size=?,usual_dress_size=?,usual_shoe_size=?,bra_size=?,
+        preferred_rise=?,preferred_hem_length=?,heel_preference=?,accessory_notes=? WHERE id=1""",
         (p.name,p.height_cm,p.chest_cm,p.waist_cm,p.hips_cm,p.thigh_cm,p.inseam_cm,p.sleeve_cm,p.neck_cm,
          p.preferred_fit,p.style_notes,p.brand_notes,p.usual_top_size,p.usual_bottom_size,p.usual_dress_size,
-         p.usual_shoe_size,p.bra_size))
+         p.usual_shoe_size,p.bra_size,p.preferred_rise,p.preferred_hem_length,p.heel_preference,p.accessory_notes))
     con.commit(); con.close()
     return {"ok": True}
 
@@ -2595,7 +2613,8 @@ def parse_voice_form(req: VoiceFormRequest):
       "profile":{
         "name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm",
         "sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes",
-        "usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size"
+        "usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size",
+        "preferred_rise","preferred_hem_length","heel_preference","accessory_notes"
       },
       "garment":{
         "category","garment_type","brand","model_line","labelled_size","colour",
@@ -2623,7 +2642,7 @@ def parse_voice_form(req: VoiceFormRequest):
 - when is the date/day/time phrase, normalized clearly where possible.
 - shopping should be "owned" if they explicitly want wardrobe only, otherwise "open" when they allow suggestions.""",
       "outfit":"""Extract the structured outfit request.
-- occasion should be one of: Casual daytime, Smart casual, Dinner, Date night, Business meeting, Business casual, Wedding / event, Holiday / resort, Travel day.
+- occasion should be one of: Casual daytime, Smart casual, Dinner, Date night, Business meeting, Business casual, Wedding / event, Wedding guest, Cocktail / party, Formal evening, Work event, Daytime event, Holiday / resort, Travel day.
 - dress_code: Use your judgement, Casual, Smart casual, Business casual, Business, Cocktail, Formal.
 - smartness: Balanced, Relaxed, Polished but not overdressed, Smart, Very smart.
 - season: Auto / current, Spring, Summer, Autumn, Winter, Transitional.
@@ -2647,7 +2666,13 @@ def parse_voice_form(req: VoiceFormRequest):
 - Do not invent brand, material, size or model.
 - fit_feedback should be one of: Unknown, Perfect fit, Slightly tight, Slightly loose, Too tight, Too loose.
 - Category should use the app's established wardrobe categories when clear.
-- Put any residual factual detail in notes."""
+- Put any residual factual detail in notes.""",
+      "profile":"""Extract only profile information explicitly stated.
+- preferred_rise can capture low, mid, high or mixed rise preferences.
+- preferred_hem_length can capture preferred dress/skirt/trouser lengths in the user's own words.
+- heel_preference should capture practical footwear preference, e.g. flats, low heel, block heel, high heel, mixed, avoid heels.
+- accessory_notes should capture stated bag, jewellery or accessory preferences.
+- Do not infer body shape or invent preferences from measurements."""
     }[mode]
 
     prompt=f"""Turn this spoken dictation into fields for a personal stylist app.
@@ -3337,7 +3362,7 @@ def wardrobe_gaps(req: WardrobeGapRequest):
             "height_cm","chest_cm","waist_cm","hips_cm","thigh_cm",
             "inseam_cm","sleeve_cm","neck_cm","preferred_fit",
             "style_notes","brand_notes","usual_top_size","usual_bottom_size",
-            "usual_dress_size","usual_shoe_size","bra_size"
+            "usual_dress_size","usual_shoe_size","bra_size","preferred_rise","preferred_hem_length","heel_preference","accessory_notes"
         ]
         if k in profile_row
     }
@@ -3668,7 +3693,7 @@ def source_products(req: ProductSourceRequest):
     brand_patterns=json.dumps(fit_evidence["brands"][:12],ensure_ascii=False)
     user_measurements=json.dumps({k:fit_evidence["profile"].get(k) for k in [
       "height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit",
-      "usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size"
+      "usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size","preferred_rise","preferred_hem_length","heel_preference","accessory_notes"
     ]},ensure_ascii=False)
 
     prompt = f"""
@@ -4710,7 +4735,7 @@ def product_tryon(req: ProductTryOnRequest):
             product_file=None
 
     prompt=f"""
-Create a photorealistic full-body menswear visualisation.
+Create a photorealistic full-body {fashion_audience()} fashion visualisation showing one {fashion_person()}.
 
 SPECIFIC RETAILER PRODUCT TO ADD:
 Name: {req.product_name}
@@ -4726,6 +4751,9 @@ OWNED WARDROBE:
 
 Outfit: {req.outfit_label or 'Outfit'}
 Reason: {req.outfit_reason or ''}
+
+PROFILE-SPECIFIC STYLING GUIDANCE:
+{styling_profile_guidance()}
 
 If a retailer product image is supplied, reproduce that product as closely as reasonably possible:
 colour, silhouette, lapels/collar, buttons, length, texture, pattern and visible construction.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.1.1">
+<link rel="stylesheet" href="/static/style.css?v=7.2">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.1.1</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.2</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -320,7 +320,7 @@
    <details class="brief-more-details">
     <summary>Optional details <span>Review or fine-tune what I understood</span></summary>
     <div class="brief-more-grid">
-     <div class="two"><label>OCCASION<select id="occasion"><option>Casual daytime</option><option>Smart casual</option><option>Dinner</option><option>Date night</option><option>Business meeting</option><option>Business casual</option><option>Wedding / event</option><option>Holiday / resort</option><option>Travel day</option></select></label><label>DRESS CODE<select id="dress_code"><option>Use your judgement</option><option>Casual</option><option>Smart casual</option><option>Business casual</option><option>Business</option><option>Cocktail</option><option>Formal</option></select></label></div>
+     <div class="two"><label>OCCASION<select id="occasion"><option>Casual daytime</option><option>Smart casual</option><option>Dinner</option><option>Date night</option><option>Business meeting</option><option>Business casual</option><option>Wedding / event</option><option>Wedding guest</option><option>Cocktail / party</option><option>Formal evening</option><option>Work event</option><option>Daytime event</option><option>Holiday / resort</option><option>Travel day</option></select></label><label>DRESS CODE<select id="dress_code"><option>Use your judgement</option><option>Casual</option><option>Smart casual</option><option>Business casual</option><option>Business</option><option>Cocktail</option><option>Formal</option></select></label></div>
      <div class="two"><label>HOW SMART?<select id="smartness"><option>Balanced</option><option>Relaxed</option><option>Polished but not overdressed</option><option>Smart</option><option>Very smart</option></select></label><label>SEASON<select id="outfit_season"><option>Auto / current</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>Transitional</option></select></label></div>
      <div class="two"><label>TEMPERATURE °C<input id="temperature" type="number" value="22"></label><label>WEATHER<select id="weather"><option>Dry</option><option>Sunny</option><option>Cloudy</option><option>Rain likely</option><option>Windy</option><option>Cold / crisp</option><option>Hot / humid</option></select></label></div>
      <label>LOCATION<input id="location" placeholder="Optional"></label>
@@ -515,6 +515,10 @@
     <small class="eyebrow">USUAL SIZES — OPTIONAL</small>
     <div class="three"><label>TOP SIZE<input id="usual_top_size" placeholder="e.g. UK 10 / S"></label><label>BOTTOM SIZE<input id="usual_bottom_size" placeholder="e.g. UK 12"></label><label>DRESS SIZE<input id="usual_dress_size" placeholder="e.g. UK 10"></label></div>
     <div class="two"><label>SHOE SIZE<input id="usual_shoe_size" placeholder="e.g. UK 5"></label><label>BRA SIZE<input id="bra_size" placeholder="optional"></label></div>
+    <small class="eyebrow womenswear-pref-heading">FIT & STYLING PREFERENCES — OPTIONAL</small>
+    <div class="two"><label>TROUSER / JEAN RISE<select id="preferred_rise"><option value="">No preference</option><option>Low rise</option><option>Mid rise</option><option>High rise</option><option>Mixed by garment</option></select></label><label>HEEL PREFERENCE<select id="heel_preference"><option value="">No preference</option><option>Mostly flats</option><option>Low heels</option><option>Block / practical heels</option><option>High heels</option><option>Mixed</option><option>Avoid heels</option></select></label></div>
+    <label>PREFERRED HEM / LENGTH<input id="preferred_hem_length" placeholder="e.g. midi dresses, full-length trousers, above-knee skirts"></label>
+    <label>BAGS / JEWELLERY / ACCESSORIES<textarea id="accessory_notes" rows="2" placeholder="e.g. minimal gold jewellery, structured crossbody bags, avoid oversized logos"></textarea></label>
    </div>
    <label>STYLE NOTES<textarea id="style_notes" rows="3"></textarea></label>
    <label>BRAND / SIZE NOTES<textarea id="brand_notes" rows="3" placeholder="e.g. Ralph Lauren Custom Slim Fit L works well…"></textarea></label>
@@ -575,5 +579,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.1.1"></script>
+<script src="/static/app.js?v=7.2"></script>
 </body></html>

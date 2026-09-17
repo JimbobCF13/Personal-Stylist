@@ -357,7 +357,8 @@ const SMART_DICTATION_MAPS={
   hips_cm:"hips_cm",thigh_cm:"thigh_cm",inseam_cm:"inseam_cm",sleeve_cm:"sleeve_cm",
   neck_cm:"neck_cm",preferred_fit:"preferred_fit",style_notes:"style_notes",brand_notes:"brand_notes",
   usual_top_size:"usual_top_size",usual_bottom_size:"usual_bottom_size",usual_dress_size:"usual_dress_size",
-  usual_shoe_size:"usual_shoe_size",bra_size:"bra_size"
+  usual_shoe_size:"usual_shoe_size",bra_size:"bra_size",preferred_rise:"preferred_rise",
+  preferred_hem_length:"preferred_hem_length",heel_preference:"heel_preference",accessory_notes:"accessory_notes"
  },
  garment:{
   category:"category",garment_type:"garment_type",brand:"brand",model_line:"model_line",
@@ -926,7 +927,7 @@ function applyStylingProfileUI(user){
  if($("homeBrandKicker"))$("homeBrandKicker").textContent=`${brand.toUpperCase()} · PRIVATE AI WARDROBE`;
  if($("accountStylingProfile"))$("accountStylingProfile").textContent=women?"Womenswear":"Menswear";
  if($("fitIntelIntro"))$("fitIntelIntro").textContent=women
-  ?"Review how your real clothes fit. Get Her Dressed will learn brand, numeric/letter size, proportion and cut patterns for future shopping."
+  ?"Review how your real clothes fit. Get Her Dressed learns top, bottom, dress and shoe sizing separately — plus rise, proportion, length and brand/cut patterns."
   :"Review how your real clothes fit. Get Him Dressed will learn brand, size and cut patterns for future shopping.";
  document.body.dataset.stylingProfile=women?"womenswear":"menswear";
  if($("profileChestLabel"))$("profileChestLabel").textContent=women?"BUST / CHEST (cm)":"CHEST (cm)";
@@ -1109,7 +1110,7 @@ async function init(){
  Promise.allSettled([healthPromise,bootPromise,wardrobePromise,profilePromise]);
 }
 const MENSWEAR_ORDER=["Blazers & Tailoring","Overshirts & Shirt Jackets","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Shirts","Polos & T-Shirts","Trousers","Shorts","Footwear","Accessories","Other"];
-const WOMENSWEAR_ORDER=["Dresses","Skirts","Jumpsuits & Playsuits","Blazers & Tailoring","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Blouses & Shirts","Tops & T-Shirts","Trousers & Jeans","Shorts","Activewear","Footwear","Bags","Accessories","Other"];
+const WOMENSWEAR_ORDER=["Dresses","Skirts","Jumpsuits & Playsuits","Blazers & Tailoring","Jackets","Coats","Knitwear","Sweatshirts & Hoodies","Blouses & Shirts","Tops & T-Shirts","Trousers & Jeans","Shorts","Activewear","Footwear","Bags","Jewellery","Accessories","Other"];
 let WARDROBE_ORDER=[...MENSWEAR_ORDER];
 let selectedWardrobeCategory="";
 let wardrobeReturnGarmentId=null;
@@ -2311,7 +2312,7 @@ async function loadProfile(){
  const p=await api("/api/profile");Object.entries(p).forEach(([k,v])=>{if($(k)&&v!==null)$(k).value=v});if(p.name)$("greeting").textContent=`Good morning, ${p.name}`;
 }
 $("saveProfile").addEventListener("click",async()=>{
- const keys=["name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes","usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size"],p={};
+ const keys=["name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes","usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size","preferred_rise","preferred_hem_length","heel_preference","accessory_notes"],p={};
  keys.forEach(k=>{let v=$(k).value;p[k]=["height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm"].includes(k)?(v?Number(v):null):v});
  await api("/api/profile",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});alert("Profile saved.");await loadProfile();
 });
