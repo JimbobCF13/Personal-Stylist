@@ -1478,3 +1478,36 @@ body[data-styling-profile="womenswear"] .onboarding-icon{
 .system-check.warn>span{background:#f4e9df;color:#8a6446}
 .system-check div{display:grid;gap:2px}.system-check b{font-size:10px}.system-check small{font-size:8px;color:#777}
 @media(max-width:620px){.system-check-grid{grid-template-columns:1fr}}
+
+
+/* V7.0 — Saved Looks 2.0 */
+.saved-looks-heading{align-items:flex-end}
+.saved-looks-heading p{max-width:590px;margin:5px 0 0;font-size:11px;line-height:1.5;color:#777}
+.saved-look-toolbar{margin:14px 0;display:grid;gap:10px}
+.saved-search-label{display:grid;gap:5px;font-size:9px;letter-spacing:.07em}
+.saved-filter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.saved-filter-grid label{font-size:9px}
+.saved-looks-summary{display:flex;gap:7px;flex-wrap:wrap}
+.saved-looks-summary span{border:1px solid var(--line);background:#f7f5f1;border-radius:999px;padding:6px 9px;font-size:8px;color:#777}
+.saved-looks-summary b{color:#222}
+.saved-look-card{position:relative}
+.saved-look-pinned{border-color:#b7a694;box-shadow:0 11px 34px rgba(80,65,52,.08)}
+.saved-look-pinned:before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:#9b8776;border-radius:20px 20px 0 0}
+.saved-title-actions{display:flex;gap:7px;align-items:center}
+.saved-look-meta,.saved-look-tags{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}
+.saved-look-meta span{font-size:8px;text-transform:uppercase;letter-spacing:.05em;padding:5px 7px;border-radius:999px;background:#f0eee9;color:#665f59}
+.saved-look-tags span{font-size:8px;padding:5px 7px;border-radius:999px;background:#eae5df;color:#5e5148}
+.saved-look-note{font-size:10px;line-height:1.45;padding:9px 10px;background:#f7f4ef;border-left:2px solid #a99382;margin:8px 0}
+.saved-last-worn{display:block;color:#8a7d72;margin:6px 0}
+.saved-look-primary-actions{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.saved-wore-btn{background:#edf3ea}
+.saved-look-edit{margin-top:11px;padding:11px;border:1px solid var(--line);background:#faf9f6;border-radius:13px;display:grid;gap:8px}
+.saved-look-edit.hidden{display:none}
+.saved-look-edit label{font-size:9px}
+.saved-look-edit textarea{resize:vertical}
+@media(max-width:700px){
+ .saved-filter-grid{grid-template-columns:1fr}
+ .saved-look-title-row{align-items:flex-start}
+ .saved-title-actions{flex-direction:column;align-items:flex-end}
+ .saved-look-primary-actions{display:grid}
+}

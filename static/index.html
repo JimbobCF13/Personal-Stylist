@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=6.9">
+<link rel="stylesheet" href="/static/style.css?v=7.0">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V6.9</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.0</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -289,9 +289,18 @@
 
 <section id="savedlooks" class="screen">
  <div class="section saved-looks-section">
-  <div class="row between">
-   <div><small class="eyebrow">FAVOURITES</small><h3>Saved Looks</h3></div>
+  <div class="row between saved-looks-heading">
+   <div><small class="eyebrow">WARDROBE MEMORY</small><h3>Saved Looks</h3><p>Keep the outfits that work, remember when you wore them and build better variations over time.</p></div>
    <button class="ghost" data-go="stylistv4" type="button">Ask My Stylist</button>
+  </div>
+  <div class="card saved-look-toolbar">
+   <label class="saved-search-label">SEARCH<input id="savedLookSearch" type="search" placeholder="Look, garment, brand, tag or occasion"></label>
+   <div class="saved-filter-grid">
+    <label>OCCASION<select id="savedLookOccasionFilter"><option value="">All occasions</option></select></label>
+    <label>SEASON<select id="savedLookSeasonFilter"><option value="">All seasons</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>Transitional</option><option>All-season</option></select></label>
+    <label>HISTORY<select id="savedLookHistoryFilter"><option value="">All saved looks</option><option value="pinned">Pinned</option><option value="worn">Worn before</option><option value="unworn">Not worn yet</option></select></label>
+   </div>
+   <div id="savedLooksSummary" class="saved-looks-summary"></div>
   </div>
   <div id="savedLooksResults"></div>
  </div>
@@ -561,5 +570,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=6.9"></script>
+<script src="/static/app.js?v=7.0"></script>
 </body></html>

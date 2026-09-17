@@ -1128,3 +1128,56 @@ The shared API helper now distinguishes:
 with clearer messages and without implying saved data was lost.
 
 No destructive migration. Existing accounts, wardrobes, original images, generated visuals, Saved Looks, fit history and onboarding data are preserved.
+
+
+## V7.0 — Saved Looks 2.0
+
+Saved Looks is now a wardrobe-memory system rather than a simple favourites list.
+
+### Organisation
+Each saved look can now store:
+- editable name,
+- occasion,
+- season,
+- up to 12 tags,
+- private notes,
+- pinned / unpinned state.
+
+Existing saved looks are preserved and automatically gain empty/default values for the new fields.
+
+### Search & filters
+Saved Looks can be searched across:
+- look name,
+- original request,
+- notes,
+- tags,
+- occasion / season,
+- brands, garment types, colours and materials in the outfit.
+
+Filters include:
+- occasion,
+- season,
+- pinned looks,
+- worn before,
+- not worn yet.
+
+### Wear history
+**I wore this** records:
+- total wear count,
+- last-worn date.
+
+This creates a stronger future signal than merely saving a look.
+
+### Reuse
+**Wear / style again** takes the saved outfit back into Ask My Stylist as the starting point, keeping the original look intact unless a useful contextual change is needed.
+
+The existing:
+- More like this,
+- Use as inspiration,
+- Works for me,
+features remain available.
+
+### Pinned looks
+Strong repeatable outfits can be pinned. Pinned looks appear first in the collection and can be filtered directly.
+
+No destructive migration. Existing accounts, wardrobe data, images, Saved Looks, visuals, feedback and fit history remain intact.

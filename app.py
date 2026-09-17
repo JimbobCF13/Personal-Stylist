@@ -550,7 +550,15 @@ def init_db():
         "ALTER TABLE profile ADD COLUMN usual_bottom_size TEXT DEFAULT ''",
         "ALTER TABLE profile ADD COLUMN usual_dress_size TEXT DEFAULT ''",
         "ALTER TABLE profile ADD COLUMN usual_shoe_size TEXT DEFAULT ''",
-        "ALTER TABLE profile ADD COLUMN bra_size TEXT DEFAULT ''"
+        "ALTER TABLE profile ADD COLUMN bra_size TEXT DEFAULT ''",
+        "ALTER TABLE outfit_favourites ADD COLUMN tags_json TEXT DEFAULT '[]'",
+        "ALTER TABLE outfit_favourites ADD COLUMN occasion TEXT DEFAULT ''",
+        "ALTER TABLE outfit_favourites ADD COLUMN season TEXT DEFAULT ''",
+        "ALTER TABLE outfit_favourites ADD COLUMN notes TEXT DEFAULT ''",
+        "ALTER TABLE outfit_favourites ADD COLUMN wore_count INTEGER DEFAULT 0",
+        "ALTER TABLE outfit_favourites ADD COLUMN last_worn_at TEXT",
+        "ALTER TABLE outfit_favourites ADD COLUMN is_pinned INTEGER DEFAULT 0",
+        "ALTER TABLE outfit_favourites ADD COLUMN updated_at TEXT"
     ]:
         try:
             con.execute(sql)
@@ -3678,34 +3686,98 @@ class FavouriteOutfitRequest(BaseModel):
     weather_context: Optional[str] = ""
     visual_path: Optional[str] = ""
 
+class SavedLookUpdateRequest(BaseModel):
+    label: Optional[str] = ""
+    tags: Optional[list[str]] = []
+    occasion: Optional[str] = ""
+    season: Optional[str] = ""
+    notes: Optional[str] = ""
+    is_pinned: Optional[bool] = False
+
+def saved_look_row(row):
+    d=dict(row)
+    try:d["outfit"]=json.loads(d.get("outfit_json") or "{}")
+    except Exception:d["outfit"]={}
+    try:d["tags"]=json.loads(d.get("tags_json") or "[]")
+    except Exception:d["tags"]=[]
+    if not isinstance(d["tags"],list):d["tags"]=[]
+    d["tags"]=[str(x).strip() for x in d["tags"] if str(x).strip()][:12]
+    d["wore_count"]=int(d.get("wore_count") or 0)
+    d["is_pinned"]=bool(d.get("is_pinned") or 0)
+    return d
+
 @app.get("/api/outfit-favourites")
 def get_outfit_favourites():
     con=db()
-    rows=[dict(r) for r in con.execute(
-        "SELECT * FROM outfit_favourites ORDER BY id DESC"
-    ).fetchall()]
+    rows=con.execute("""
+      SELECT * FROM outfit_favourites
+      ORDER BY COALESCE(is_pinned,0) DESC, id DESC
+    """).fetchall()
     con.close()
-    for row in rows:
-        try: row["outfit"]=json.loads(row.get("outfit_json") or "{}")
-        except Exception: row["outfit"]={}
-    return rows
+    return [saved_look_row(r) for r in rows]
 
 @app.post("/api/outfit-favourites")
 def save_outfit_favourite(req: FavouriteOutfitRequest):
     outfit=req.outfit or {}
     label=str(outfit.get("label") or "Saved look")
+    # Use stylist fields as gentle defaults where they are actually present.
+    occasion=str(outfit.get("occasion_fit") or "")
     con=db()
     cur=con.execute("""
       INSERT INTO outfit_favourites
-      (label,outfit_json,request_text,weather_context,visual_path)
-      VALUES (?,?,?,?,?)
+      (label,outfit_json,request_text,weather_context,visual_path,occasion,tags_json,wore_count,is_pinned,updated_at)
+      VALUES (?,?,?,?,?,?,'[]',0,0,?)
     """,(label,json.dumps(outfit,ensure_ascii=False),req.request_text or "",
-         req.weather_context or "",req.visual_path or ""))
+         req.weather_context or "",req.visual_path or "",occasion,utc_now().isoformat()))
     fid=cur.lastrowid
     con.commit()
-    row=dict(con.execute("SELECT * FROM outfit_favourites WHERE id=?",(fid,)).fetchone())
+    row=con.execute("SELECT * FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
     con.close()
-    return row
+    return saved_look_row(row)
+
+@app.put("/api/outfit-favourites/{fid}")
+def update_outfit_favourite(fid:int, req: SavedLookUpdateRequest):
+    tags=[]
+    seen=set()
+    for raw in (req.tags or []):
+        tag=" ".join(str(raw).strip().split())[:40]
+        key=tag.casefold()
+        if tag and key not in seen:
+            tags.append(tag);seen.add(key)
+        if len(tags)>=12:break
+    con=db()
+    exists=con.execute("SELECT id FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
+    if not exists:
+        con.close();raise HTTPException(404,"Saved look not found.")
+    con.execute("""
+      UPDATE outfit_favourites
+      SET label=?,tags_json=?,occasion=?,season=?,notes=?,is_pinned=?,updated_at=?
+      WHERE id=?
+    """,((req.label or "Saved look").strip()[:120],json.dumps(tags,ensure_ascii=False),
+         (req.occasion or "").strip()[:80],(req.season or "").strip()[:40],
+         (req.notes or "").strip()[:1000],1 if req.is_pinned else 0,
+         utc_now().isoformat(),fid))
+    con.commit()
+    row=con.execute("SELECT * FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
+    con.close()
+    return saved_look_row(row)
+
+@app.post("/api/outfit-favourites/{fid}/wore")
+def mark_saved_look_worn(fid:int):
+    now=utc_now().isoformat()
+    con=db()
+    exists=con.execute("SELECT id FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
+    if not exists:
+        con.close();raise HTTPException(404,"Saved look not found.")
+    con.execute("""
+      UPDATE outfit_favourites
+      SET wore_count=COALESCE(wore_count,0)+1,last_worn_at=?,updated_at=?
+      WHERE id=?
+    """,(now,now,fid))
+    con.commit()
+    row=con.execute("SELECT * FROM outfit_favourites WHERE id=?",(fid,)).fetchone()
+    con.close()
+    return saved_look_row(row)
 
 @app.delete("/api/outfit-favourites/{fid}")
 def delete_outfit_favourite(fid:int):

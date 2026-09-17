@@ -2436,6 +2436,7 @@ async function saveFavouriteOutfit(encoded,index,button){
    method:"POST",headers:{"Content-Type":"application/json"},
    body:JSON.stringify({outfit:o,rating:"Loved"})
   }).catch(()=>{});
+  localStorage.removeItem(userCacheKey("savedLooks"));
   if(button)button.textContent="★ Saved";
  }catch(err){
   if(button){button.disabled=false;button.textContent=original;}
@@ -2443,31 +2444,173 @@ async function saveFavouriteOutfit(encoded,index,button){
  }
 }
 
+let savedLooksRows=[];
+
+function savedLookSearchText(row){
+ const o=row.outfit||{};
+ const pieces=(o.owned_garment_ids||[]).map(id=>garments.find(g=>g.id===id)).filter(Boolean);
+ return [
+  row.label,o.label,row.request_text,row.weather_context,row.occasion,row.season,row.notes,
+  ...(row.tags||[]),
+  ...pieces.flatMap(g=>[g.brand,g.garment_type,g.category,g.colour,g.material])
+ ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function savedLookFilteredRows(){
+ const q=($("savedLookSearch")?.value||"").trim().toLowerCase();
+ const occasion=$("savedLookOccasionFilter")?.value||"";
+ const season=$("savedLookSeasonFilter")?.value||"";
+ const history=$("savedLookHistoryFilter")?.value||"";
+ return savedLooksRows.filter(row=>{
+  if(q && !savedLookSearchText(row).includes(q))return false;
+  if(occasion && (row.occasion||"")!==occasion)return false;
+  if(season && (row.season||"")!==season)return false;
+  if(history==="pinned" && !row.is_pinned)return false;
+  if(history==="worn" && !(Number(row.wore_count||0)>0))return false;
+  if(history==="unworn" && Number(row.wore_count||0)>0)return false;
+  return true;
+ });
+}
+
+function populateSavedLookFilters(){
+ const select=$("savedLookOccasionFilter");
+ if(!select)return;
+ const current=select.value;
+ const values=[...new Set(savedLooksRows.map(x=>(x.occasion||"").trim()).filter(Boolean))].sort();
+ select.innerHTML='<option value="">All occasions</option>'+values.map(x=>`<option>${esc(x)}</option>`).join("");
+ if(values.includes(current))select.value=current;
+}
+
+function renderSavedLooksCollection(){
+ const box=$("savedLooksResults");
+ if(!box)return;
+ const rows=savedLookFilteredRows();
+ const total=savedLooksRows.length;
+ const worn=savedLooksRows.filter(x=>Number(x.wore_count||0)>0).length;
+ const pinned=savedLooksRows.filter(x=>x.is_pinned).length;
+ if($("savedLooksSummary"))$("savedLooksSummary").innerHTML=`<span><b>${total}</b> saved</span><span><b>${worn}</b> worn</span><span><b>${pinned}</b> pinned</span>`;
+ if(!total){
+  box.innerHTML='<div class="notice">No saved looks yet. Favourite an outfit from Ask My Stylist and it will appear here.</div>';
+  return;
+ }
+ if(!rows.length){
+  box.innerHTML='<div class="notice">No saved looks match those filters.</div>';
+  return;
+ }
+ box.innerHTML=rows.map(renderSavedLook).join("");
+ requestAnimationFrame(()=>stabiliseDynamicImages(box));
+}
+
+function savedLookTagsInput(row){
+ return esc((row.tags||[]).join(", "));
+}
+
+function savedLookEditPanel(row){
+ const seasons=["","Spring","Summer","Autumn","Winter","Transitional","All-season"];
+ return `<div id="savedLookEdit-${row.id}" class="saved-look-edit hidden">
+  <div class="two">
+   <label>NAME<input id="savedLabel-${row.id}" value="${esc(row.label||row.outfit?.label||"Saved look")}"></label>
+   <label>OCCASION<input id="savedOccasion-${row.id}" value="${esc(row.occasion||"")}" placeholder="e.g. Smart casual dinner"></label>
+  </div>
+  <div class="two">
+   <label>SEASON<select id="savedSeason-${row.id}">${seasons.map(s=>`<option ${s===(row.season||"")?"selected":""}>${esc(s||"Not set")}</option>`).join("")}</select></label>
+   <label>TAGS<input id="savedTags-${row.id}" value="${savedLookTagsInput(row)}" placeholder="e.g. dinner, travel, easy"></label>
+  </div>
+  <label>NOTES<textarea id="savedNotes-${row.id}" rows="2" placeholder="Anything worth remembering about this look">${esc(row.notes||"")}</textarea></label>
+  <div class="row"><button class="primary" type="button" onclick="saveSavedLookDetails(${row.id},this)">Save details</button><button class="ghost" type="button" onclick="toggleSavedLookEdit(${row.id})">Cancel</button></div>
+ </div>`;
+}
+
+function toggleSavedLookEdit(id){
+ $(`savedLookEdit-${id}`)?.classList.toggle("hidden");
+}
+
+async function saveSavedLookDetails(id,button){
+ const row=savedLooksRows.find(x=>x.id===id);if(!row)return;
+ const seasonValue=$(`savedSeason-${id}`)?.value||"";
+ const payload={
+  label:$(`savedLabel-${id}`)?.value.trim()||"Saved look",
+  occasion:$(`savedOccasion-${id}`)?.value.trim()||"",
+  season:seasonValue==="Not set"?"":seasonValue,
+  tags:($(`savedTags-${id}`)?.value||"").split(",").map(x=>x.trim()).filter(Boolean),
+  notes:$(`savedNotes-${id}`)?.value.trim()||"",
+  is_pinned:Boolean(row.is_pinned)
+ };
+ const original=button?.textContent||"Save details";
+ if(button){button.disabled=true;button.textContent="Saving…"}
+ try{
+  await api(`/api/outfit-favourites/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  localStorage.removeItem(userCacheKey("savedLooks"));
+  await loadSavedLooks();
+ }catch(err){alert(err.message);if(button){button.disabled=false;button.textContent=original}}
+}
+
+async function markSavedLookWorn(id,button){
+ const original=button?.textContent||"I wore this";
+ if(button){button.disabled=true;button.textContent="Saving…"}
+ try{
+  await api(`/api/outfit-favourites/${id}/wore`,{method:"POST"});
+  localStorage.removeItem(userCacheKey("savedLooks"));
+  await loadSavedLooks();
+ }catch(err){alert(err.message);if(button){button.disabled=false;button.textContent=original}}
+}
+
+async function toggleSavedLookPinned(id,button){
+ const row=savedLooksRows.find(x=>x.id===id);if(!row)return;
+ const payload={
+  label:row.label||row.outfit?.label||"Saved look",
+  occasion:row.occasion||"",season:row.season||"",tags:row.tags||[],notes:row.notes||"",
+  is_pinned:!row.is_pinned
+ };
+ if(button)button.disabled=true;
+ try{
+  await api(`/api/outfit-favourites/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  localStorage.removeItem(userCacheKey("savedLooks"));
+  await loadSavedLooks();
+ }catch(err){alert(err.message);if(button)button.disabled=false}
+}
+
+function useSavedLookAgain(encoded,rowId){
+ const data=JSON.parse(decodeURIComponent(encoded));
+ const row=savedLooksRows.find(x=>x.id===Number(rowId));
+ const o=data.outfit||{};
+ const pieceNames=(o.owned_garment_ids||[]).map(id=>{
+  const g=garments.find(x=>x.id===id);
+  return g?`${g.brand?g.brand+" ":""}${g.garment_type||g.category||"garment"}`:"";
+ }).filter(Boolean);
+ const prompt=[
+  `I want to wear my saved look "${row?.label||o.label||"Saved look"}" again.`,
+  pieceNames.length?`The saved pieces are: ${pieceNames.join(", ")}.`:"",
+  "Use the saved look as the starting point. Keep it intact if it still works, or suggest only small useful changes for today's context."
+ ].filter(Boolean).join(" ");
+ $("v4Request").value=prompt;
+ go("stylistv4");
+ setTimeout(()=>$("v4Request")?.focus(),80);
+}
+
+["savedLookSearch","savedLookOccasionFilter","savedLookSeasonFilter","savedLookHistoryFilter"].forEach(id=>{
+ $(id)?.addEventListener(id==="savedLookSearch"?"input":"change",renderSavedLooksCollection);
+});
+
 async function loadSavedLooks(){
  const box=$("savedLooksResults");
  if(!box)return;
 
  const cached=readUserCache("savedLooks");
  if(Array.isArray(cached)){
-  if(cached.length){
-   box.innerHTML=cached.map(renderSavedLook).join("");
-   requestAnimationFrame(()=>stabiliseDynamicImages(box));
-  }else{
-   box.innerHTML='<div class="notice">No saved looks yet. Favourite an outfit from Ask My Stylist and it will appear here.</div>';
-  }
+  savedLooksRows=cached;
+  populateSavedLookFilters();
+  renderSavedLooksCollection();
  }else{
   box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Loading saved looks…</b></div></div>';
  }
 
  try{
   const rows=await api("/api/outfit-favourites");
+  savedLooksRows=rows;
   writeUserCache("savedLooks",rows);
-  if(!rows.length){
-   box.innerHTML='<div class="notice">No saved looks yet. Favourite an outfit from Ask My Stylist and it will appear here.</div>';
-   return;
-  }
-  box.innerHTML=rows.map(renderSavedLook).join("");
-  requestAnimationFrame(()=>stabiliseDynamicImages(box));
+  populateSavedLookFilters();
+  renderSavedLooksCollection();
  }catch(err){
   if(!Array.isArray(cached))box.innerHTML=`<div class="notice">${esc(err.message)}</div>`;
  }
@@ -2479,18 +2622,35 @@ function renderSavedLook(row){
  const strip=pieces.map(g=>g.image_path?`<div class="saved-piece"><img class="saved-piece-image" src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" onload="stabiliseImagePaint(this)" alt=""><span>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</span></div>`:"").join("");
  const visual=row.visual_path?`<img class="saved-look-visual dynamic-ai-image" src="${row.visual_path}" loading="lazy" decoding="async" onload="stabiliseImagePaint(this)" alt="Saved outfit visualisation">`:"";
  const payload=encodeURIComponent(JSON.stringify({outfit:o,request_text:row.request_text||"",weather_context:row.weather_context||""}));
- return `<article class="card saved-look-card">
-  <div class="row between"><div><small>SAVED LOOK</small><h3>${esc(row.label||o.label||"Outfit")}</h3></div><button class="text-button danger-text" onclick="deleteSavedLook(${row.id})">Remove</button></div>
+ const worn=Number(row.wore_count||0);
+ const lastWorn=row.last_worn_at?new Date(row.last_worn_at).toLocaleDateString():"";
+ const tags=(row.tags||[]).map(t=>`<span>${esc(t)}</span>`).join("");
+ const meta=[row.occasion,row.season,worn?`${worn} wear${worn===1?"":"s"}`:"Not worn yet"].filter(Boolean);
+ return `<article class="card saved-look-card ${row.is_pinned?"saved-look-pinned":""}">
+  <div class="row between saved-look-title-row">
+   <div><small>${row.is_pinned?"PINNED LOOK":"SAVED LOOK"}</small><h3>${esc(row.label||o.label||"Outfit")}</h3></div>
+   <div class="saved-title-actions"><button class="text-button" type="button" onclick="toggleSavedLookPinned(${row.id},this)">${row.is_pinned?"★ Pinned":"☆ Pin"}</button><button class="text-button danger-text" onclick="deleteSavedLook(${row.id})">Remove</button></div>
+  </div>
+  ${meta.length?`<div class="saved-look-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
+  ${tags?`<div class="saved-look-tags">${tags}</div>`:""}
   ${visual}
   <div class="saved-piece-strip">${strip}</div>
   ${o.why_it_works?`<p>${esc(o.why_it_works)}</p>`:""}
+  ${row.notes?`<div class="saved-look-note"><b>Your note:</b> ${esc(row.notes)}</div>`:""}
+  ${lastWorn?`<small class="saved-last-worn">Last worn ${esc(lastWorn)}</small>`:""}
   ${row.weather_context?`<div class="saved-weather"><b>Weather context:</b> ${esc(row.weather_context)}</div>`:""}
   ${row.request_text?`<small class="saved-request">Originally asked: ${esc(row.request_text)}</small>`:""}
+  <div class="saved-look-actions saved-look-primary-actions">
+   <button class="primary" type="button" onclick="useSavedLookAgain('${payload}',${row.id})">Wear / style again</button>
+   <button class="ghost saved-wore-btn" type="button" onclick="markSavedLookWorn(${row.id},this)">✓ I wore this</button>
+   <button class="ghost" type="button" onclick="toggleSavedLookEdit(${row.id})">Edit details</button>
+  </div>
   <div class="saved-look-actions">
-   <button class="primary" type="button" onclick="savedLookVariations('${payload}',${row.id},'similar',this)">More like this</button>
+   <button class="ghost" type="button" onclick="savedLookVariations('${payload}',${row.id},'similar',this)">More like this</button>
    <button class="ghost" type="button" onclick="savedLookVariations('${payload}',${row.id},'inspiration',this)">Use as inspiration</button>
    <button class="ghost reaction-btn positive" type="button" onclick="reactToOutfit('${encodeURIComponent(JSON.stringify(o))}','Works for me',this)">✓ Works for me</button>
   </div>
+  ${savedLookEditPanel(row)}
   <div id="savedLookVariations-${row.id}" class="saved-look-variations"></div>
  </article>`;
 }
