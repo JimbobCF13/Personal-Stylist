@@ -1946,3 +1946,31 @@ nav [data-go].nav-active:after{
 @media(max-width:620px){
  .account-data-summary{grid-template-columns:1fr 1fr}
 }
+
+
+/* V7.8 — account security */
+.account-security-card{margin-top:12px}
+.account-security-card h4{margin:2px 0 5px}
+.account-security-summary{
+ display:flex;align-items:center;justify-content:space-between;gap:14px;
+ margin:12px 0;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:#faf8f5
+}
+.account-security-summary>div{display:flex;align-items:baseline;gap:6px}
+.account-security-summary b{font-size:18px}
+.account-security-summary span,.account-security-summary small{font-size:9px;color:#756f68}
+.security-password-details{
+ margin:10px 0;border:1px solid var(--line);border-radius:13px;background:#fff;overflow:hidden
+}
+.security-password-details summary{
+ list-style:none;cursor:pointer;padding:11px 12px;font-size:10px;font-weight:800;
+ display:flex;align-items:center;justify-content:space-between
+}
+.security-password-details summary::-webkit-details-marker{display:none}
+.security-password-details[open] summary span{transform:rotate(90deg)}
+.security-password-form{
+ border-top:1px solid var(--line);padding:12px;display:grid;gap:9px
+}
+.security-password-form small{line-height:1.4;color:#746d66}
+@media(max-width:620px){
+ .account-security-summary{align-items:flex-start;flex-direction:column;gap:5px}
+}

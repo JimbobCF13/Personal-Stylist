@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.7">
+<link rel="stylesheet" href="/static/style.css?v=7.8">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.7</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.8</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -501,6 +501,25 @@
    <button id="restartOnboardingBtn" class="ghost full" type="button">Show me around the app</button>
    <button id="logoutBtn" class="ghost full" type="button">Sign out</button>
   </div>
+  <div class="card account-security-card">
+   <div class="row between">
+    <div><small class="eyebrow">SECURITY</small><h4>Account security</h4></div>
+    <span class="pill">Protected</span>
+   </div>
+   <div id="accountSecuritySummary" class="account-security-summary"><small>Checking active sessions…</small></div>
+   <details class="security-password-details">
+    <summary>Change password <span>›</span></summary>
+    <div class="security-password-form">
+     <label>CURRENT PASSWORD<input id="securityCurrentPassword" type="password" autocomplete="current-password"></label>
+     <label>NEW PASSWORD<input id="securityNewPassword" type="password" autocomplete="new-password" minlength="8"></label>
+     <label>CONFIRM NEW PASSWORD<input id="securityConfirmPassword" type="password" autocomplete="new-password" minlength="8"></label>
+     <button id="changePasswordBtn" class="primary full" type="button">Change password</button>
+     <small id="changePasswordStatus"></small>
+    </div>
+   </details>
+   <button id="signOutOtherSessionsBtn" class="ghost full" type="button">Sign out other devices</button>
+   <small id="sessionSecurityStatus" class="account-backup-status"></small>
+  </div>
   <div class="card account-data-card">
    <div class="row between">
     <div><small class="eyebrow">YOUR DATA</small><h4>Backup & portability</h4></div>
@@ -638,5 +657,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.7"></script>
+<script src="/static/app.js?v=7.8"></script>
 </body></html>

@@ -1591,3 +1591,34 @@ The export does **not** include:
 The export is read-only: creating a backup does not mutate or delete the live wardrobe. Temporary server-side export files are deleted after the download response is served.
 
 This is intentionally a portability/recovery foundation before a later Postgres/object-storage migration.
+
+
+## V7.8 — Account Security Controls
+
+V7.8 strengthens the account layer before any major database/storage migration.
+
+### My Account → Security
+Users can now:
+- see how many active sessions exist,
+- see whether other sessions/devices are signed in,
+- change their password by confirming the current password,
+- sign out every other session while keeping the current device signed in.
+
+### Password changes
+Changing a password:
+- requires the correct current password,
+- requires a new password of at least eight characters,
+- refuses the same password,
+- stores a fresh PBKDF2-HMAC-SHA256 password hash,
+- revokes every other active session after the change.
+
+### Session control
+`Sign out other devices` deletes only other session tokens for the current user. It does not touch wardrobe/profile data and it does not sign out the current browser.
+
+### Browser write-action protection
+Authenticated POST/PUT/PATCH/DELETE API requests now reject an explicit cross-origin Origin/Referer. This complements the existing HttpOnly + SameSite=Lax session cookie.
+
+### Deliberate limitation
+V7.8 does **not** pretend to provide email-based forgotten-password recovery. Proper password-reset and email verification should be added only when a real transactional email provider is connected.
+
+No wardrobe/media migration. No destructive user-data changes.

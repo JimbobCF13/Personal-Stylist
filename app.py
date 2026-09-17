@@ -205,13 +205,33 @@ PUBLIC_PATHS={
 @app.middleware("http")
 async def account_context(request: Request, call_next):
     path=request.url.path
-    user=user_from_session(request.cookies.get(SESSION_COOKIE,""))
+    raw_token=request.cookies.get(SESSION_COOKIE,"")
+    user=user_from_session(raw_token)
     token=CURRENT_USER.set(user)
     try:
         protected_media=path.startswith("/uploads/") or path.startswith("/cleaned/") or path.startswith("/generated/") or path.startswith("/model-photos/")
         protected_api=path.startswith("/api/") and path not in PUBLIC_PATHS
         if (protected_api or protected_media) and not user:
             return JSONResponse({"detail":"Please sign in again to continue."},status_code=401)
+
+        # Basic CSRF hardening for authenticated state-changing requests.
+        # SameSite=Lax remains the first line of defence; this rejects an explicit
+        # cross-origin browser Origin/Referer when one is supplied.
+        if user and path.startswith("/api/") and request.method.upper() in {"POST","PUT","PATCH","DELETE"}:
+            origin=(request.headers.get("origin") or "").strip()
+            referer=(request.headers.get("referer") or "").strip()
+            host=(request.headers.get("host") or "").strip().lower()
+            candidate=origin or referer
+            if candidate:
+                try:
+                    from urllib.parse import urlparse
+                    parsed=urlparse(candidate)
+                    candidate_host=(parsed.netloc or "").strip().lower()
+                    if candidate_host and candidate_host!=host:
+                        return JSONResponse({"detail":"This account action was blocked because it came from another site."},status_code=403)
+                except Exception:
+                    return JSONResponse({"detail":"This account action could not be verified."},status_code=403)
+
         return await call_next(request)
     finally:
         CURRENT_USER.reset(token)
@@ -1005,7 +1025,7 @@ def account_data_manifest():
     payload={
       "export_format":"get-dressed-portable-backup-v1",
       "exported_at":utc_now().isoformat(),
-      "app_version":"7.7",
+      "app_version":"7.8",
       "account":{
         "id":u.get("id"),
         "email":u.get("email"),
@@ -1124,6 +1144,75 @@ def export_account_data(background_tasks: BackgroundTasks):
         "X-Content-Type-Options":"nosniff"
       }
     )
+
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@app.get("/api/account/security")
+def account_security(request: Request):
+    u=current_user()
+    token=request.cookies.get(SESSION_COOKIE,"")
+    current_hash=session_hash(token) if token else ""
+    now=utc_now().isoformat()
+    con=auth_db()
+    con.execute("DELETE FROM sessions WHERE expires_at < ?",(now,))
+    rows=con.execute(
+      "SELECT token_hash,created_at,expires_at FROM sessions WHERE user_id=? ORDER BY created_at DESC",
+      (u["id"],)
+    ).fetchall()
+    con.commit();con.close()
+    return {
+      "active_sessions":len(rows),
+      "other_sessions":sum(1 for r in rows if r["token_hash"]!=current_hash),
+      "current_session_created_at":next((r["created_at"] for r in rows if r["token_hash"]==current_hash),None),
+      "session_expires_at":next((r["expires_at"] for r in rows if r["token_hash"]==current_hash),None),
+    }
+
+@app.post("/api/account/security/change-password")
+def change_account_password(req: ChangePasswordRequest, request: Request):
+    u=current_user()
+    current=(req.current_password or "")
+    new=(req.new_password or "")
+    if len(new)<8:
+        raise HTTPException(400,"Use a new password of at least 8 characters.")
+    if current==new:
+        raise HTTPException(400,"Choose a different new password.")
+
+    con=auth_db()
+    row=con.execute("SELECT password_hash FROM users WHERE id=?",(u["id"],)).fetchone()
+    if not row or not password_ok(current,row["password_hash"]):
+        con.close()
+        raise HTTPException(401,"Your current password is incorrect.")
+
+    new_hash=password_hash(new)
+    current_token=request.cookies.get(SESSION_COOKIE,"")
+    keep_hash=session_hash(current_token) if current_token else ""
+    con.execute("UPDATE users SET password_hash=? WHERE id=?",(new_hash,u["id"]))
+    if keep_hash:
+        con.execute("DELETE FROM sessions WHERE user_id=? AND token_hash<>?",(u["id"],keep_hash))
+    else:
+        con.execute("DELETE FROM sessions WHERE user_id=?",(u["id"],))
+    con.commit();con.close()
+    return {"ok":True,"other_sessions_revoked":True}
+
+@app.post("/api/account/security/sign-out-others")
+def sign_out_other_sessions(request: Request):
+    u=current_user()
+    token=request.cookies.get(SESSION_COOKIE,"")
+    if not token:
+        raise HTTPException(401,"Please sign in again.")
+    keep_hash=session_hash(token)
+    con=auth_db()
+    before=int(con.execute(
+      "SELECT COUNT(*) FROM sessions WHERE user_id=? AND token_hash<>?",
+      (u["id"],keep_hash)
+    ).fetchone()[0] or 0)
+    con.execute("DELETE FROM sessions WHERE user_id=? AND token_hash<>?",(u["id"],keep_hash))
+    con.commit();con.close()
+    return {"ok":True,"revoked_sessions":before}
 
 
 @app.post("/api/account/invites")

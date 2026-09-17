@@ -600,10 +600,76 @@ async function loadAccount(){
  $("adminUsersCard").classList.toggle("hidden",u.role!=="admin");
  $("adminFeedbackCard").classList.toggle("hidden",u.role!=="admin");
  $("adminSystemCard").classList.toggle("hidden",u.role!=="admin");
- loadAccountDataSummary();
+ await Promise.all([loadAccountDataSummary(),loadAccountSecurity()]);
  if(u.role==="admin")await Promise.all([loadInvites(),loadAdminUsers(),loadAdminFeedback(),loadSystemStatus()]);
 }
 
+
+
+async function loadAccountSecurity(){
+ const box=$("accountSecuritySummary");
+ const btn=$("signOutOtherSessionsBtn");
+ if(!box)return;
+ try{
+  const x=await api("/api/account/security");
+  const other=Number(x.other_sessions||0);
+  box.innerHTML=`<div><b>${Number(x.active_sessions||1)}</b><span>active session${Number(x.active_sessions||1)===1?"":"s"}</span></div>
+   <small>${other?`${other} other device/session${other===1?"":"s"} currently signed in.`:"Only this session is active."}</small>`;
+  if(btn){
+   btn.disabled=other===0;
+   btn.textContent=other?`Sign out ${other} other session${other===1?"":"s"}`:"No other sessions to sign out";
+  }
+ }catch(err){
+  box.innerHTML=`<small>${esc(err.message)}</small>`;
+ }
+}
+
+$("changePasswordBtn")?.addEventListener("click",async()=>{
+ const btn=$("changePasswordBtn");
+ const status=$("changePasswordStatus");
+ const current=$("securityCurrentPassword").value;
+ const next=$("securityNewPassword").value;
+ const confirmNext=$("securityConfirmPassword").value;
+ if(next.length<8){status.textContent="Use at least 8 characters.";return}
+ if(next!==confirmNext){status.textContent="The new passwords do not match.";return}
+ const original=btn.textContent;
+ btn.disabled=true;btn.textContent="Changing password…";status.textContent="";
+ try{
+  await api("/api/account/security/change-password",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({current_password:current,new_password:next})
+  });
+  $("securityCurrentPassword").value="";
+  $("securityNewPassword").value="";
+  $("securityConfirmPassword").value="";
+  status.textContent="Password changed. Other signed-in sessions were closed.";
+  await loadAccountSecurity();
+ }catch(err){
+  status.textContent=err.message;
+ }finally{
+  btn.disabled=false;btn.textContent=original;
+ }
+});
+
+$("signOutOtherSessionsBtn")?.addEventListener("click",async()=>{
+ const btn=$("signOutOtherSessionsBtn");
+ const status=$("sessionSecurityStatus");
+ if(btn.disabled)return;
+ if(!confirm("Sign out every other Get Dressed session? This device will stay signed in."))return;
+ const original=btn.textContent;
+ btn.disabled=true;btn.textContent="Signing out other sessions…";
+ try{
+  const x=await api("/api/account/security/sign-out-others",{method:"POST"});
+  status.textContent=x.revoked_sessions
+   ? `${x.revoked_sessions} other session${x.revoked_sessions===1?"":"s"} signed out.`
+   :"No other sessions were active.";
+  await loadAccountSecurity();
+ }catch(err){
+  status.textContent=err.message;
+ }finally{
+  btn.disabled=false;btn.textContent=original;
+ }
+});
 
 function readableBytes(bytes){
  const n=Number(bytes||0);
