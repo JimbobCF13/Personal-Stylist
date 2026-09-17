@@ -1511,3 +1511,13 @@ body[data-styling-profile="womenswear"] .onboarding-icon{
  .saved-title-actions{flex-direction:column;align-items:flex-end}
  .saved-look-primary-actions{display:grid}
 }
+
+/* V7.1 — persistent trips */
+.saved-trips-card{margin-bottom:12px}.saved-trips-card h4{margin:3px 0}
+.saved-trip-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.saved-trip-row:last-child{border-bottom:0}.saved-trip-row>div:first-child{display:grid;gap:3px}.saved-trip-row b{font-size:11px}.saved-trip-row small{font-size:8px;color:#888}.saved-trip-row>div:last-child{display:flex;gap:6px}
+.trip-save-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}.trip-save-actions>div{display:grid;gap:3px}.trip-save-actions>div:last-child{display:flex;gap:7px}
+.trip-checklist-card{margin:10px 0}.trip-checklist{display:grid;gap:6px;margin-top:10px}
+.trip-check-item{display:grid;grid-template-columns:24px 44px 1fr;gap:8px;align-items:center;border:1px solid var(--line);border-radius:11px;padding:7px;background:#faf9f6}
+.trip-check-item.checked{opacity:.6;background:#eef2eb}.trip-check-item img{width:44px;height:52px;object-fit:contain;border-radius:7px;background:#fff}.trip-check-item span{display:grid;gap:2px}.trip-check-item b{font-size:10px}.trip-check-item small{font-size:8px;color:#777}
+@media(max-width:620px){.trip-save-actions{display:grid}.trip-save-actions>div:last-child{display:grid;grid-template-columns:1fr 1fr}.saved-trip-row{grid-template-columns:1fr}.saved-trip-row>div:last-child{justify-content:flex-start}}

@@ -1181,3 +1181,33 @@ features remain available.
 Strong repeatable outfits can be pinned. Pinned looks appear first in the collection and can be filtered directly.
 
 No destructive migration. Existing accounts, wardrobe data, images, Saved Looks, visuals, feedback and fit history remain intact.
+
+
+## V7.1 — Help Me Pack 3.0 / Persistent Trips
+
+### Saved trips
+Packing plans can now be saved, reopened, updated and removed.
+A saved trip retains:
+- the original trip brief and structured fields,
+- destination/dates,
+- researched trip/weather context,
+- packing plan,
+- luggage choice,
+- packing checklist state.
+
+### Luggage-aware planning
+Users can now specify Hand luggage only, Cabin case, Checked suitcase or Large checked suitcase.
+The packing engine is instructed to respect that constraint when deciding how much to take.
+
+### Packing checklist
+Every owned garment in the capsule becomes a persistent checklist item.
+Travel-day garments are identified separately as **Wear on travel day** rather than **Pack in luggage**.
+Checklist progress is saved automatically for saved trips.
+
+### Reopen and continue
+Opening a saved trip restores its form fields, research, outfit plan and checklist, so users can continue where they left off rather than rebuilding the trip.
+
+### Refresh weather
+A saved/current trip has **Refresh weather**, which reruns destination/weather research while leaving the existing capsule/outfit plan intact. If the trip is already saved, the refreshed context is saved back to that trip.
+
+No destructive migration. Existing wardrobes, Saved Looks, generated outfit visuals and user accounts remain unchanged.

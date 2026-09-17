@@ -61,6 +61,9 @@ async function api(url,opts={}){
 
 let activeAiDictation=null;
 let currentPackingPlan=null;
+let currentPackingRequest=null;
+let currentSavedTripId=null;
+let currentTripChecklist={};
 let currentTripContext=null;
 const appActivities=new Map();
 const packingVisualCache=new Map();
@@ -695,6 +698,7 @@ function go(id){
  if(id==="wardrobe")loadGarments(false);
  if(id==="shortlist")loadShortlist();
  if(id==="savedlooks")loadSavedLooks();
+ if(id==="packing")loadSavedTrips();
  if(id==="stylistv4"&&latestStylistSession)requestAnimationFrame(renderLatestStylistSession);
  if(id==="garmentdetail"&&detailGarmentId)loadGarmentDetail(detailGarmentId);
  if(id==="outfits")populateAnchor();
@@ -3493,6 +3497,119 @@ function renderPackingLook(d,index){
  </article>`;
 }
 
+
+function packingChecklistFromPlan(plan){
+ const checked=currentTripChecklist||{};
+ const items=(plan?.packing_list||[]).map(p=>({
+  key:`g-${p.garment_id}`,garment_id:p.garment_id,checked:Boolean(checked[`g-${p.garment_id}`])
+ }));
+ const travelIds=new Set();
+ (plan?.outfit_plan||[]).filter(x=>(x.time_of_day||"").toLowerCase()==="travel" || (x.occasion||"").toLowerCase().includes("travel"))
+  .forEach(x=>(x.garment_ids||[]).forEach(id=>travelIds.add(Number(id))));
+ return {items,travelIds};
+}
+
+function renderPackingChecklist(plan){
+ const {items,travelIds}=packingChecklistFromPlan(plan);
+ const packed=items.filter(x=>x.checked).length;
+ const rows=items.map(item=>{
+  const g=garments.find(x=>x.id===item.garment_id);if(!g)return "";
+  const travel=travelIds.has(g.id);
+  return `<label class="trip-check-item ${item.checked?"checked":""}">
+   <input type="checkbox" data-trip-check="${item.key}" ${item.checked?"checked":""}>
+   <img src="${garmentThumbUrl(g)}" loading="lazy" alt="">
+   <span><b>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category||"Garment"))}</b><small>${travel?"Wear on travel day":"Pack in luggage"}</small></span>
+  </label>`;
+ }).join("");
+ return `<div class="card trip-checklist-card">
+  <div class="row between"><div><small class="eyebrow">PACKING CHECKLIST</small><h3>${packed}/${items.length} ready</h3></div><span class="pill">${esc(currentPackingRequest?.luggage||"Luggage not specified")}</span></div>
+  <div class="trip-checklist">${rows}</div>
+ </div>`;
+}
+
+function currentTripPayload(){
+ return {
+  title:[currentPackingRequest?.destination,currentPackingRequest?.start_date].filter(Boolean).join(" · ")||"Saved trip",
+  destination:currentPackingRequest?.destination||"",
+  start_date:currentPackingRequest?.start_date||"",
+  end_date:currentPackingRequest?.end_date||"",
+  luggage:currentPackingRequest?.luggage||"",
+  request:currentPackingRequest||{},
+  trip_context:currentTripContext||{},
+  plan:currentPackingPlan||{},
+  checklist:currentTripChecklist||{}
+ };
+}
+
+async function saveCurrentTrip(button){
+ if(!currentPackingPlan)return;
+ const original=button?.textContent||"Save trip";
+ if(button){button.disabled=true;button.textContent="Saving…"}
+ try{
+  const url=currentSavedTripId?`/api/saved-trips/${currentSavedTripId}`:"/api/saved-trips";
+  const method=currentSavedTripId?"PUT":"POST";
+  const x=await api(url,{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(currentTripPayload())});
+  currentSavedTripId=x.id;
+  if(button)button.textContent="✓ Trip saved";
+  await loadSavedTrips();
+ }catch(err){alert(err.message);if(button){button.disabled=false;button.textContent=original}}
+}
+
+async function loadSavedTrips(){
+ const box=$("savedTripsResults");if(!box)return;
+ try{
+  const rows=await api("/api/saved-trips");
+  if(!rows.length){box.innerHTML='<small class="muted-copy">Save a packing plan and it will appear here.</small>';return}
+  box.innerHTML=rows.map(t=>`<div class="saved-trip-row">
+   <div><b>${esc(t.title||t.destination||"Saved trip")}</b><small>${esc([t.start_date,t.end_date,t.luggage].filter(Boolean).join(" · "))}</small></div>
+   <div><button class="ghost" type="button" onclick="openSavedTrip(${t.id})">Open</button><button class="text-button danger-text" type="button" onclick="deleteSavedTrip(${t.id})">Remove</button></div>
+  </div>`).join("");
+  window._savedTrips=rows;
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+}
+$("refreshSavedTrips")?.addEventListener("click",loadSavedTrips);
+
+function fillTripForm(req={}){
+ const map={
+  destination:"pack_destination",trip_brief:"pack_brief",start_date:"pack_start_date",end_date:"pack_end_date",
+  days:"pack_days",trip_type:"pack_trip_type",weather:"pack_weather",activities:"pack_activities",
+  dress_needs:"pack_dress_needs",laundry:"pack_laundry",notes:"pack_notes",luggage:"pack_luggage"
+ };
+ Object.entries(map).forEach(([k,id])=>{if($(id)&&req[k]!==undefined&&req[k]!==null)$(id).value=String(req[k])});
+ if($("pack_shopping"))$("pack_shopping").value=req.shopping_allowed===false?"No":"Yes";
+}
+
+function openSavedTrip(id){
+ const t=(window._savedTrips||[]).find(x=>x.id===Number(id));if(!t)return;
+ currentSavedTripId=t.id;
+ currentPackingRequest=t.request||{};
+ currentTripContext=t.trip_context||{};
+ currentPackingPlan=t.plan||{};
+ currentTripChecklist=t.checklist||{};
+ fillTripForm(currentPackingRequest);
+ renderPackingPlan(currentPackingPlan);
+ $("packingResults")?.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+async function deleteSavedTrip(id){
+ if(!confirm("Remove this saved trip?"))return;
+ await api(`/api/saved-trips/${id}`,{method:"DELETE"});
+ if(currentSavedTripId===id)currentSavedTripId=null;
+ loadSavedTrips();
+}
+
+async function refreshCurrentTripWeather(button){
+ if(!currentPackingRequest)return;
+ const original=button?.textContent||"Refresh weather";
+ if(button){button.disabled=true;button.textContent="Refreshing…"}
+ try{
+  currentTripContext=await api("/api/trip-context",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(currentPackingRequest)});
+  if(currentPackingPlan)renderPackingPlan(currentPackingPlan);
+  if(currentSavedTripId)await saveCurrentTrip(null);
+ }catch(err){alert(err.message)}
+ finally{if(button){button.disabled=false;button.textContent=original}}
+}
+
 function renderPackingPlan(x){
  const box=$("packingResults");
  currentPackingPlan=x;
@@ -3534,8 +3651,10 @@ function renderPackingPlan(x){
   : "";
 
  box.innerHTML=
+  `<div class="card trip-save-actions"><div><small class="eyebrow">TRIP PLAN</small><b>${esc(currentPackingRequest?.destination||x.destination||"Your trip")}</b></div><div><button class="ghost" type="button" onclick="refreshCurrentTripWeather(this)">Refresh weather</button><button class="primary" type="button" onclick="saveCurrentTrip(this)">${currentSavedTripId?"Update saved trip":"Save trip"}</button></div></div>`+
   renderTripContext(currentTripContext)+
   `<div class="notice packing-summary"><b>Your capsule</b><p>${esc(x.summary||"")}</p>${x.capsule_strategy?`<small>${esc(x.capsule_strategy)}</small>`:""}</div>
+   ${renderPackingChecklist(x)}
    <div class="card"><h3>Pack these</h3>${packed}</div>
    <div class="card pack-plan-card">
     <div class="row between"><h3>Outfit plan</h3><span id="packingVisualPrep" class="pill">Preparing visuals…</span></div>
@@ -3659,6 +3778,8 @@ async function packingMoreLike(index,button){
 
 $("makePackingPlan")?.addEventListener("click",async()=>{
  const box=$("packingResults");
+ currentSavedTripId=null;
+ currentTripChecklist={};
  const tripBrief=($("pack_brief")?.value||"").trim();
  if(!tripBrief && !$("pack_destination").value.trim()){
   alert("Tell me about your trip first.");
@@ -3681,8 +3802,10 @@ $("makePackingPlan")?.addEventListener("click",async()=>{
   dress_needs:$("pack_dress_needs").value,
   laundry:$("pack_laundry").value,
   shopping_allowed:$("pack_shopping").value==="Yes",
+  luggage:$("pack_luggage")?.value||"",
   notes:$("pack_notes").value
  };
+ currentPackingRequest=payload;
 
  beginAppActivity("packing-plan","Researching your trip…","Checking weather, destination and any named hotels, restaurants or venues.","research");
  box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Researching the trip…</b><small>I’ll use a real forecast when the dates are close enough; otherwise I’ll use seasonal conditions.</small></div></div>';
@@ -3709,6 +3832,14 @@ $("makePackingPlan")?.addEventListener("click",async()=>{
  }
 });
 
+$("packingResults")?.addEventListener("change",async e=>{
+ const input=e.target.closest("[data-trip-check]");if(!input)return;
+ currentTripChecklist[input.dataset.tripCheck]=input.checked;
+ renderPackingPlan(currentPackingPlan);
+ if(currentSavedTripId){
+  try{await api(`/api/saved-trips/${currentSavedTripId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(currentTripPayload())})}catch{}
+ }
+});
 $("quickWardrobeAnalyse")?.addEventListener("click",analyseQuickWardrobe);
 $("quickWardrobeDictate")?.addEventListener("click",startQuickWardrobeDictation);
 $("quickWardrobeResults")?.addEventListener("input",e=>{

@@ -522,6 +522,20 @@ def init_db():
       label TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS saved_trips (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      destination TEXT DEFAULT '',
+      start_date TEXT DEFAULT '',
+      end_date TEXT DEFAULT '',
+      luggage TEXT DEFAULT '',
+      request_json TEXT NOT NULL,
+      context_json TEXT NOT NULL,
+      plan_json TEXT NOT NULL,
+      checklist_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
     """)
     try:
         con.execute("ALTER TABLE garments ADD COLUMN original_image_path TEXT")
@@ -2759,6 +2773,76 @@ Rules:
     return result
 
 
+class SavedTripRequest(BaseModel):
+    title: str = ""
+    destination: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    luggage: str = ""
+    request: dict = {}
+    trip_context: dict = {}
+    plan: dict = {}
+    checklist: dict = {}
+
+def saved_trip_row(row):
+    d=dict(row)
+    for src,dst,default in [
+        ("request_json","request",{}),("context_json","trip_context",{}),
+        ("plan_json","plan",{}),("checklist_json","checklist",{})
+    ]:
+        try:d[dst]=json.loads(d.get(src) or "{}")
+        except Exception:d[dst]=default
+    return d
+
+@app.get("/api/saved-trips")
+def get_saved_trips():
+    con=db()
+    rows=con.execute("SELECT * FROM saved_trips ORDER BY COALESCE(start_date,''), id DESC").fetchall()
+    con.close()
+    return [saved_trip_row(r) for r in rows]
+
+@app.post("/api/saved-trips")
+def save_trip(req: SavedTripRequest):
+    title=(req.title or req.destination or "Saved trip").strip()[:140]
+    con=db()
+    cur=con.execute("""
+      INSERT INTO saved_trips
+      (title,destination,start_date,end_date,luggage,request_json,context_json,plan_json,checklist_json,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
+    """,(title,(req.destination or "").strip()[:140],req.start_date or "",req.end_date or "",
+         (req.luggage or "").strip()[:80],json.dumps(req.request or {},ensure_ascii=False),
+         json.dumps(req.trip_context or {},ensure_ascii=False),json.dumps(req.plan or {},ensure_ascii=False),
+         json.dumps(req.checklist or {},ensure_ascii=False),utc_now().isoformat()))
+    tid=cur.lastrowid
+    con.commit()
+    row=con.execute("SELECT * FROM saved_trips WHERE id=?",(tid,)).fetchone()
+    con.close()
+    return saved_trip_row(row)
+
+@app.put("/api/saved-trips/{tid}")
+def update_trip(tid:int, req: SavedTripRequest):
+    con=db()
+    exists=con.execute("SELECT id FROM saved_trips WHERE id=?",(tid,)).fetchone()
+    if not exists:
+        con.close(); raise HTTPException(404,"Saved trip not found.")
+    title=(req.title or req.destination or "Saved trip").strip()[:140]
+    con.execute("""
+      UPDATE saved_trips SET title=?,destination=?,start_date=?,end_date=?,luggage=?,
+       request_json=?,context_json=?,plan_json=?,checklist_json=?,updated_at=? WHERE id=?
+    """,(title,(req.destination or "").strip()[:140],req.start_date or "",req.end_date or "",
+         (req.luggage or "").strip()[:80],json.dumps(req.request or {},ensure_ascii=False),
+         json.dumps(req.trip_context or {},ensure_ascii=False),json.dumps(req.plan or {},ensure_ascii=False),
+         json.dumps(req.checklist or {},ensure_ascii=False),utc_now().isoformat(),tid))
+    con.commit()
+    row=con.execute("SELECT * FROM saved_trips WHERE id=?",(tid,)).fetchone()
+    con.close()
+    return saved_trip_row(row)
+
+@app.delete("/api/saved-trips/{tid}")
+def delete_trip(tid:int):
+    con=db(); con.execute("DELETE FROM saved_trips WHERE id=?",(tid,)); con.commit(); con.close()
+    return {"ok":True}
+
 class PackingRequest(BaseModel):
     destination: str = ""
     trip_brief: str = ""
@@ -2771,6 +2855,7 @@ class PackingRequest(BaseModel):
     dress_needs: str = ""
     laundry: str = "No"
     shopping_allowed: bool = True
+    luggage: str = ""
     notes: str = ""
     trip_context: dict = {}
 
@@ -2829,7 +2914,7 @@ Rules:
 - Reuse versatile garments deliberately across days/occasions to reduce luggage.
 - Respect researched weather, destination/venue context, activities, dates, dress needs, laundry, fit history and style feedback.
 - Treat inferred venue dress guidance as guidance, not a verified rule.
-- Avoid overpacking. Shoes, trousers and outer layers should earn their place by working across multiple looks where possible.
+- Avoid overpacking. Respect the stated luggage allowance/size. Shoes, trousers and outer layers should earn their place by working across multiple looks where possible.
 - If shopping_allowed is false, missing_items must be empty.
 - If shopping_allowed is true, list a missing item only for a genuine gap.
 - Each outfit_plan entry must represent ONE discrete outfit for ONE occasion/time of day.
@@ -2846,7 +2931,7 @@ Rules:
       "destination":req.destination,"trip_brief":req.trip_brief,"start_date":req.start_date,"end_date":req.end_date,
       "days":req.days,"trip_type":req.trip_type,"user_weather":req.weather,
       "activities":req.activities,"dress_needs":req.dress_needs,"laundry":req.laundry,
-      "shopping_allowed":req.shopping_allowed,"notes":req.notes
+      "shopping_allowed":req.shopping_allowed,"luggage":req.luggage,"notes":req.notes
      },
      "researched_trip_context":req.trip_context or {},
      "profile":profile,"wardrobe":compact,"recent_feedback":feedback,"saved_looks":favourites

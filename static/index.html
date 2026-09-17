@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.0">
+<link rel="stylesheet" href="/static/style.css?v=7.1">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.0</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.1</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -339,6 +339,10 @@
 
 <section id="packing" class="screen">
  <div class="section"><h3>Help Me Pack</h3>
+  <div class="card saved-trips-card">
+   <div class="row between"><div><small class="eyebrow">MY TRIPS</small><h4>Saved trips</h4></div><button id="refreshSavedTrips" class="ghost" type="button">Refresh</button></div>
+   <div id="savedTripsResults"><small class="muted-copy">Save a packing plan and it will appear here.</small></div>
+  </div>
   <div class="card form pack-simple-form">
    <div class="stylist-intro">
     <span class="eyebrow">TRAVEL STYLIST</span>
@@ -359,8 +363,9 @@
      <label>RETURN <small>optional</small><input id="pack_end_date" type="date"></label>
      <label>DAYS <small>optional</small><input id="pack_days" type="number" min="1" max="60" value="5"></label>
     </div>
-    <div class="two">
+    <div class="three">
      <label>LAUNDRY<select id="pack_laundry"><option>No</option><option>Yes</option><option>Possibly</option></select></label>
+     <label>LUGGAGE<select id="pack_luggage"><option value="">Not specified</option><option>Hand luggage only</option><option>Cabin case</option><option>Checked suitcase</option><option>Large checked suitcase</option></select></label>
      <label>CAN SUGGEST MISSING ITEMS?<select id="pack_shopping"><option>Yes</option><option>No</option></select></label>
     </div>
    </div>
@@ -570,5 +575,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.0"></script>
+<script src="/static/app.js?v=7.1"></script>
 </body></html>
