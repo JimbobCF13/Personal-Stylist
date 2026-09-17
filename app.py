@@ -1033,7 +1033,7 @@ SETUP_STEPS = [
     ("profile","Personalise your profile","profile"),
     ("model_photo","Add a model photo","profile"),
     ("wardrobe","Build a useful wardrobe","quickwardrobe"),
-    ("fit_review","Review one real fit","fitintel"),
+    ("fit_review","Teach me what fits","fitintel"),
     ("stylist","Try your personal stylist","stylistv4"),
     ("saved_look","Save a look you like","savedlooks"),
 ]
@@ -1049,6 +1049,11 @@ def setup_progress():
     fit_review_count=int(con.execute(
         "SELECT COUNT(*) FROM garments WHERE COALESCE(fit_review_status,'')='confirmed' OR fit_reviewed_at IS NOT NULL"
     ).fetchone()[0] or 0)
+    quick_fit_count=int(con.execute("""
+        SELECT COUNT(*) FROM garments
+        WHERE TRIM(COALESCE(fit_feedback,''))<>''
+          AND LOWER(TRIM(COALESCE(fit_feedback,''))) NOT IN ('unknown','fit unknown')
+    """).fetchone()[0] or 0)
     event_rows=con.execute("SELECT event_key,completed_at FROM setup_events").fetchall()
     events={r["event_key"]:r["completed_at"] for r in event_rows}
     con.close()
@@ -1065,7 +1070,7 @@ def setup_progress():
       "profile":profile_complete,
       "model_photo":model_photo_count>=1,
       "wardrobe":wardrobe_count>=6,
-      "fit_review":fit_review_count>=1,
+      "fit_review":(fit_review_count>=1 or quick_fit_count>=1),
       "stylist":stylist_complete,
       "saved_look":saved_count>=1,
     }
@@ -1073,7 +1078,11 @@ def setup_progress():
       "profile": "Measurements, sizing or preferences added" if profile_complete else "Add your name plus at least one fit, size or style preference.",
       "model_photo": f"{model_photo_count} model photo{'s' if model_photo_count!=1 else ''} saved" if model_photo_count else "Add a clear photo so outfit visuals can look like you.",
       "wardrobe": f"{wardrobe_count} wardrobe items saved" if wardrobe_count else "Add your everyday favourites first.",
-      "fit_review": f"{fit_review_count} confirmed fit review{'s' if fit_review_count!=1 else ''}" if fit_review_count else "Review how one real garment fits.",
+      "fit_review": (
+          f"{quick_fit_count} garment{'s' if quick_fit_count!=1 else ''} with fit feedback"
+          if quick_fit_count else
+          (f"{fit_review_count} detailed fit review{'s' if fit_review_count!=1 else ''}" if fit_review_count else "Mark how at least one garment fits.")
+      ),
       "stylist": "Personal stylist used" if stylist_complete else "Ask the stylist for your first real outfit.",
       "saved_look": f"{saved_count} saved look{'s' if saved_count!=1 else ''}" if saved_count else "Save one outfit that feels right.",
     }
@@ -4776,23 +4785,17 @@ def save_fit_review(gid: int, req: FitReviewRequest):
     if rating is not None:
         rating=max(1,min(5,int(rating)))
     reviewed=datetime.now(timezone.utc).isoformat()
-    feedback=(
-        f"Fit review: {rating or 'unrated'}/5. "
-        f"Chest/bust {req.fit_chest or '—'}; waist {req.fit_waist or '—'}; hips {req.fit_hips or '—'}; "
-        f"length {req.fit_length or '—'}; sleeve {req.fit_sleeve or '—'}; "
-        f"shoulders {req.fit_shoulders or '—'}. {req.fit_notes or ''}"
-    ).strip()
     con.execute("""
       UPDATE garments SET
         labelled_size=CASE WHEN ?<>'' THEN ? ELSE labelled_size END,
         fit_review_status='confirmed', fit_rating=?,
         fit_chest=?,fit_waist=?,fit_hips=?,fit_length=?,fit_sleeve=?,fit_shoulders=?,
-        fit_notes=?,fit_reviewed_at=?,fit_feedback=?
+        fit_notes=?,fit_reviewed_at=?
       WHERE id=?
     """,(req.labelled_size or "",req.labelled_size or "",rating,
          req.fit_chest or "",req.fit_waist or "",req.fit_hips or "",req.fit_length or "",
          req.fit_sleeve or "",req.fit_shoulders or "",req.fit_notes or "",
-         reviewed,feedback,gid))
+         reviewed,gid))
     con.commit()
     updated=dict(con.execute("SELECT * FROM garments WHERE id=?",(gid,)).fetchone())
     con.close()
@@ -4818,7 +4821,7 @@ def fit_evidence_snapshot(limit: int = 120):
     con=db()
     profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     rows=[dict(r) for r in con.execute("""
-      SELECT id,brand,model_line,garment_type,category,labelled_size,fit_cut,
+      SELECT id,brand,model_line,garment_type,category,labelled_size,fit_cut,fit_feedback,
              fit_review_status,fit_rating,fit_chest,fit_waist,fit_hips,fit_length,
              fit_sleeve,fit_shoulders,fit_notes,fit_reviewed_at
       FROM garments
@@ -4828,6 +4831,11 @@ def fit_evidence_snapshot(limit: int = 120):
     con.close()
 
     confirmed=[r for r in rows if r.get("fit_review_status")=="confirmed"]
+    quick_feedback=[
+      r for r in rows
+      if (r.get("fit_feedback") or "").strip()
+      and (r.get("fit_feedback") or "").strip().lower() not in ("unknown","fit unknown")
+    ]
     by_brand={}
     by_category={}
     for r in confirmed:
@@ -4866,7 +4874,12 @@ def fit_evidence_snapshot(limit: int = 120):
     return {
       "profile":profile,
       "confirmed":confirmed,
-      "unreviewed":[r for r in rows if r.get("fit_review_status")!="confirmed"],
+      "quick_feedback":quick_feedback,
+      "unreviewed":[
+        r for r in rows
+        if r.get("fit_review_status")!="confirmed"
+        and ((r.get("fit_feedback") or "").strip().lower() in ("","unknown","fit unknown"))
+      ],
       "brands":summarise(by_brand),
       "categories":summarise(by_category)
     }
@@ -4893,13 +4906,16 @@ FIT_INTELLIGENCE_SCHEMA={
 def fit_intelligence():
     evidence=fit_evidence_snapshot()
     confirmed=evidence["confirmed"]
+    quick_feedback=evidence["quick_feedback"]
     unreviewed=evidence["unreviewed"]
 
     fallback={
       "summary":(
-        "Fit intelligence gets stronger as you review how individual garments actually fit."
-        if not confirmed else
-        f"Built from {len(confirmed)} confirmed fit review{'s' if len(confirmed)!=1 else ''}."
+        f"Learning from {len(quick_feedback)} garment{'s' if len(quick_feedback)!=1 else ''} with real fit feedback."
+        if quick_feedback and not confirmed else
+        ("Add Fit Feedback to garments as you upload them to teach the sizing engine."
+         if not quick_feedback and not confirmed else
+         f"Learning from {len(quick_feedback)} quick fit signal{'s' if len(quick_feedback)!=1 else ''} and {len(confirmed)} detailed review{'s' if len(confirmed)!=1 else ''}.")
       ),
       "confidence":"low" if len(confirmed)<3 else "medium" if len(confirmed)<8 else "high",
       "what_fits_best":[],
@@ -4910,7 +4926,7 @@ def fit_intelligence():
     }
 
     analysis=fallback
-    if confirmed and os.getenv("OPENAI_API_KEY") and OpenAI is not None:
+    if (confirmed or quick_feedback) and os.getenv("OPENAI_API_KEY") and OpenAI is not None:
         compact={
           "profile":evidence["profile"],
           "brand_patterns":evidence["brands"][:15],
@@ -4918,18 +4934,24 @@ def fit_intelligence():
           "confirmed_reviews":[{
             k:r.get(k) for k in [
               "id","brand","model_line","garment_type","category","labelled_size",
-              "fit_cut","fit_rating","fit_chest","fit_waist","fit_hips","fit_length",
+              "fit_cut","fit_feedback","fit_rating","fit_chest","fit_waist","fit_hips","fit_length",
               "fit_sleeve","fit_shoulders","fit_notes"
             ]
           } for r in confirmed[:60]],
+          "quick_fit_feedback":[{
+            k:r.get(k) for k in [
+              "id","brand","model_line","garment_type","category","labelled_size","fit_cut","fit_feedback"
+            ]
+          } for r in quick_feedback[:80]],
           "unreviewed_items":[{
             k:r.get(k) for k in ["id","brand","model_line","garment_type","category","labelled_size"]
           } for r in unreviewed[:30]]
         }
         instructions=f"""You are the fit-learning engine for a personal clothing stylist.
 
-Use ONLY the supplied real-world fit reviews and measurements. Do not invent body characteristics,
-brand sizing rules or certainty that the evidence does not support.
+Use ONLY the supplied real-world fit feedback, detailed fit reviews and measurements. Quick Fit Feedback
+such as Perfect fit, Slightly tight or Slightly loose is valid real-world evidence. Detailed reviews add specificity
+but are optional. Do not invent body characteristics, brand sizing rules or certainty that the evidence does not support.
 The current styling profile is: {styling_profile()}.
 For womenswear, treat bust/chest, waist, hips, hem/body length and shoe/dress/top/bottom sizing as distinct signals where available.
 For menswear, keep the existing chest/shoulder/waist/sleeve/trouser evidence model.

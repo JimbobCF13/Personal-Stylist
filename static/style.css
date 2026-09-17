@@ -1854,3 +1854,11 @@ nav [data-go].nav-active:after{
  .setup-progress-steps{grid-template-columns:1fr}
  .setup-progress-head{align-items:center}
 }
+
+
+/* V7.6.2 — simplified garment-aware fit reviews */
+.fit-review-simple-note{
+ grid-column:1/-1;
+ margin:0;
+}
+.fit-form .muted-copy{margin:6px 0 12px}

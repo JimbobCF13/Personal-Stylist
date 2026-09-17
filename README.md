@@ -1501,3 +1501,35 @@ When Build Around navigated to Ask My Stylist, the app scheduled restoration of 
 - The normal previous-session restoration behaviour remains unchanged when opening Ask My Stylist normally.
 
 No data migration and no user data changes.
+
+
+## V7.6.2 — Fit feedback + garment-aware detailed reviews
+
+### Setup milestone
+**Teach me what fits** is complete when the user has either:
+- meaningful quick Fit Feedback on at least one garment, or
+- a confirmed detailed fit review.
+
+Existing `Perfect fit`, `Slightly tight`, `Slightly loose`, `Too tight` and `Too loose` feedback therefore counts immediately.
+
+### Detailed fit reviews are now optional
+Quick Fit Feedback is explicitly treated as useful real-world evidence. The detailed review is available only for extra sizing precision.
+
+### Garment-aware questions
+The detailed form now asks only relevant questions:
+- tops / knitwear / shirts: chest or bust, shoulders, sleeves, body length
+- jackets / coats / blazers / overshirts: chest or bust, shoulders, sleeves, body length
+- trousers / jeans / shorts: waist, hips/seat, leg length
+- skirts: waist, hips, length
+- dresses / jumpsuits: bust/chest, waist, hips, overall length
+- footwear: labelled size, overall fit and notes only
+- other items: overall fit and notes only
+
+Confirmed-fit summaries show only the fields relevant to that garment.
+
+### Know My Size
+Quick Fit Feedback now contributes to Fit Intelligence. A garment with meaningful quick feedback is no longer treated as unreviewed merely because the optional detailed form has not been completed.
+
+Detailed fit reviews no longer overwrite the simpler Fit Feedback value.
+
+No destructive migration.

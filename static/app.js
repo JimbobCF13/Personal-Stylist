@@ -1432,52 +1432,117 @@ function enrichmentSources(sources){
 }
 
 
+function fitReviewKind(g){
+ const text=`${g.category||""} ${g.garment_type||""}`.toLowerCase();
+ if(/shoe|trainer|sneaker|loafer|boot|heel|pump|sandal|espadrille|footwear/.test(text))return "footwear";
+ if(/trouser|jean|chino|jogger|short|pants|legging/.test(text))return "bottom";
+ if(/skirt/.test(text))return "skirt";
+ if(/dress|jumpsuit|playsuit|romper/.test(text))return "dress";
+ if(/blazer|sport coat|sports coat|suit jacket|tailored jacket|jacket|coat|parka|mac|trench|bomber|harrington|gilet|overshirt|shirt jacket/.test(text))return "outer";
+ if(/shirt|blouse|top|t-shirt|t shirt|tee|polo|knit|jumper|sweater|cardigan|hoodie|sweatshirt/.test(text))return "top";
+ return "simple";
+}
+
+function fitReviewFields(g){
+ const women=authState.user?.styling_profile==="womenswear";
+ const kind=fitReviewKind(g);
+ const map={
+  top:[
+   ["fit_chest",women?"Bust / chest":"Chest"],
+   ["fit_shoulders","Shoulders"],
+   ["fit_sleeve","Sleeve"],
+   ["fit_length","Body length"]
+  ],
+  outer:[
+   ["fit_chest",women?"Bust / chest":"Chest"],
+   ["fit_shoulders","Shoulders"],
+   ["fit_sleeve","Sleeve"],
+   ["fit_length","Body length"]
+  ],
+  bottom:[
+   ["fit_waist","Waist"],
+   ["fit_hips","Hips / seat"],
+   ["fit_length","Leg length"]
+  ],
+  skirt:[
+   ["fit_waist","Waist"],
+   ["fit_hips","Hips"],
+   ["fit_length","Length"]
+  ],
+  dress:[
+   ["fit_chest",women?"Bust / chest":"Chest"],
+   ["fit_waist","Waist"],
+   ["fit_hips","Hips"],
+   ["fit_length","Overall length"]
+  ],
+  footwear:[],
+  simple:[]
+ };
+ return map[kind]||[];
+}
+
 function renderFitReviewPanel(g){
  const status=g.fit_review_status||"";
+ const fields=fitReviewFields(g);
  if(status==="confirmed"){
+  const summary=fields
+   .filter(([key])=>String(g[key]||"").trim())
+   .map(([key,label])=>`<span>${esc(label)} <b>${esc(g[key])}</b></span>`)
+   .join("");
   return `<div class="detail-research fit-confirmed">
    <div class="research-head"><div><small>FIT LEARNING</small><h4>Fit confirmed</h4></div><span class="fit-status-pill">Learned</span></div>
    <p><b>${esc(g.brand||"This garment")} ${esc(g.labelled_size||"")}</b>${g.fit_rating?` · ${esc(g.fit_rating)}/5`:""}</p>
-   <div class="fit-summary-grid">
-    <span>${authState.user?.styling_profile==="womenswear"?"Bust / chest":"Chest"} <b>${esc(g.fit_chest||"—")}</b></span><span>Waist <b>${esc(g.fit_waist||"—")}</b></span>
-    <span>Hips <b>${esc(g.fit_hips||"—")}</b></span><span>Length <b>${esc(g.fit_length||"—")}</b></span><span>Sleeve <b>${esc(g.fit_sleeve||"—")}</b></span>
-    <span>Shoulders <b>${esc(g.fit_shoulders||"—")}</b></span>
-   </div>
+   ${summary?`<div class="fit-summary-grid">${summary}</div>`:""}
    ${g.fit_notes?`<p>${esc(g.fit_notes)}</p>`:""}
-   <button class="ghost" onclick="openFitReview(${g.id})">Update fit review</button>
+   <button class="ghost" onclick="openFitReview(${g.id})">Update detailed fit</button>
   </div>`;
  }
  return `<div class="detail-research fit-awaiting">
-  <div class="research-head"><div><small>FIT LEARNING</small><h4>Teach me how this fits</h4></div><span class="fit-status-pill awaiting">Not reviewed</span></div>
-  <p>Confirm the labelled size and how this garment fits you. I’ll use it as real-world evidence for future size and shopping recommendations.</p>
-  <button class="primary" onclick="openFitReview(${g.id})">Review this fit</button>
+  <div class="research-head"><div><small>FIT LEARNING</small><h4>Optional detailed fit</h4></div><span class="fit-status-pill awaiting">Optional</span></div>
+  <p>Your quick Fit Feedback already teaches the stylist. Use this only if you want to add more detail for future sizing and shopping advice.</p>
+  <button class="ghost" onclick="openFitReview(${g.id})">Add detailed fit</button>
  </div>`;
 }
 
 function fitOptions(value){
  const opts=["Much too tight","Slightly tight","Good","Slightly loose","Much too loose"];
- return opts.map(x=>`<option ${value===x?"selected":""}>${x}</option>`).join("");
+ return `<option value="">Not recorded</option>`+
+  opts.map(x=>`<option value="${esc(x)}" ${value===x?"selected":""}>${esc(x)}</option>`).join("");
+}
+
+function fitFieldHtml(g,key,label){
+ return `<label>${esc(label)}<select id="${key.replace("_","-")}">${fitOptions(g[key])}</select></label>`;
 }
 
 function openFitReview(id){
  const g=currentGarmentDetail||{};
  const panel=$("fitReviewPanel");
  if(!panel)return;
+ const fields=fitReviewFields(g);
+ const kind=fitReviewKind(g);
+ const extra=fields.length
+  ? fields.map(([key,label])=>fitFieldHtml(g,key,label)).join("")
+  : `<div class="notice fit-review-simple-note">${
+      kind==="footwear"
+       ?"For footwear, labelled size, overall fit and your notes are enough."
+       :"For this item, overall fit plus an optional note is enough."
+     }</div>`;
  panel.innerHTML=`<div class="detail-research fit-form">
-  <small>FIT REVIEW</small><h4>Teach the stylist how this actually fits</h4>
+  <small>DETAILED FIT · OPTIONAL</small><h4>Tell me only what matters for this garment</h4>
+  <p class="muted-copy">Your normal Fit Feedback already counts. This adds extra detail only where it is useful.</p>
   <div class="fit-form-grid">
    <label>Labelled size<input id="fit-size" value="${esc(g.labelled_size||"")}"></label>
-   <label>Overall fit<select id="fit-rating"><option value="">Choose</option>${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(g.fit_rating)===n?"selected":""}>${n}/5</option>`).join("")}</select></label>
-   <label>${authState.user?.styling_profile==="womenswear"?"Bust / chest":"Chest"}<select id="fit-chest">${fitOptions(g.fit_chest)}</select></label>
-   <label>Waist<select id="fit-waist">${fitOptions(g.fit_waist)}</select></label>
-   <label>Hips / seat<select id="fit-hips">${fitOptions(g.fit_hips)}</select></label>
-   <label>${authState.user?.styling_profile==="womenswear"?"Body / hem length":"Body / leg length"}<select id="fit-length">${fitOptions(g.fit_length)}</select></label>
-   <label>Sleeve<select id="fit-sleeve">${fitOptions(g.fit_sleeve)}</select></label>
-   <label>Shoulders<select id="fit-shoulders">${fitOptions(g.fit_shoulders)}</select></label>
+   <label>Overall fit<select id="fit-rating"><option value="">Not recorded</option>${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(g.fit_rating)===n?"selected":""}>${n}/5</option>`).join("")}</select></label>
+   ${extra}
   </div>
-  <label>Anything else<textarea id="fit-notes" rows="3" placeholder="e.g. good through the body but sleeves slightly long">${esc(g.fit_notes||"")}</textarea></label>
-  <div class="row"><button class="primary" onclick="saveFitReview(${id})">Save fit review</button><button class="ghost" onclick="loadGarmentDetail(${id})">Cancel</button></div>
+  <label>Anything else<textarea id="fit-notes" rows="3" placeholder="Only add something useful, e.g. sleeves slightly long or tight across the thigh">${esc(g.fit_notes||"")}</textarea></label>
+  <div class="row"><button class="primary" onclick="saveFitReview(${id})">Save detailed fit</button><button class="ghost" onclick="loadGarmentDetail(${id})">Cancel</button></div>
  </div>`;
+}
+
+function fitInputValue(id){
+ const el=$(id);
+ return el ? el.value : "";
 }
 
 async function saveFitReview(id){
@@ -1485,15 +1550,20 @@ async function saveFitReview(id){
   await api(`/api/garments/${id}/fit-review`,{
    method:"POST",headers:{"Content-Type":"application/json"},
    body:JSON.stringify({
-    labelled_size:$("fit-size").value.trim(),
-    fit_rating:$("fit-rating").value?Number($("fit-rating").value):null,
-    fit_chest:$("fit-chest").value,fit_waist:$("fit-waist").value,fit_hips:$("fit-hips").value,
-    fit_length:$("fit-length").value,fit_sleeve:$("fit-sleeve").value,
-    fit_shoulders:$("fit-shoulders").value,fit_notes:$("fit-notes").value.trim()
+    labelled_size:fitInputValue("fit-size").trim(),
+    fit_rating:fitInputValue("fit-rating")?Number(fitInputValue("fit-rating")):null,
+    fit_chest:fitInputValue("fit-chest"),
+    fit_waist:fitInputValue("fit-waist"),
+    fit_hips:fitInputValue("fit-hips"),
+    fit_length:fitInputValue("fit-length"),
+    fit_sleeve:fitInputValue("fit-sleeve"),
+    fit_shoulders:fitInputValue("fit-shoulders"),
+    fit_notes:fitInputValue("fit-notes").trim()
    })
   });
   await loadGarments();
   await loadGarmentDetail(id);
+  refreshSetupProgress();
  }catch(err){alert(err.message)}
 }
 
