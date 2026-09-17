@@ -710,6 +710,7 @@ function go(id){
  if(id==="intelligence")loadWardrobeIntelligence();
  if(id==="fitintel")loadFitIntelligence();
  if(id==="quickwardrobe")renderQuickWardrobeResults();
+ if(id==="add"||id==="edit")populateGarmentCategorySelects();
  if(id==="buildlook")renderBuildLookPicker();
 }
 document.querySelector('nav [data-go="home"]')?.classList.add("nav-active");
@@ -924,6 +925,7 @@ async function tryProductWardrobeLook(encoded,index,button=null,silent=false){
 function applyStylingProfileUI(user){
  const women=(user?.styling_profile||"menswear")==="womenswear";
  WARDROBE_ORDER=[...(women?WOMENSWEAR_ORDER:MENSWEAR_ORDER)];
+ populateGarmentCategorySelects();
  const brand=women?"Get Her Dressed":"Get Him Dressed";
  document.title=brand;
  if($("appBrandName"))$("appBrandName").textContent=brand;
@@ -1131,6 +1133,15 @@ function normalisedCategory(c){
 
 function wardrobeCategoryLabel(cat){
  return cat;
+}
+function populateGarmentCategorySelects(){
+ ["category","e_category"].forEach(id=>{
+  const el=$(id);if(!el)return;
+  const current=el.value;
+  el.innerHTML=WARDROBE_ORDER.map(cat=>`<option value="${esc(cat)}">${esc(cat)}</option>`).join("");
+  if(WARDROBE_ORDER.includes(current))el.value=current;
+  else if(current)el.value=normalisedCategory(current);
+ });
 }
 
 function renderWardrobeCategoryNav(){
@@ -1624,6 +1635,7 @@ function editGarment(id){
  }
  $("editPhotoStatus").textContent="";
 
+ populateGarmentCategorySelects();
  const map={
   category:"e_category",
   garment_type:"e_garment_type",
@@ -1680,6 +1692,7 @@ $("saveEdit").addEventListener("click",async()=>{
  if(!editingGarmentId)return;
  const body={
   category:$("e_category").value,
+  category_manual:true,
   garment_type:$("e_garment_type").value,
   brand:$("e_brand").value,
   model_line:$("e_model_line").value,
@@ -2241,8 +2254,13 @@ async function loadStyleLearning(){
   const brands=(x.perfect_fit_brands||[]).map(b=>`${esc(b.brand)} (${b.count})`).join(", ");
   const colours=(x.saved_colours||[]).map(c=>`${esc(c.name)} (${c.count})`).join(", ");
   const garmentTypes=(x.saved_garment_types||[]).map(c=>`${esc(c.name)} (${c.count})`).join(", ");
+  const wornColours=(x.worn_colours||[]).map(c=>`${esc(c.name)} (${c.count} wear${c.count===1?"":"s"})`).join(", ");
+  const wornTypes=(x.worn_garment_types||[]).map(c=>`${esc(c.name)} (${c.count} wear${c.count===1?"":"s"})`).join(", ");
+  const recordedWears=Number(x.recorded_wears||0);
+  const wornLooks=Number(x.worn_look_count||0);
 
   const signals=[];
+  if(recordedWears)signals.push(`${recordedWears} recorded wear${recordedWears===1?"":"s"} across ${wornLooks} look${wornLooks===1?"":"s"}`);
   if(saved)signals.push(`${saved} saved look${saved===1?"":"s"}`);
   if(total)signals.push(`${total} outfit reaction${total===1?"":"s"}`);
 
@@ -2256,6 +2274,8 @@ async function loadStyleLearning(){
     ].filter(Boolean).join(" · ")
    }</p>`;
   }
+  if(wornColours)html+=`<p><b>Colours you actually wear:</b> ${wornColours}</p>`;
+  if(wornTypes)html+=`<p><b>Pieces you actually wear:</b> ${wornTypes}</p>`;
   if(colours)html+=`<p><b>Colours recurring in saved looks:</b> ${colours}</p>`;
   if(garmentTypes)html+=`<p><b>Pieces recurring in saved looks:</b> ${garmentTypes}</p>`;
   if(brands)html+=`<p><b>Perfect-fit brands:</b> ${brands}</p>`;

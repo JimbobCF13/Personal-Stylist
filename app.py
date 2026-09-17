@@ -313,9 +313,11 @@ def canonical_wardrobe_category(
     material: str = "",
 ) -> str:
     primary = re.sub(r"\s+", " ", f"{garment_type or ''}".strip().lower())
+    # Stored category is deliberately excluded from semantic evidence.
+    # Otherwise one bad classification can reinforce itself on every reload.
     support = re.sub(
         r"\s+", " ",
-        f"{category or ''} {model_line or ''} {fit_cut or ''} {notes or ''} {brand or ''} {material or ''}".strip().lower()
+        f"{model_line or ''} {fit_cut or ''} {notes or ''} {brand or ''} {material or ''}".strip().lower()
     )
     raw = f"{primary} {support}".strip()
 
@@ -457,7 +459,7 @@ def canonical_wardrobe_category(
     if any(w in raw for w in accessories): return "Accessories"
 
     legacy = (category or "").strip().casefold()
-    if legacy == "jackets & outerwear": return "Jackets"
+    if legacy in ("jackets","coats","jackets & outerwear","outerwear","jackets & coats"): return "Jackets & Coats"
     if legacy == "blazers & tailoring": return "Blazers & Tailoring"
     if legacy in ("overshirts & shirt jackets","overshirts"): return "Overshirts & Shirt Jackets"
 
@@ -469,11 +471,14 @@ def canonical_wardrobe_category(
 def normalise_existing_wardrobe_categories():
     con=db()
     rows=con.execute("""
-        SELECT id, category, garment_type, model_line, fit_cut, notes, brand, material
+        SELECT id, category, garment_type, model_line, fit_cut, notes, brand, material,
+               COALESCE(category_manual,0) AS category_manual
         FROM garments
     """).fetchall()
     changed=0
     for row in rows:
+        if int(row["category_manual"] or 0):
+            continue
         new_cat=canonical_wardrobe_category(
             row["category"] or "", row["garment_type"] or "",
             row["model_line"] or "", row["fit_cut"] or "", row["notes"] or "",
@@ -576,6 +581,7 @@ def init_db():
         "ALTER TABLE garments ADD COLUMN purchase_status TEXT DEFAULT ''",
         "ALTER TABLE garments ADD COLUMN purchase_retailer TEXT DEFAULT ''",
         "ALTER TABLE garments ADD COLUMN purchase_price TEXT DEFAULT ''",
+        "ALTER TABLE garments ADD COLUMN category_manual INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE garments ADD COLUMN purchase_url TEXT DEFAULT ''",
         "ALTER TABLE garments ADD COLUMN purchase_date TEXT DEFAULT ''",
         "ALTER TABLE garments ADD COLUMN fit_review_status TEXT DEFAULT ''",
@@ -1133,19 +1139,20 @@ def garments():
     for row in rows:
         # Keep the visible wardrobe taxonomy canonical as the app evolves.
         # This is a safe metadata-only migration: no garment/image is deleted.
-        canonical_category=canonical_wardrobe_category(
-            category=row.get("category") or "",
-            garment_type=row.get("garment_type") or "",
-            model_line=row.get("model_line") or "",
-            fit_cut=row.get("fit_cut") or "",
-            notes=row.get("notes") or "",
-            brand=row.get("brand") or "",
-            material=row.get("material") or "",
-        )
-        if canonical_category and canonical_category != (row.get("category") or ""):
-            row["category"]=canonical_category
-            con.execute("UPDATE garments SET category=? WHERE id=?",(canonical_category,row["id"]))
-            changed=True
+        if not int(row.get("category_manual") or 0):
+            canonical_category=canonical_wardrobe_category(
+                category=row.get("category") or "",
+                garment_type=row.get("garment_type") or "",
+                model_line=row.get("model_line") or "",
+                fit_cut=row.get("fit_cut") or "",
+                notes=row.get("notes") or "",
+                brand=row.get("brand") or "",
+                material=row.get("material") or "",
+            )
+            if canonical_category and canonical_category != (row.get("category") or ""):
+                row["category"]=canonical_category
+                con.execute("UPDATE garments SET category=? WHERE id=?",(canonical_category,row["id"]))
+                changed=True
 
         display=row.get("image_path") or ""
         original=row.get("original_image_path") or ""
@@ -1530,6 +1537,7 @@ def ignore_garment_enrichment(gid: int):
 
 class GarmentUpdate(BaseModel):
     category: Optional[str] = ""
+    category_manual: Optional[bool] = True
     garment_type: Optional[str] = ""
     brand: Optional[str] = ""
     model_line: Optional[str] = ""
@@ -1623,14 +1631,19 @@ def update_garment(gid: int, g: GarmentUpdate):
         con.close()
         raise HTTPException(404, "Garment not found")
 
+    selected_category=(g.category or "").strip()
+    if selected_category not in wardrobe_category_order():
+        selected_category=canonical_wardrobe_category(
+            selected_category,g.garment_type,g.model_line,g.fit_cut,g.notes,g.brand,g.material
+        )
     con.execute("""UPDATE garments SET
-        category=?, garment_type=?, brand=?, model_line=?, labelled_size=?,
+        category=?, category_manual=?, garment_type=?, brand=?, model_line=?, labelled_size=?,
         colour=?, material=?, pattern=?, fit_cut=?, fit_feedback=?,
         season=?, formality=?, notes=?
         WHERE id=?""",
-        (g.category, g.garment_type, g.brand, g.model_line, g.labelled_size,
-         g.colour, g.material, g.pattern, g.fit_cut, g.fit_feedback,
-         g.season, g.formality, g.notes, gid))
+        (selected_category,1 if g.category_manual else 0,g.garment_type,g.brand,g.model_line,g.labelled_size,
+         g.colour,g.material,g.pattern,g.fit_cut,g.fit_feedback,
+         g.season,g.formality,g.notes,gid))
     con.commit()
     con.close()
     return {"ok": True, "id": gid}
@@ -2065,9 +2078,9 @@ async def add_garment(
 ):
     con = db()
     cur = con.execute("""INSERT INTO garments
-      (image_path,original_image_path,category,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-      (image_path,original_image_path or image_path,canonical_wardrobe_category(category, garment_type, model_line, fit_cut, notes, brand, material),garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence))
+      (image_path,original_image_path,category,category_manual,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+      (image_path,original_image_path or image_path,canonical_wardrobe_category(category, garment_type, model_line, fit_cut, notes, brand, material),0,garment_type,brand,model_line,labelled_size,colour,material,pattern,fit_cut,fit_feedback,season,formality,notes,ai_confidence))
     con.commit(); gid=cur.lastrowid; con.close()
     return {"ok":True,"id":gid}
 
@@ -2119,7 +2132,7 @@ Extract only garments the user actually says they own. One physical garment = on
 If they describe multiples, create separate items only when the description distinguishes them; otherwise create the stated quantity as separate records with the same known metadata.
 Never invent a brand, model, size, material, colour, pattern, fit or season. Leave unknown strings blank.
 Use these canonical categories only: {", ".join(wardrobe_category_order())}. Blazers, sports jackets and suit jackets belong in Blazers & Tailoring. Overshirts, shirt jackets and shackets belong in Overshirts & Shirt Jackets. Utility shirts and work shirts belong in Shirts unless explicitly described as an overshirt or shirt jacket. Sweatshirts and hoodies belong in Sweatshirts & Hoodies; do not classify them as Polos & T-Shirts or Knitwear.
-Classify by wardrobe role rather than literal product naming: rugby shirts belong in Knitwear; short-sleeve knitted polos belong in Polos & T-Shirts; long-sleeve knitted polos/pullovers belong in Knitwear. A lightweight knitted pullover can belong in Knitwear even if a retailer calls it a long-sleeve T-shirt. Casual jackets such as Harringtons, bombers and gilets belong in Jackets. Overcoats, trench coats, macs, raincoats and parkas belong in Coats.
+Classify by wardrobe role rather than literal product naming: rugby shirts belong in Knitwear; short-sleeve knitted polos belong in Polos & T-Shirts; long-sleeve knitted polos/pullovers belong in Knitwear. A lightweight knitted pullover can belong in Knitwear even if a retailer calls it a long-sleeve T-shirt. All true outerwear belongs in Jackets & Coats: Harringtons, bombers, gilets, wax jackets, denim/trucker jackets, sherpa-lined jackets, technical/rain jackets, parkas, macs, overcoats and winter coats.
 Normalise obvious garment wording into a useful garment_type, e.g. polo shirt, crew-neck T-shirt, chinos, loafers, overshirt.
 Season and formality can be inferred conservatively from the garment itself, but leave blank when uncertain.
 Set confidence based on how completely the user's description supports the record.
@@ -2254,6 +2267,64 @@ Be concise but specific about why the outfit works and, where relevant, connect 
 
 
 
+
+def saved_style_evidence(con, limit:int=40):
+    """Compact, ranked style-memory evidence for AI prompts.
+
+    A Saved Look is positive evidence, but a look the user has actually worn is
+    stronger. This keeps the raw data transparent instead of inventing a hidden
+    score: consumers receive wore_count, pinned state and last_worn_at directly,
+    plus a simple evidence_level label.
+    """
+    rows=[dict(r) for r in con.execute("""
+      SELECT id,label,outfit_json,request_text,weather_context,
+             tags_json,occasion,season,notes,wore_count,last_worn_at,is_pinned,created_at
+      FROM outfit_favourites
+      ORDER BY COALESCE(wore_count,0) DESC, COALESCE(is_pinned,0) DESC, id DESC
+      LIMIT ?
+    """,(max(1,min(int(limit or 40),100)),)).fetchall()]
+    evidence=[]
+    for row in rows:
+        try:
+            outfit=json.loads(row.get("outfit_json") or "{}")
+        except Exception:
+            outfit={}
+        try:
+            tags=json.loads(row.get("tags_json") or "[]")
+            if not isinstance(tags,list): tags=[]
+        except Exception:
+            tags=[]
+        worn=max(0,int(row.get("wore_count") or 0))
+        evidence.append({
+          "saved_look_id":row.get("id"),
+          "label":row.get("label") or outfit.get("label") or "",
+          "garment_ids":outfit.get("owned_garment_ids") or outfit.get("garment_ids") or [],
+          "wore_count":worn,
+          "last_worn_at":row.get("last_worn_at"),
+          "is_pinned":bool(row.get("is_pinned")),
+          "occasion":row.get("occasion") or "",
+          "season":row.get("season") or "",
+          "tags":tags[:8],
+          "notes":row.get("notes") or "",
+          "request_text":row.get("request_text") or "",
+          "weather_context":row.get("weather_context") or "",
+          "evidence_level":"strong_real_wear" if worn>=2 else ("real_wear" if worn==1 else "saved_preference")
+        })
+    return evidence
+
+def garment_wear_evidence(saved_looks:list[dict]):
+    counts={}
+    for look in saved_looks or []:
+        worn=max(0,int(look.get("wore_count") or 0))
+        if worn<=0:
+            continue
+        for raw in look.get("garment_ids") or []:
+            try: gid=int(raw)
+            except Exception: continue
+            counts[gid]=counts.get(gid,0)+worn
+    return counts
+
+
 WARDROBE_INTELLIGENCE_SCHEMA = {
  "type":"object",
  "properties":{
@@ -2281,9 +2352,7 @@ WARDROBE_INTELLIGENCE_SCHEMA = {
 def wardrobe_intelligence():
     con=db()
     garments=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
-    favourites=[dict(r) for r in con.execute(
-        "SELECT id,label,outfit_json,request_text,weather_context,created_at FROM outfit_favourites ORDER BY id DESC LIMIT 100"
-    ).fetchall()]
+    favourites=saved_style_evidence(con,100)
     feedback=[dict(r) for r in con.execute(
         "SELECT rating,outfit_json,created_at FROM feedback ORDER BY id DESC LIMIT 100"
     ).fetchall()]
@@ -2318,15 +2387,12 @@ def wardrobe_intelligence():
     garment_by_id={g["id"]:g for g in garments}
     saved_item_counts={}
     for row in favourites:
-        try:
-            outfit=json.loads(row.get("outfit_json") or "{}")
-        except Exception:
-            continue
-        for raw in outfit.get("owned_garment_ids",[]):
+        for raw in row.get("garment_ids") or []:
             try: gid=int(raw)
             except Exception: continue
             if gid in garment_by_id:
                 saved_item_counts[gid]=saved_item_counts.get(gid,0)+1
+    worn_item_counts=garment_wear_evidence(favourites)
 
     category_list=[
         {"name":name,"count":count}
@@ -2347,10 +2413,22 @@ def wardrobe_intelligence():
           "category":g.get("category") or ""
         })
 
+    worn_list=[]
+    for gid,count in sorted(worn_item_counts.items(),key=lambda x:(-x[1],x[0]))[:12]:
+        g=garment_by_id.get(gid)
+        if not g: continue
+        worn_list.append({
+          "id":gid,"count":count,
+          "label":" ".join(x for x in [g.get("brand"),g.get("garment_type") or g.get("category")] if x),
+          "colour":g.get("colour") or "","category":g.get("category") or ""
+        })
+
     metrics={
       "total_items":len(garments),
       "categories":len(category_counts),
       "saved_looks":len(favourites),
+      "worn_saved_looks":sum(1 for x in favourites if int(x.get("wore_count") or 0)>0),
+      "recorded_wears":sum(int(x.get("wore_count") or 0) for x in favourites),
       "perfect_fit_items":perfect_fit
     }
 
@@ -2423,8 +2501,9 @@ Evidence rules:
       "category_counts":category_list,
       "colour_counts":colour_list,
       "saved_item_counts":saved_list,
+      "worn_item_counts":worn_list,
       "analysis":analysis,
-      "evidence_note":"Saved Look frequency shows what you choose to save, not necessarily what you wear most often."
+      "evidence_note":"Saved Look frequency shows preference. Recorded wears are separate, stronger evidence of what you actually use."
     }
 
 @app.get("/api/style-learning")
@@ -2436,9 +2515,7 @@ def style_learning():
     garments = [dict(r) for r in con.execute(
         "SELECT id, brand, garment_type, fit_feedback, colour, material, formality FROM garments ORDER BY id DESC"
     ).fetchall()]
-    favourites = [dict(r) for r in con.execute(
-        "SELECT outfit_json, created_at FROM outfit_favourites ORDER BY id DESC LIMIT 100"
-    ).fetchall()]
+    favourites = saved_style_evidence(con,100)
     con.close()
 
     counts = {}
@@ -2454,12 +2531,11 @@ def style_learning():
     garment_map={g["id"]:g for g in garments}
     saved_colours={}
     saved_categories={}
+    worn_colours={}
+    worn_categories={}
     for row in favourites:
-        try:
-            outfit=json.loads(row.get("outfit_json") or "{}")
-        except Exception:
-            continue
-        for raw_id in outfit.get("owned_garment_ids",[]):
+        worn=max(0,int(row.get("wore_count") or 0))
+        for raw_id in row.get("garment_ids") or []:
             try: gid=int(raw_id)
             except Exception: continue
             g=garment_map.get(gid)
@@ -2468,20 +2544,30 @@ def style_learning():
             category=(g.get("garment_type") or "").strip()
             if colour:
                 saved_colours[colour]=saved_colours.get(colour,0)+1
+                if worn: worn_colours[colour]=worn_colours.get(colour,0)+worn
             if category:
                 saved_categories[category]=saved_categories.get(category,0)+1
+                if worn: worn_categories[category]=worn_categories.get(category,0)+worn
 
     top_colours=sorted(saved_colours.items(),key=lambda x:(-x[1],x[0]))[:5]
     top_categories=sorted(saved_categories.items(),key=lambda x:(-x[1],x[0]))[:5]
+    top_worn_colours=sorted(worn_colours.items(),key=lambda x:(-x[1],x[0]))[:5]
+    top_worn_categories=sorted(worn_categories.items(),key=lambda x:(-x[1],x[0]))[:5]
+    worn_look_count=sum(1 for x in favourites if int(x.get("wore_count") or 0)>0)
+    recorded_wears=sum(int(x.get("wore_count") or 0) for x in favourites)
 
     return {
         "feedback_count": len(rows),
         "saved_look_count": len(favourites),
+        "worn_look_count": worn_look_count,
+        "recorded_wears": recorded_wears,
         "ratings": counts,
         "perfect_fit_brands": [{"brand": b, "count": c} for b, c in top_brands],
         "saved_colours": [{"name": n, "count": c} for n,c in top_colours],
         "saved_garment_types": [{"name": n, "count": c} for n,c in top_categories],
-        "message": "Saved looks are treated as a strong positive signal. Reactions and fit feedback build the pattern over time, but the stylist is instructed to preserve variety rather than repeat one palette indefinitely."
+        "worn_colours": [{"name": n, "count": c} for n,c in top_worn_colours],
+        "worn_garment_types": [{"name": n, "count": c} for n,c in top_worn_categories],
+        "message": "Actual recorded wears now carry more weight than saved-only looks. Saved looks, reactions and fit feedback still matter, but repeated real wear is treated as the strongest style-preference evidence while preserving variety."
     }
 
 @app.post("/api/outfits")
@@ -2492,6 +2578,7 @@ def outfits(req: OutfitRequest):
     recent_feedback = [dict(r) for r in con.execute(
         "SELECT rating, outfit_json, created_at FROM feedback ORDER BY id DESC LIMIT 30"
     ).fetchall()]
+    saved_looks = saved_style_evidence(con,30)
     con.close()
     if len(garments) < 2:
         raise HTTPException(400, "Add at least two garments first.")
@@ -2505,7 +2592,9 @@ def outfits(req: OutfitRequest):
       "anchor_garment": anchor,
       "wardrobe": garments,
       "recent_feedback": recent_feedback,
+      "saved_looks": saved_looks,
       "learning_rules": {
+        "actual_wear_outweighs_saved_only": True,
         "use_repeated_patterns_not_single_reactions": True,
         "perfect_fit_feedback_is_high_value": True,
         "rejected_outfits_should_reduce_similar_future_combinations": True,
@@ -2960,7 +3049,7 @@ def plan_my_week(req: WeekPlanRequest):
     profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     feedback=[dict(r) for r in con.execute("SELECT rating,outfit_json,created_at FROM feedback ORDER BY id DESC LIMIT 30").fetchall()]
     favourites=[dict(r) for r in con.execute(
-      "SELECT label,outfit_json,request_text,weather_context,wore_count,last_worn_at FROM outfit_favourites ORDER BY id DESC LIMIT 30"
+      "SELECT label,outfit_json,request_text,weather_context,wore_count,last_worn_at,is_pinned,tags_json,occasion,season,notes FROM outfit_favourites ORDER BY COALESCE(wore_count,0) DESC, id DESC LIMIT 30"
     ).fetchall()]
     con.close()
     if len(garments)<3:
@@ -3048,7 +3137,7 @@ def help_me_pack(req: PackingRequest):
     profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     feedback=[dict(r) for r in con.execute("SELECT rating,outfit_json,created_at FROM feedback ORDER BY id DESC LIMIT 30").fetchall()]
     favourites=[dict(r) for r in con.execute(
-        "SELECT label,outfit_json,request_text,weather_context FROM outfit_favourites ORDER BY id DESC LIMIT 20"
+        "SELECT label,outfit_json,request_text,weather_context,wore_count,last_worn_at,is_pinned,tags_json,occasion,season,notes FROM outfit_favourites ORDER BY COALESCE(wore_count,0) DESC, id DESC LIMIT 20"
     ).fetchall()]
     con.close()
 
@@ -3071,6 +3160,7 @@ Rules:
 - Never claim the user owns something absent from the wardrobe.
 - Reuse versatile garments deliberately across days/occasions to reduce luggage.
 - Respect researched weather, destination/venue context, activities, dates, dress needs, laundry, fit history and style feedback.
+- Saved looks include wore_count. Prefer patterns proven by actual wear over saved-only ideas, while still creating enough variety for the trip.
 - Treat inferred venue dress guidance as guidance, not a verified rule.
 - Avoid overpacking. Respect the stated luggage allowance/size. Shoes, trousers and outer layers should earn their place by working across multiple looks where possible.
 - If shopping_allowed is false, missing_items must be empty.
@@ -3445,6 +3535,8 @@ PRINCIPLES:
 - Produce recommendations that are meaningfully different from one another.
 - The shopping_spec should be precise enough to search retailers later.
 - search_phrase should be concise and useful for a future live shopping search.
+- Actual wear evidence is stronger than saved-only looks when deciding whether the user really uses a style or garment combination.
+- Do not call a category a gap merely because it is underrepresented if the user's real-wear evidence shows they rarely choose that type.
 - purchase_role must describe what job the purchase does in the wardrobe.
 - duplicate_reason must name the closest overlap or explain why overlap is low.
 - versatility_note should explain the practical breadth of use without inventing numeric outfit counts.
@@ -3462,7 +3554,7 @@ def wardrobe_gaps(req: WardrobeGapRequest):
         "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 20"
     ).fetchall()]
     favourite_rows = [dict(r) for r in con.execute(
-        "SELECT label,outfit_json FROM outfit_favourites ORDER BY id DESC LIMIT 20"
+        "SELECT label,outfit_json,wore_count,last_worn_at,is_pinned,tags_json,occasion,season,notes FROM outfit_favourites ORDER BY COALESCE(wore_count,0) DESC, id DESC LIMIT 20"
     ).fetchall()]
     con.close()
 
@@ -3519,7 +3611,12 @@ def wardrobe_gaps(req: WardrobeGapRequest):
             parsed=json.loads(row.get("outfit_json") or "{}")
             saved_looks.append({
               "label":row.get("label") or parsed.get("label") or "",
-              "garment_ids":parsed.get("owned_garment_ids") or parsed.get("garment_ids") or []
+              "garment_ids":parsed.get("owned_garment_ids") or parsed.get("garment_ids") or [],
+              "wore_count":int(row.get("wore_count") or 0),
+              "last_worn_at":row.get("last_worn_at"),
+              "is_pinned":bool(row.get("is_pinned")),
+              "occasion":row.get("occasion") or "",
+              "season":row.get("season") or ""
             })
         except Exception:
             pass
@@ -4190,8 +4287,11 @@ Priorities:
 - Reason about colour harmony, material/texture, silhouette, footwear, layering, weather,
   seasonality, formality, occasion and practicality.
 - Use fit feedback, preferred brands and learned feedback where relevant.
-- Treat SAVED LOOKS as a strong positive signal: the user deliberately kept those outfits.
+- Treat SAVED LOOKS as positive evidence: the user deliberately kept those outfits.
+- Treat SAVED LOOKS with wore_count > 0 as stronger REAL-WEAR evidence. Repeated wears are stronger than a single wear; a saved-only look must never outweigh repeated actual wear.
+- is_pinned, tags, occasion, season, notes and last_worn_at are useful context, but do not invent preferences from missing metadata.
 - Treat "Works for me" feedback as a positive signal and "Less like this" as a soft negative signal.
+- Evidence hierarchy for taste: repeated actual wear > single actual wear > repeated positive reactions/saved patterns > one saved look. Fit reviews remain the strongest evidence for sizing/fit, not taste.
 - Learn repeated patterns across saved looks and feedback: palette, contrast, silhouette, layering,
   footwear, smartness and recurring garment combinations.
 - Do not overfit to one repeated pattern. If recent preferences are dominated by one palette
@@ -4217,7 +4317,7 @@ def stylist_v4(req: StylistV4Request):
         "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 40"
     ).fetchall()]
     favourites = [dict(r) for r in con.execute(
-        "SELECT label, outfit_json, request_text, weather_context FROM outfit_favourites ORDER BY id DESC LIMIT 30"
+        "SELECT label,outfit_json,request_text,weather_context,wore_count,last_worn_at,is_pinned,tags_json,occasion,season,notes FROM outfit_favourites ORDER BY COALESCE(wore_count,0) DESC, id DESC LIMIT 30"
     ).fetchall()]
     con.close()
 
@@ -4281,6 +4381,7 @@ def stylist_v4_replace_one(req: ReplaceOutfitRequest):
     wardrobe=[dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
     profile=dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     feedback_rows=[dict(r) for r in con.execute("SELECT rating,outfit_json FROM feedback ORDER BY id DESC LIMIT 30").fetchall()]
+    saved_looks=saved_style_evidence(con,30)
     con.close()
     if not wardrobe:
         raise HTTPException(400,"Add some wardrobe items first.")
@@ -4317,7 +4418,8 @@ Rules:
       "other_outfits_already_shown":req.other_outfits[:6],
       "profile":profile,
       "wardrobe":compact,
-      "recent_feedback":feedback_rows
+      "recent_feedback":feedback_rows,
+      "saved_looks":saved_looks
     }
     try:
         response=OpenAI().responses.create(
@@ -4368,6 +4470,7 @@ def stylist_v4_more_like_this(req: StylistMoreLikeRequest):
     feedback=[dict(r) for r in con.execute(
         "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 30"
     ).fetchall()]
+    saved_looks=saved_style_evidence(con,30)
     con.close()
 
     if not wardrobe:
@@ -4405,6 +4508,7 @@ Rules:
 - If owned_only is true, missing_piece must be blank.
 - If owned_only is false, suggest a missing item only when it materially improves a variation.
 - Respect fit history, colour harmony, silhouette, weather, formality and the user's original request.
+- Use saved_looks as taste evidence; entries with wore_count > 0 are real-wear evidence and should carry more weight than saved-only looks.
 - Keep explanations concise and specific.
 - Rank the variations best-first and score each 0–100.
 """
@@ -4418,6 +4522,7 @@ Rules:
         "profile":profile,
         "wardrobe":compact_wardrobe,
         "recent_feedback":feedback,
+        "saved_looks":saved_looks,
         "max_options":max_options
     }
 

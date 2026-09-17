@@ -1799,3 +1799,15 @@ nav [data-go].nav-active:after{
  .refine-input-row{grid-template-columns:1fr}
  .week-plan-grid{grid-template-columns:1fr}
 }
+
+
+/* V7.5.1 — manual wardrobe category control */
+.category-help{
+ display:block;
+ margin-top:5px;
+ color:#7b746d;
+ font-size:8px;
+ line-height:1.35;
+ text-transform:none;
+ letter-spacing:0;
+}

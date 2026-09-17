@@ -1386,3 +1386,67 @@ Existing menswear records stored as `Jackets`, `Coats`, `Jackets & Outerwear` or
 Complete suits and explicitly labelled suit components are grouped under **Blazers & Tailoring**. The underlying garment type still distinguishes suit jacket, matching trousers, waistcoat or complete suit so the stylist can reason about whether components can sensibly be worn separately.
 
 No destructive migration.
+
+
+## V7.5 — Style Learning & Wardrobe Memory
+
+This release makes existing behaviour signals materially affect the AI rather than only being stored/displayed.
+
+### Evidence hierarchy
+The styling system now consistently distinguishes:
+1. repeated actual wear,
+2. a single actual wear,
+3. repeated positive reactions / recurring saved patterns,
+4. one saved-only look.
+
+Fit reviews remain the strongest evidence for fit and sizing; wear evidence is used primarily for taste, practicality and real-world preference.
+
+### Actual wear is now passed into
+- Ask My Stylist,
+- Replace This Outfit,
+- More Like This,
+- Help Me Pack,
+- Plan My Week,
+- Wardrobe Gaps / shopping intelligence,
+- Wardrobe Intelligence,
+- legacy What Should I Wear flow.
+
+Saved Look context now includes wear count, last-worn date, pinned state, tags, occasion, season and notes where relevant.
+
+### Style Learning panel
+My Profile now distinguishes:
+- recorded real wears,
+- colours recurring in actually worn looks,
+- garment types recurring in actually worn looks,
+- saved-only patterns,
+- outfit reactions,
+- perfect-fit brands.
+
+### Wardrobe Intelligence
+Wardrobe Intelligence now keeps saved frequency and real-wear frequency separate. It no longer has to treat a repeatedly saved garment as though it were necessarily worn frequently.
+
+No destructive migration. Existing Saved Looks and wear counts are used immediately.
+
+
+## V7.5.1 — Category classifier fix + manual category override
+
+This corrective build fixes a category self-reinforcement bug and adds manual category control.
+
+### Root cause fixed
+The automatic classifier previously included the garment's **existing stored category** in the text it used to decide the next category. This meant a previous mistake could become self-reinforcing: an outerwear garment already stored as `Blazers & Tailoring` supplied the word `Blazers` back to the classifier on every reload.
+
+The stored category is now excluded from semantic classification evidence. The classifier uses the real garment metadata — garment type, model/line, fit/cut, notes, brand and material — then uses the old category only as a final legacy fallback.
+
+A denim/trucker/sherpa jacket therefore resolves to **Jackets & Coats** even if its previous stored category was **Blazers & Tailoring**.
+
+### Manual category dropdown
+The Add Garment and Edit Garment forms now use a category dropdown containing the current profile's real wardrobe sections.
+
+When a category is saved from **Edit Garment**, it becomes a manual category override. Automatic classification will no longer move that garment later.
+
+This allows the user to correct edge cases immediately without fighting the AI classifier.
+
+### Persistence
+A new additive `category_manual` flag is stored per garment. Existing garments default to automatic classification; manually edited garments become locked to the selected category.
+
+No garments, images, fit history, Saved Looks or other user data are removed.
