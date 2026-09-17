@@ -1533,3 +1533,19 @@ Quick Fit Feedback now contributes to Fit Intelligence. A garment with meaningfu
 Detailed fit reviews no longer overwrite the simpler Fit Feedback value.
 
 No destructive migration.
+
+
+## V7.6.3 — Generated outfit image sizing
+
+Generated outfit visuals are now constrained by both width and viewport height so a complete look is normally visible on a laptop without scrolling just to see the lower half of the outfit.
+
+Applies consistently to:
+- Ask My Stylist visualisations
+- Saved Looks
+- Build My Own Look
+- Help Me Pack generated looks
+- other model / try-on generated outfit images
+
+Desktop and laptop visuals are centred, use `object-fit: contain`, and cap their height relative to the browser viewport. Mobile remains full-width with a sensible viewport-height cap.
+
+No image files are altered and there is no data migration.
