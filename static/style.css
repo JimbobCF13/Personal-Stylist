@@ -1468,3 +1468,13 @@ body[data-styling-profile="womenswear"] .onboarding-icon{
 .audience-verified{
  background:#edf3ea!important;color:#4d6849!important;border-color:#d4e2cf!important
 }
+
+/* V6.9 — reliability / beta hardening */
+#adminSystemCard{margin-top:12px}
+.system-check-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}
+.system-check{display:grid;grid-template-columns:28px 1fr;gap:7px;align-items:center;border:1px solid var(--line);border-radius:11px;padding:9px;background:#faf9f6}
+.system-check>span{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:900}
+.system-check.ok>span{background:#e7efe4;color:#4c6948}
+.system-check.warn>span{background:#f4e9df;color:#8a6446}
+.system-check div{display:grid;gap:2px}.system-check b{font-size:10px}.system-check small{font-size:8px;color:#777}
+@media(max-width:620px){.system-check-grid{grid-template-columns:1fr}}

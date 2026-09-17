@@ -1087,3 +1087,44 @@ The server now performs a second, deterministic check after the live web search:
 The search note reports when mismatched products were filtered out.
 
 This is a sourcing-only hotfix. It does not alter accounts, wardrobes, images, Saved Looks, fit history or onboarding data.
+
+
+## V6.9 — Reliability & Beta Hardening
+
+### Authentication
+- Failed sign-ins are rate-limited per email after 5 failures within 15 minutes.
+- A successful login clears the failure counter.
+- Disabled tester accounts now receive a clear disabled-account response instead of receiving a session that immediately fails.
+- Existing sessions and password storage remain unchanged.
+
+### External URL / image safety
+- Retailer thumbnails and product URLs now use the existing public-IP validation rather than scheme-only checks.
+- Redirects to private, loopback, reserved or local-network addresses are blocked.
+- Try On Me product-image downloads validate the final URL, MIME type and maximum file size before saving anything.
+
+### Storage isolation
+- Explicit garment deletion now resolves image files through the signed-in user's storage root and refuses to remove files outside that root.
+- This closes an old legacy-path assumption without changing normal wardrobe storage.
+
+### Photo cleanup
+- remove.bg credit/quota failures now show:
+  "Background-cleaning credits have run out or the service limit has been reached. Add remove.bg credits and try again."
+- Original photos remain unchanged after any cleanup failure.
+
+### Privacy / diagnostics
+- The public health endpoint no longer exposes internal disk or database paths.
+- Owner/Admin gets a new **System check** card showing:
+  - storage writable status,
+  - missing wardrobe-image references,
+  - AI connection,
+  - photo-cleanup configuration.
+
+### Front-end failures
+The shared API helper now distinguishes:
+- connection loss,
+- rate limiting,
+- temporary service failures,
+- ordinary request errors,
+with clearer messages and without implying saved data was lost.
+
+No destructive migration. Existing accounts, wardrobes, original images, generated visuals, Saved Looks, fit history and onboarding data are preserved.

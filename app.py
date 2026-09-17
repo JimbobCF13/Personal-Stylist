@@ -87,6 +87,13 @@ def init_auth_db():
       created_at TEXT NOT NULL,
       FOREIGN KEY(user_id) REFERENCES users(id)
     );
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL,
+      attempted_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_login_attempts_email_time
+      ON login_attempts(email,attempted_at);
     """)
     try:
         con.execute("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
@@ -204,7 +211,7 @@ async def account_context(request: Request, call_next):
         protected_media=path.startswith("/uploads/") or path.startswith("/cleaned/") or path.startswith("/generated/") or path.startswith("/model-photos/")
         protected_api=path.startswith("/api/") and path not in PUBLIC_PATHS
         if (protected_api or protected_media) and not user:
-            return JSONResponse({"detail":"Please sign in to Get Him Dressed."},status_code=401)
+            return JSONResponse({"detail":"Please sign in again to continue."},status_code=401)
         return await call_next(request)
     finally:
         CURRENT_USER.reset(token)
@@ -628,6 +635,29 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+LOGIN_WINDOW_MINUTES=15
+LOGIN_MAX_FAILURES=5
+
+def enforce_login_rate_limit(email: str):
+    cutoff=(utc_now()-timedelta(minutes=LOGIN_WINDOW_MINUTES)).isoformat()
+    con=auth_db()
+    con.execute("DELETE FROM login_attempts WHERE attempted_at < ?",(cutoff,))
+    count=con.execute("SELECT COUNT(*) AS n FROM login_attempts WHERE email=? AND attempted_at>=?",
+                      (email,cutoff)).fetchone()["n"]
+    con.commit(); con.close()
+    if count>=LOGIN_MAX_FAILURES:
+        raise HTTPException(429,"Too many unsuccessful sign-in attempts. Please wait about 15 minutes and try again.")
+
+def record_login_failure(email: str):
+    con=auth_db()
+    con.execute("INSERT INTO login_attempts(email,attempted_at) VALUES (?,?)",(email,utc_now().isoformat()))
+    con.commit(); con.close()
+
+def clear_login_failures(email: str):
+    con=auth_db()
+    con.execute("DELETE FROM login_attempts WHERE email=?",(email,))
+    con.commit(); con.close()
+
 def initialise_isolated_user_store(user: dict):
     token=CURRENT_USER.set(user)
     try:
@@ -707,11 +737,16 @@ def register_account(req: RegisterRequest):
 @app.post("/api/auth/login")
 def login_account(req: LoginRequest):
     email=(req.email or "").strip().lower()
+    enforce_login_rate_limit(email)
     con=auth_db()
     row=con.execute("SELECT * FROM users WHERE email=?",(email,)).fetchone()
     con.close()
     if not row or not password_ok(req.password,row["password_hash"]):
+        record_login_failure(email)
         raise HTTPException(401,"Email or password is incorrect.")
+    if int(row["active"] if "active" in row.keys() else 1)==0:
+        raise HTTPException(403,"This tester account is currently disabled.")
+    clear_login_failures(email)
     user=public_user(row)
     token,expires=create_session(user["id"])
     response=JSONResponse({"ok":True,"user":user})
@@ -847,6 +882,35 @@ def admin_feedback():
     con.close()
     return rows
 
+@app.get("/api/admin/system-status")
+def admin_system_status():
+    require_admin()
+    root=active_user_root()
+    writable=False
+    probe=root/".ghd_write_test"
+    try:
+        probe.write_text("ok")
+        writable=True
+        probe.unlink(missing_ok=True)
+    except Exception:
+        writable=False
+
+    con=db()
+    rows=[dict(r) for r in con.execute("SELECT id,image_path,original_image_path FROM garments").fetchall()]
+    con.close()
+    missing=0
+    for row in rows:
+        paths=[row.get("image_path"),row.get("original_image_path")]
+        if paths and not any(p and resolve_saved_image_path(p).exists() for p in paths):
+            missing+=1
+    return {
+      "storage_writable":writable,
+      "wardrobe_items":len(rows),
+      "missing_image_items":missing,
+      "ai_enabled":bool(os.getenv("OPENAI_API_KEY")) and OpenAI is not None,
+      "photo_cleanup_enabled":bool(os.getenv("REMOVE_BG_API_KEY"))
+    }
+
 @app.get("/api/account")
 def account_details():
     u=current_user()
@@ -881,7 +945,11 @@ def home():
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "ai_enabled": bool(os.getenv("OPENAI_API_KEY")) and OpenAI is not None, "data_dir": str(DATA_DIR), "database": str(current_db_path())}
+    return {
+      "ok": True,
+      "ai_enabled": bool(os.getenv("OPENAI_API_KEY")) and OpenAI is not None,
+      "photo_cleanup_enabled": bool(os.getenv("REMOVE_BG_API_KEY"))
+    }
 
 @app.get("/api/bootstrap")
 def app_bootstrap():
@@ -1503,14 +1571,11 @@ def delete_garment(gid: int):
             if not rel:
                 continue
             try:
-                rel_path = str(rel).lstrip("/")
-                if rel_path.startswith("cleaned/"):
-                    p = DATA_DIR / rel_path
-                elif rel_path.startswith("uploads/"):
-                    p = DATA_DIR / rel_path
-                else:
-                    p = ROOT / rel_path
-                if p.exists():
+                p=resolve_saved_image_path(rel)
+                active_root=active_user_root().resolve()
+                resolved=p.resolve()
+                # Never allow a garment delete to escape the signed-in user's storage.
+                if resolved.is_relative_to(active_root) and p.exists() and p.is_file():
                     p.unlink()
             except Exception:
                 pass
@@ -1700,6 +1765,12 @@ def premium_remove_background(source_path: Path) -> Path:
             message = errors[0].get("title") if errors and isinstance(errors[0], dict) else detail
         except Exception:
             message = f"HTTP {exc.code}"
+        lower_message=str(message or "").lower()
+        if exc.code in (402,429) or any(x in lower_message for x in ["credit","quota","insufficient"]):
+            raise CleanupServiceError(
+                "Background-cleaning credits have run out or the service limit has been reached. "
+                "Add remove.bg credits and try again. Your original photo is unchanged."
+            )
         raise CleanupServiceError(f"Background-removal service returned an error: {message}. Your original photo is unchanged.")
     except urllib.error.URLError as exc:
         raise CleanupServiceError(f"Background-removal service could not be reached: {exc.reason}. Your original photo is unchanged.")
@@ -3271,13 +3342,31 @@ def _public_http_url(url: str) -> bool:
         return True
     except Exception:return False
 
+class _PublicOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not _public_http_url(newurl):
+            raise urllib.error.URLError("Blocked unsafe redirect target.")
+        return super().redirect_request(req,fp,code,msg,headers,newurl)
+
+def _safe_urlopen(request, timeout=12):
+    target=request.full_url if hasattr(request,"full_url") else str(request)
+    if not _public_http_url(target):
+        raise urllib.error.URLError("Blocked unsafe URL.")
+    opener=urllib.request.build_opener(_PublicOnlyRedirectHandler())
+    response=opener.open(request,timeout=timeout)
+    final_url=response.geturl()
+    if not _public_http_url(final_url):
+        response.close()
+        raise urllib.error.URLError("Blocked unsafe redirect target.")
+    return response
+
 def _fetch_product_page_meta(url: str) -> dict:
     if not _public_http_url(url):raise HTTPException(400,"Please use a normal public retailer product URL.")
     try:
         import urllib.request, html as _html, re as _re
         from urllib.parse import urljoin
         req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0","Accept":"text/html,application/xhtml+xml"})
-        with urllib.request.urlopen(req,timeout=12) as r:
+        with _safe_urlopen(req,timeout=12) as r:
             if "text/html" not in (r.headers.get("Content-Type") or "").lower():raise HTTPException(400,"That link does not appear to be a retailer product page.")
             raw=r.read(1200000).decode("utf-8","ignore")
         def mv(keys):
@@ -3305,7 +3394,7 @@ def _download_import_image(image_url: str) -> tuple[str,str]:
     try:
         import urllib.request
         req=urllib.request.Request(image_url,headers={"User-Agent":"Mozilla/5.0","Accept":"image/*"})
-        with urllib.request.urlopen(req,timeout=12) as r:
+        with _safe_urlopen(req,timeout=12) as r:
             ctype=(r.headers.get("Content-Type") or "").lower()
             if not ctype.startswith("image/"):return "",""
             data=r.read(12*1024*1024)
@@ -3948,12 +4037,7 @@ class ShortlistProductRequest(BaseModel):
     context: Optional[dict] = None
 
 def _safe_web_url(url: str) -> bool:
-    try:
-        from urllib.parse import urlparse
-        p=urlparse(url or "")
-        return p.scheme in ("http","https") and bool(p.netloc)
-    except Exception:
-        return False
+    return _public_http_url(url)
 
 def _extract_product_image(page_url: str) -> str:
     if not _safe_web_url(page_url):
@@ -3965,7 +4049,7 @@ def _extract_product_image(page_url: str) -> str:
             "User-Agent":"Mozilla/5.0",
             "Accept":"text/html,application/xhtml+xml"
         })
-        with urllib.request.urlopen(req,timeout=8) as r:
+        with _safe_urlopen(req,timeout=8) as r:
             if "text/html" not in (r.headers.get("Content-Type") or "").lower():
                 return ""
             raw=r.read(900000).decode("utf-8","ignore")
@@ -4445,22 +4529,26 @@ def product_tryon(req: ProductTryOnRequest):
             raise HTTPException(400,"Add at least one photo in My Model before using Try on me.")
 
     product_file=None
-    if req.product_image_url:
+    if req.product_image_url and _public_http_url(req.product_image_url):
         try:
-            import urllib.request
-            from urllib.parse import urlparse
-            parsed=urlparse(req.product_image_url)
-            if parsed.scheme in ("http","https"):
-                request=urllib.request.Request(req.product_image_url,headers={"User-Agent":"Mozilla/5.0"})
-                with urllib.request.urlopen(request,timeout=12) as r:
-                    data=r.read(12*1024*1024)
-                if data:
-                    tmp=generated_dir() /f"product_ref_{uuid.uuid4().hex}.img"
-                    tmp.write_bytes(data)
-                    product_file=normalise_image_for_ai(tmp)
-                    try:
-                        if tmp.exists() and tmp!=product_file: tmp.unlink()
-                    except Exception: pass
+            request=urllib.request.Request(req.product_image_url,headers={"User-Agent":"Mozilla/5.0","Accept":"image/*"})
+            with _safe_urlopen(request,timeout=12) as r:
+                ctype=(r.headers.get("Content-Type") or "").lower()
+                length=r.headers.get("Content-Length")
+                if not ctype.startswith("image/"):
+                    raise ValueError("Product reference was not an image.")
+                if length and int(length)>12*1024*1024:
+                    raise ValueError("Product reference image is too large.")
+                data=r.read(12*1024*1024+1)
+                if len(data)>12*1024*1024:
+                    raise ValueError("Product reference image is too large.")
+            if data:
+                tmp=generated_dir() /f"product_ref_{uuid.uuid4().hex}.img"
+                tmp.write_bytes(data)
+                product_file=normalise_image_for_ai(tmp)
+                try:
+                    if tmp.exists() and tmp!=product_file: tmp.unlink()
+                except Exception: pass
         except Exception:
             product_file=None
 

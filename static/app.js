@@ -41,11 +41,21 @@ function esc(value){
 }
 
 async function api(url,opts={}){
- const r=await fetch(url,opts); const data=await r.json().catch(()=>({}));
+ let r;
+ try{
+  r=await fetch(url,opts);
+ }catch(err){
+  throw new Error("Connection lost. Check your internet connection and try again.");
+ }
+ const data=await r.json().catch(()=>({}));
  if(r.status===401 && !url.startsWith("/api/auth/")){
   showAuthGate({bootstrap_available:false});
  }
- if(!r.ok) throw new Error(data.detail||"Something went wrong");
+ if(!r.ok){
+  if(r.status===429)throw new Error(data.detail||"Too many attempts. Please wait a little and try again.");
+  if(r.status===502 || r.status===503)throw new Error(data.detail||"That service is temporarily unavailable. Your saved data has not been changed.");
+  throw new Error(data.detail||`Something went wrong (${r.status}).`);
+ }
  return data;
 }
 
@@ -585,7 +595,8 @@ async function loadAccount(){
  $("adminInviteCard").classList.toggle("hidden",u.role!=="admin");
  $("adminUsersCard").classList.toggle("hidden",u.role!=="admin");
  $("adminFeedbackCard").classList.toggle("hidden",u.role!=="admin");
- if(u.role==="admin")await Promise.all([loadInvites(),loadAdminUsers(),loadAdminFeedback()]);
+ $("adminSystemCard").classList.toggle("hidden",u.role!=="admin");
+ if(u.role==="admin")await Promise.all([loadInvites(),loadAdminUsers(),loadAdminFeedback(),loadSystemStatus()]);
 }
 
 function formatLastActive(value){
@@ -612,6 +623,23 @@ async function toggleTesterAccess(id,enable,button){
  catch(err){alert(err.message);button.disabled=false}
 }
 $("refreshAdminUsers")?.addEventListener("click",loadAdminUsers);
+
+async function loadSystemStatus(){
+ const box=$("systemStatusResults"); if(!box)return;
+ box.innerHTML='<div class="visual-loading">Running checks…</div>';
+ try{
+  const x=await api("/api/admin/system-status");
+  const checks=[
+   ["Storage",x.storage_writable,"Writable","Problem"],
+   ["Wardrobe images",Number(x.missing_image_items||0)===0,`${x.wardrobe_items||0} items OK`,`${x.missing_image_items} item(s) need attention`],
+   ["AI stylist",x.ai_enabled,"Connected","Not configured"],
+   ["Photo cleanup",x.photo_cleanup_enabled,"Connected","Not configured"]
+  ];
+  box.innerHTML=`<div class="system-check-grid">${checks.map(([label,ok,good,bad])=>`
+   <div class="system-check ${ok?"ok":"warn"}"><span>${ok?"✓":"!"}</span><div><b>${esc(label)}</b><small>${esc(ok?good:bad)}</small></div></div>`).join("")}</div>`;
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
+}
+$("refreshSystemStatus")?.addEventListener("click",loadSystemStatus);
 
 async function loadAdminFeedback(){
  const box=$("adminFeedbackResults"); if(!box)return;
