@@ -1723,3 +1723,13 @@ The new `/api/stylist-v4/refine-one` route preserves the existing outfit and mak
 After refinement, only that outfit card/image is regenerated — the rest of the trip visuals are left alone.
 
 No destructive migration.
+
+## V7.10 — Beta Readiness & Usage Controls
+
+Adds measured per-user text-AI usage, image generation counts, per-user storage visibility, tester image safeguards, and an admin beta-readiness dashboard.
+
+Default non-admin beta image limits are 20/day and 300/month. Override with `BETA_DAILY_IMAGE_LIMIT` and `BETA_MONTHLY_IMAGE_LIMIT`. Admin is exempt.
+
+Text dollar figures are estimates from measured token usage; image activity is counted separately because reference-image input billing varies. Provider invoices remain the source of truth.
+
+No destructive migration.

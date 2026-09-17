@@ -94,6 +94,22 @@ def init_auth_db():
     );
     CREATE INDEX IF NOT EXISTS idx_login_attempts_email_time
       ON login_attempts(email,attempted_at);
+    CREATE TABLE IF NOT EXISTS usage_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      endpoint TEXT,
+      units REAL NOT NULL DEFAULT 1,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      estimated_usd REAL NOT NULL DEFAULT 0,
+      metadata_json TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_usage_events_user_time ON usage_events(user_id,created_at);
+    CREATE INDEX IF NOT EXISTS idx_usage_events_type_time ON usage_events(event_type,created_at);
     """)
     try:
         con.execute("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
@@ -195,6 +211,75 @@ def require_admin():
     if not u or u.get("role")!="admin":
         raise HTTPException(403,"Admin access required.")
     return u
+
+TEXT_MODEL_PRICING={
+    "gpt-5.6-terra":{"input":2.00,"cached":0.20,"output":12.00},
+    "gpt-5.6-luna":{"input":0.20,"cached":0.02,"output":1.20},
+    "gpt-5.6-sol":{"input":4.00,"cached":0.40,"output":20.00},
+}
+BETA_DAILY_IMAGE_LIMIT=max(1,int(os.getenv("BETA_DAILY_IMAGE_LIMIT","20")))
+BETA_MONTHLY_IMAGE_LIMIT=max(BETA_DAILY_IMAGE_LIMIT,int(os.getenv("BETA_MONTHLY_IMAGE_LIMIT","300")))
+
+def record_usage_event(event_type:str, endpoint:str="", units:float=1, input_tokens:int=0,
+                       cached_input_tokens:int=0, output_tokens:int=0,
+                       estimated_usd:float=0, metadata:dict|None=None):
+    uid=current_user_id()
+    if not uid:
+        return
+    try:
+        con=auth_db()
+        con.execute("""INSERT INTO usage_events
+          (user_id,event_type,endpoint,units,input_tokens,cached_input_tokens,output_tokens,estimated_usd,metadata_json,created_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?)""",
+          (uid,event_type,endpoint or "",float(units or 0),int(input_tokens or 0),
+           int(cached_input_tokens or 0),int(output_tokens or 0),float(estimated_usd or 0),
+           json.dumps(metadata or {},ensure_ascii=False),utc_now().isoformat()))
+        con.commit();con.close()
+    except Exception:
+        pass
+
+def _usage_value(obj,name,default=0):
+    if obj is None: return default
+    if isinstance(obj,dict): return obj.get(name,default) or default
+    return getattr(obj,name,default) or default
+
+def tracked_responses_create(client,*args,**kwargs):
+    response=client.responses.create(*args,**kwargs)
+    try:
+        usage=getattr(response,"usage",None)
+        input_tokens=int(_usage_value(usage,"input_tokens",0))
+        output_tokens=int(_usage_value(usage,"output_tokens",0))
+        details=_usage_value(usage,"input_tokens_details",{}) or {}
+        cached=int(_usage_value(details,"cached_tokens",0))
+        model=str(kwargs.get("model") or os.getenv("OPENAI_MODEL","gpt-5.6-terra"))
+        rates=TEXT_MODEL_PRICING.get(model,TEXT_MODEL_PRICING["gpt-5.6-terra"])
+        uncached=max(0,input_tokens-cached)
+        cost=(uncached*rates["input"]+cached*rates["cached"]+output_tokens*rates["output"])/1_000_000
+        record_usage_event("text_ai","responses",1,input_tokens,cached,output_tokens,cost,{"model":model})
+    except Exception:
+        record_usage_event("text_ai","responses",1,metadata={"model":str(kwargs.get("model") or "")})
+    return response
+
+def image_usage_counts(uid:int|None=None):
+    uid=int(uid or current_user_id() or 0)
+    if not uid: return {"today":0,"month":0}
+    now=utc_now()
+    day_start=now.replace(hour=0,minute=0,second=0,microsecond=0).isoformat()
+    month_start=now.replace(day=1,hour=0,minute=0,second=0,microsecond=0).isoformat()
+    con=auth_db()
+    today=int(con.execute("SELECT COALESCE(SUM(units),0) FROM usage_events WHERE user_id=? AND event_type='image_generation' AND created_at>=?",(uid,day_start)).fetchone()[0] or 0)
+    month=int(con.execute("SELECT COALESCE(SUM(units),0) FROM usage_events WHERE user_id=? AND event_type='image_generation' AND created_at>=?",(uid,month_start)).fetchone()[0] or 0)
+    con.close()
+    return {"today":today,"month":month}
+
+def enforce_beta_image_limit():
+    u=current_user() or {}
+    if u.get("role")=="admin": return
+    counts=image_usage_counts()
+    if counts["today"]>=BETA_DAILY_IMAGE_LIMIT:
+        raise HTTPException(429,f"Beta image limit reached for today ({BETA_DAILY_IMAGE_LIMIT}). Styling still works; more images will be available tomorrow.")
+    if counts["month"]>=BETA_MONTHLY_IMAGE_LIMIT:
+        raise HTTPException(429,f"Beta image limit reached for this month ({BETA_MONTHLY_IMAGE_LIMIT}). Please contact the beta owner if you need more.")
 
 init_auth_db()
 
@@ -873,6 +958,80 @@ def user_store_counts(row):
         pass
     return counts
 
+def _dir_usage_bytes(path:Path):
+    total=0
+    if not path.exists(): return 0
+    for p in path.rglob("*"):
+        try:
+            if p.is_file(): total+=p.stat().st_size
+        except Exception: pass
+    return total
+
+@app.get("/api/admin/beta-usage")
+def admin_beta_usage():
+    require_admin()
+    now=utc_now()
+    day_start=now.replace(hour=0,minute=0,second=0,microsecond=0).isoformat()
+    month_start=now.replace(day=1,hour=0,minute=0,second=0,microsecond=0).isoformat()
+    con=auth_db()
+    users=con.execute("SELECT * FROM users ORDER BY created_at ASC").fetchall()
+    totals=con.execute("""SELECT
+      COALESCE(SUM(CASE WHEN event_type='image_generation' AND created_at>=? THEN units ELSE 0 END),0) images_today,
+      COALESCE(SUM(CASE WHEN event_type='image_generation' AND created_at>=? THEN units ELSE 0 END),0) images_month,
+      COALESCE(SUM(CASE WHEN event_type='text_ai' AND created_at>=? THEN 1 ELSE 0 END),0) text_calls_month,
+      COALESCE(SUM(CASE WHEN event_type='text_ai' AND created_at>=? THEN input_tokens ELSE 0 END),0) input_tokens_month,
+      COALESCE(SUM(CASE WHEN event_type='text_ai' AND created_at>=? THEN output_tokens ELSE 0 END),0) output_tokens_month,
+      COALESCE(SUM(CASE WHEN event_type='text_ai' AND created_at>=? THEN estimated_usd ELSE 0 END),0) text_cost_month
+      FROM usage_events""",(day_start,month_start,month_start,month_start,month_start,month_start)).fetchone()
+    rows=[]
+    for row in users:
+        uid=int(row["id"])
+        usage=con.execute("""SELECT
+          COALESCE(SUM(CASE WHEN event_type='image_generation' AND created_at>=? THEN units ELSE 0 END),0) images_today,
+          COALESCE(SUM(CASE WHEN event_type='image_generation' AND created_at>=? THEN units ELSE 0 END),0) images_month,
+          COALESCE(SUM(CASE WHEN event_type='text_ai' AND created_at>=? THEN 1 ELSE 0 END),0) text_calls_month,
+          COALESCE(SUM(CASE WHEN event_type='text_ai' AND created_at>=? THEN estimated_usd ELSE 0 END),0) text_cost_month
+          FROM usage_events WHERE user_id=?""",(day_start,month_start,month_start,month_start,uid)).fetchone()
+        rows.append({
+          "id":uid,"display_name":row["display_name"],"email":row["email"],"role":row["role"],
+          "active":int(row["active"]),"images_today":int(usage["images_today"] or 0),
+          "images_month":int(usage["images_month"] or 0),"text_calls_month":int(usage["text_calls_month"] or 0),
+          "text_cost_month":round(float(usage["text_cost_month"] or 0),4),
+          "storage_bytes":_dir_usage_bytes(user_storage_root_for(row))
+        })
+    con.close()
+
+    ai_connected=bool(os.getenv("OPENAI_API_KEY"))
+    disk_ok=False
+    try:
+        probe=DATA_DIR/".beta_readiness_probe"; probe.write_text("ok"); probe.unlink(); disk_ok=True
+    except Exception:
+        disk_ok=False
+    checks=[
+      {"label":"AI connection","ok":ai_connected,"detail":"OpenAI API key configured" if ai_connected else "OpenAI API key missing"},
+      {"label":"Persistent storage","ok":disk_ok,"detail":"Storage is writable" if disk_ok else "Storage write check failed"},
+      {"label":"Data backup","ok":True,"detail":"Per-account export available"},
+      {"label":"Tester isolation","ok":True,"detail":"Tester accounts use isolated stores"},
+      {"label":"Usage safeguards","ok":True,"detail":f"{BETA_DAILY_IMAGE_LIMIT}/day · {BETA_MONTHLY_IMAGE_LIMIT}/month per tester"},
+    ]
+    return {
+      "ready_for_small_beta":all(c["ok"] for c in checks),
+      "recommended_first_wave":"5–8 testers",
+      "checks":checks,
+      "limits":{"daily_images":BETA_DAILY_IMAGE_LIMIT,"monthly_images":BETA_MONTHLY_IMAGE_LIMIT},
+      "totals":{
+        "images_today":int(totals["images_today"] or 0),
+        "images_month":int(totals["images_month"] or 0),
+        "text_calls_month":int(totals["text_calls_month"] or 0),
+        "input_tokens_month":int(totals["input_tokens_month"] or 0),
+        "output_tokens_month":int(totals["output_tokens_month"] or 0),
+        "estimated_text_cost_month":round(float(totals["text_cost_month"] or 0),4),
+        "storage_bytes":sum(r["storage_bytes"] for r in rows)
+      },
+      "users":rows,
+      "pricing_note":"Text cost is estimated from measured token usage. Image generations are counted separately because reference-image inputs vary. Your OpenAI invoice is the source of truth."
+    }
+
 @app.get("/api/admin/users")
 def admin_users():
     require_admin()
@@ -1025,7 +1184,7 @@ def account_data_manifest():
     payload={
       "export_format":"get-dressed-portable-backup-v1",
       "exported_at":utc_now().isoformat(),
-      "app_version":"7.8",
+      "app_version":"7.10",
       "account":{
         "id":u.get("id"),
         "email":u.get("email"),
@@ -1688,7 +1847,7 @@ Rules:
 
     try:
         client = OpenAI()
-        response = client.responses.create(
+        response = tracked_responses_create(client,
             model=os.getenv("OPENAI_SHOPPING_MODEL", os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
             reasoning={"effort":"low"},
             tools=[{"type":"web_search"}],
@@ -2271,7 +2430,7 @@ If menswear, classify by wardrobe role and silhouette rather than blindly copyin
 - a true buttoned shirt -> Shirts
 - a lightweight knitted pullover remains Knitwear even if a retailer calls it a "T-shirt".
 Use the closest established wardrobe category and do not let the word "shirt" override the actual construction/use."""
-    response = client.responses.create(
+    response = tracked_responses_create(client,
         model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
         reasoning={"effort":"low"},
         input=[{
@@ -2470,7 +2629,7 @@ Set confidence based on how completely the user's description supports the recor
 The user will review every item before saving, so concise notes are better than speculation."""
 
     try:
-        response=client.responses.create(
+        response=tracked_responses_create(client,
             model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
             reasoning={"effort":"low"},
             instructions=instructions,
@@ -2816,7 +2975,7 @@ Evidence rules:
 - Keep the writing concise and specific to the supplied wardrobe.
 """
         try:
-            response=OpenAI().responses.create(
+            response=tracked_responses_create(OpenAI(),
               model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
               reasoning={"effort":"low"},
               instructions=instructions,
@@ -2932,7 +3091,7 @@ def outfits(req: OutfitRequest):
         "liked_or_loved_outfits_should_increase_similar_future_combinations": True
       }
     }
-    response = client.responses.create(
+    response = tracked_responses_create(client,
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
       reasoning={"effort":"medium"},
       instructions=STYLIST_INSTRUCTIONS,
@@ -3149,7 +3308,7 @@ Rules:
 {mode_guidance}
 """
     try:
-        response=OpenAI().responses.create(
+        response=tracked_responses_create(OpenAI(),
             model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
             reasoning={"effort":"low"},
             input=prompt,
@@ -3224,7 +3383,7 @@ Rules:
 - This is clothing and packing guidance, not safety-critical weather advice.
 """
     try:
-        response=OpenAI().responses.create(
+        response=tracked_responses_create(OpenAI(),
             model=os.getenv("OPENAI_SHOPPING_MODEL",os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
             reasoning={"effort":"low"},
             tools=[{"type":"web_search"}],
@@ -3423,7 +3582,7 @@ Rules:
       "profile":profile,"wardrobe":compact,"recent_feedback":feedback,"saved_looks":favourites
     }
     try:
-        response=OpenAI().responses.create(
+        response=tracked_responses_create(OpenAI(),
           model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
           reasoning={"effort":"low"},
           instructions=instructions+styling_profile_guidance(),
@@ -3517,7 +3676,7 @@ Rules:
     }
 
     try:
-        response=OpenAI().responses.create(
+        response=tracked_responses_create(OpenAI(),
             model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
             reasoning={"effort":os.getenv("OPENAI_PACK_REASONING","low")},
             instructions=instructions,
@@ -3621,6 +3780,7 @@ class OutfitVisualisationRequest(BaseModel):
 
 @app.post("/api/outfit-visualisation")
 def outfit_visualisation(req: OutfitVisualisationRequest):
+    enforce_beta_image_limit()
     if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
         raise HTTPException(400, "OpenAI image generation is not connected.")
 
@@ -3770,6 +3930,10 @@ Important:
     filename = f"outfit_{uuid.uuid4().hex}.png"
     out_path = generated_dir() / filename
     out_path.write_bytes(base64.b64decode(b64))
+    record_usage_event("image_generation","/api/outfit-visualisation",1,metadata={
+      "model":image_model,"size":"1024x1536","quality":"medium",
+      "reference_images":len(reference_files[:7]) if 'reference_files' in locals() else 0
+    })
 
     return {
         "ok": True,
@@ -3973,7 +4137,7 @@ def wardrobe_gaps(req: WardrobeGapRequest):
     }
 
     client = OpenAI()
-    response = client.responses.create(
+    response = tracked_responses_create(client,
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
       reasoning={"effort":"low"},
       instructions=SHOPPING_STYLIST_INSTRUCTIONS + styling_profile_guidance(),
@@ -4115,7 +4279,7 @@ Use the retailer page as the factual source.
 - Keep notes factual and concise.
 - For category, classify by wardrobe function rather than literal naming. A short-sleeve knitted polo is Polos & T-Shirts; a long-sleeve knitted polo/pullover or rugby shirt is Knitwear; an overshirt is Overshirts & Shirt Jackets; a sweatshirt is Sweatshirts & Hoodies."""
             try:
-                response=client.responses.create(
+                response=tracked_responses_create(client,
                     model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
                     reasoning={"effort":"low"},
                     input=prompt,
@@ -4148,7 +4312,7 @@ Rules:
 - If exact product identification is uncertain, leave uncertain factual fields empty and use low confidence.
 """
             try:
-                response=client.responses.create(
+                response=tracked_responses_create(client,
                     model=os.getenv("OPENAI_SHOPPING_MODEL",os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
                     reasoning={"effort":"medium"},
                     tools=[{"type":"web_search"}],
@@ -4311,7 +4475,7 @@ Rules:
 
     client = OpenAI()
     try:
-        response = client.responses.create(
+        response = tracked_responses_create(client,
             model=os.getenv("OPENAI_SHOPPING_MODEL", os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
             reasoning={"effort":"medium"},
             tools=[{"type":"web_search"}],
@@ -4542,7 +4706,7 @@ Summarise temperatures in Celsius, precipitation/rain risk, wind and practical c
 The styling_context should be concise and useful for choosing layers, fabrics, outerwear and footwear.
 """
     try:
-        response=OpenAI().responses.create(
+        response=tracked_responses_create(OpenAI(),
             model=os.getenv("OPENAI_SHOPPING_MODEL",os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
             reasoning={"effort":"low"},
             tools=[{"type":"web_search"}],
@@ -4677,7 +4841,7 @@ def stylist_v4(req: StylistV4Request):
     }
 
     client = OpenAI()
-    response = client.responses.create(
+    response = tracked_responses_create(client,
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
       reasoning={"effort":"low"},
       instructions=STYLIST_V4_INSTRUCTIONS + styling_profile_guidance(),
@@ -4753,7 +4917,7 @@ Rules:
       "saved_looks":saved_looks
     }
     try:
-        response=OpenAI().responses.create(
+        response=tracked_responses_create(OpenAI(),
           model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
           reasoning={"effort":"low"},
           instructions=instructions+styling_profile_guidance(),
@@ -4855,7 +5019,7 @@ Rules:
       "saved_looks":saved_looks
     }
     try:
-        response=OpenAI().responses.create(
+        response=tracked_responses_create(OpenAI(),
           model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
           reasoning={"effort":"low"},
           instructions=instructions+styling_profile_guidance(),
@@ -4969,7 +5133,7 @@ Rules:
     }
 
     try:
-        response=OpenAI().responses.create(
+        response=tracked_responses_create(OpenAI(),
             model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
             reasoning={"effort":"low"},
             instructions=instructions + styling_profile_guidance(),
@@ -5313,7 +5477,7 @@ Important:
 - Keep this concise and useful.
 """
         try:
-            response=OpenAI().responses.create(
+            response=tracked_responses_create(OpenAI(),
               model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),
               reasoning={"effort":"low"},
               instructions=instructions,
@@ -5386,7 +5550,7 @@ def look_critique(req:LookCritiqueRequest):
 
     context={"mode":mode,"user_request":req.request_text or "No occasion supplied","selected_outfit":[compact(g) for g in selected],
              "wardrobe":[compact(g) for g in wardrobe],"profile":profile}
-    response=OpenAI().responses.create(
+    response=tracked_responses_create(OpenAI(),
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},
       instructions=f"""You are a restrained, practical personal stylist. {instruction}
 Never claim an item is owned unless its garment id is in the wardrobe data.
@@ -5435,7 +5599,7 @@ DESCRIPTION: {meta.get('description') or ''}
 TEXT: {(meta.get('page_text') or '')[:8000]}
 Return supported product facts only. Never invent brand, model, colour, material or fit."""
         try:
-            response=OpenAI().responses.create(
+            response=tracked_responses_create(OpenAI(),
               model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},input=prompt,
               text={"format":{"type":"json_schema","name":"product_url_import","schema":PRODUCT_URL_IMPORT_SCHEMA,"strict":True}}
             )
@@ -5446,7 +5610,7 @@ Return supported product facts only. Never invent brand, model, colour, material
         # Existing web-search fallback handles retailers that block direct page fetches.
         search_prompt=f"""Identify the exact menswear product at this retailer URL using live web search: {url}.
 Return only facts supported by the retailer or reliable indexed product information. Never guess."""
-        response=OpenAI().responses.create(
+        response=tracked_responses_create(OpenAI(),
           model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},
           tools=[{"type":"web_search"}],tool_choice="auto",input=search_prompt,
           text={"format":{"type":"json_schema","name":"product_url_import","schema":PRODUCT_URL_IMPORT_SCHEMA,"strict":True}}
@@ -5464,7 +5628,7 @@ Return only facts supported by the retailer or reliable indexed product informat
     max_options=max(1,min(int(req.max_options or 3),4))
     context={"product":analysis,"product_url":url,"occasion":req.occasion or "not specified",
              "wardrobe":[compact(g) for g in wardrobe],"profile":profile,"max_options":max_options}
-    response=OpenAI().responses.create(
+    response=tracked_responses_create(OpenAI(),
       model=os.getenv("OPENAI_MODEL","gpt-5.6-terra"),reasoning={"effort":"low"},
       instructions="""Build outfits around the external product using only the user's real wardrobe for the remaining pieces.
 Return distinct, practical options. owned_garment_ids must contain only real ids from the supplied wardrobe.
@@ -5492,6 +5656,7 @@ class ProductTryOnRequest(BaseModel):
 
 @app.post("/api/product-tryon")
 def product_tryon(req: ProductTryOnRequest):
+    enforce_beta_image_limit()
     if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
         raise HTTPException(400, "OpenAI image generation is not connected.")
 
@@ -5611,6 +5776,9 @@ Do not invent visible logos. This is an AI styling visualisation, not a guarante
     filename=f"product_tryon_{uuid.uuid4().hex}.png"
     out=generated_dir() /filename
     out.write_bytes(base64.b64decode(b64))
+    record_usage_event("image_generation","/api/product-tryon",1,metadata={
+      "model":image_model,"size":"1024x1536","quality":"medium","reference_images":len(refs[:8])
+    })
     return {
         "ok":True,
         "image_path":f"/generated/{filename}",

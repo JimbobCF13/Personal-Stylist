@@ -600,8 +600,9 @@ async function loadAccount(){
  $("adminUsersCard").classList.toggle("hidden",u.role!=="admin");
  $("adminFeedbackCard").classList.toggle("hidden",u.role!=="admin");
  $("adminSystemCard").classList.toggle("hidden",u.role!=="admin");
+ $("adminBetaUsageCard").classList.toggle("hidden",u.role!=="admin");
  await Promise.all([loadAccountDataSummary(),loadAccountSecurity()]);
- if(u.role==="admin")await Promise.all([loadInvites(),loadAdminUsers(),loadAdminFeedback(),loadSystemStatus()]);
+ if(u.role==="admin")await Promise.all([loadInvites(),loadAdminUsers(),loadAdminFeedback(),loadSystemStatus(),loadBetaUsage()]);
 }
 
 
@@ -724,6 +725,22 @@ $("downloadAccountBackup")?.addEventListener("click",async()=>{
   btn.disabled=false;btn.textContent=original;
  }
 });
+
+function betaMoney(value){const n=Number(value||0);return n<0.01?`$${n.toFixed(4)}`:`$${n.toFixed(2)}`}
+async function loadBetaUsage(){
+ const banner=$("betaReadinessBanner"),metrics=$("betaUsageMetrics"),users=$("betaUsageUsers"),note=$("betaUsageNote");
+ if(!banner)return;
+ try{
+  const x=await api("/api/admin/beta-usage");
+  banner.className=`beta-readiness-banner ${x.ready_for_small_beta?"ready":"not-ready"}`;
+  banner.innerHTML=`<div><span>${x.ready_for_small_beta?"✓":"!"}</span><div><b>${x.ready_for_small_beta?"Ready for a small private beta":"Not quite ready for testers"}</b><small>${x.ready_for_small_beta?`Start with ${esc(x.recommended_first_wave)}.`:"Resolve the checks below first."}</small></div></div><div class="beta-checks">${(x.checks||[]).map(c=>`<span class="${c.ok?"ok":"warn"}">${c.ok?"✓":"!"} ${esc(c.label)}<small>${esc(c.detail||"")}</small></span>`).join("")}</div>`;
+  const t=x.totals||{};
+  metrics.innerHTML=`<div><strong>${t.images_today||0}</strong><span>Images today</span></div><div><strong>${t.images_month||0}</strong><span>Images this month</span></div><div><strong>${t.text_calls_month||0}</strong><span>AI text calls this month</span></div><div><strong>${betaMoney(t.estimated_text_cost_month||0)}</strong><span>Measured text estimate</span></div><div><strong>${readableBytes(t.storage_bytes||0)}</strong><span>Stored data/media</span></div>`;
+  users.innerHTML=`<div class="beta-user-head"><b>Tester usage this month</b><small>Limits: ${x.limits?.daily_images||0}/day · ${x.limits?.monthly_images||0}/month</small></div><div class="beta-user-list">${(x.users||[]).map(u=>`<div class="beta-user-row"><div><b>${esc(u.display_name||u.email)}</b><small>${u.role==="admin"?"Owner":"Tester"} · ${u.active?"Active":"Disabled"}</small></div><span><b>${u.images_month||0}</b><small>images</small></span><span><b>${u.text_calls_month||0}</b><small>AI calls</small></span><span><b>${betaMoney(u.text_cost_month||0)}</b><small>text est.</small></span><span><b>${readableBytes(u.storage_bytes||0)}</b><small>storage</small></span></div>`).join("")}</div>`;
+  note.textContent=x.pricing_note||"";
+ }catch(err){banner.className="beta-readiness-banner not-ready";banner.innerHTML=`<small>${esc(err.message)}</small>`}
+}
+$("refreshBetaUsage")?.addEventListener("click",loadBetaUsage);
 
 function formatLastActive(value){
  if(!value)return "Never";
