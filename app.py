@@ -899,6 +899,15 @@ def register_account(req: RegisterRequest):
     user=public_user(row)
     if scope=="isolated":
         initialise_isolated_user_store(user)
+        # The tester already supplied their name during registration.
+        # Seed their private profile so onboarding does not ask for it again.
+        token_ctx=CURRENT_USER.set(user)
+        try:
+            profile_con=db()
+            profile_con.execute("UPDATE profile SET name=? WHERE id=1 AND TRIM(COALESCE(name,''))=''",(name,))
+            profile_con.commit(); profile_con.close()
+        finally:
+            CURRENT_USER.reset(token_ctx)
 
     token,expires=create_session(uid)
     response=JSONResponse({"ok":True,"user":user})
@@ -1237,7 +1246,7 @@ def account_data_manifest():
     payload={
       "export_format":"get-dressed-portable-backup-v1",
       "exported_at":utc_now().isoformat(),
-      "app_version":"7.10.2",
+      "app_version":"7.10.3",
       "account":{
         "id":u.get("id"),
         "email":u.get("email"),

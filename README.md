@@ -1760,3 +1760,18 @@ The home-screen feature tiles can now be reordered per account.
 
 ### Data safety
 Adds one nullable `home_order_json` column to the accounts `users` table using a safe additive migration. No wardrobe, media, profile, saved-look, trip or fit data is changed.
+
+
+## V7.10.3 — First-Time Tester Readiness
+
+Final private-beta onboarding/readiness cleanup.
+
+- Fresh tester profiles inherit the name supplied during registration.
+- Empty Wardrobe now gives clear first-use routes to Add with Photos or Quick Add.
+- Empty Saved Looks explains the learning value and links straight to Ask My Stylist.
+- Sign-in and registration support Enter-key submission.
+- Onboarding explicitly points testers to Beta Feedback in My Account.
+- Feedback categories now cover onboarding, Saved Looks, Plan My Week and Home/navigation.
+- Admin Usage & Capacity now shows each tester's image generations today as well as the monthly count.
+
+No destructive migration.

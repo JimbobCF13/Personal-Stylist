@@ -599,6 +599,7 @@ async function loginAccount(){
  finally{btn.disabled=false;btn.textContent="Sign in"}
 }
 $("authLoginBtn")?.addEventListener("click",loginAccount);
+$("authLoginPane")?.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();loginAccount()}});
 
 async function registerAccount(){
  const btn=$("authRegisterBtn");
@@ -618,6 +619,7 @@ async function registerAccount(){
  finally{btn.disabled=false;btn.textContent="Create account"}
 }
 $("authRegisterBtn")?.addEventListener("click",registerAccount);
+$("authRegisterPane")?.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();registerAccount()}});
 
 async function loadAccount(){
  if(!authState.user)return;
@@ -768,7 +770,7 @@ async function loadBetaUsage(){
   banner.innerHTML=`<div><span>${x.ready_for_small_beta?"✓":"!"}</span><div><b>${x.ready_for_small_beta?"Ready for a small private beta":"Not quite ready for testers"}</b><small>${x.ready_for_small_beta?`Start with ${esc(x.recommended_first_wave)}.`:"Resolve the checks below first."}</small></div></div><div class="beta-checks">${(x.checks||[]).map(c=>`<span class="${c.ok?"ok":"warn"}">${c.ok?"✓":"!"} ${esc(c.label)}<small>${esc(c.detail||"")}</small></span>`).join("")}</div>`;
   const t=x.totals||{};
   metrics.innerHTML=`<div><strong>${t.images_today||0}</strong><span>Images today</span></div><div><strong>${t.images_month||0}</strong><span>Images this month</span></div><div><strong>${t.text_calls_month||0}</strong><span>AI text calls this month</span></div><div><strong>${betaMoney(t.estimated_text_cost_month||0)}</strong><span>Measured text estimate</span></div><div><strong>${readableBytes(t.storage_bytes||0)}</strong><span>Stored data/media</span></div>`;
-  users.innerHTML=`<div class="beta-user-head"><b>Tester usage this month</b><small>Limits: ${x.limits?.daily_images||0}/day · ${x.limits?.monthly_images||0}/month</small></div><div class="beta-user-list">${(x.users||[]).map(u=>`<div class="beta-user-row"><div><b>${esc(u.display_name||u.email)}</b><small>${u.role==="admin"?"Owner":"Tester"} · ${u.active?"Active":"Disabled"}</small></div><span><b>${u.images_month||0}</b><small>images</small></span><span><b>${u.text_calls_month||0}</b><small>AI calls</small></span><span><b>${betaMoney(u.text_cost_month||0)}</b><small>text est.</small></span><span><b>${readableBytes(u.storage_bytes||0)}</b><small>storage</small></span></div>`).join("")}</div>`;
+  users.innerHTML=`<div class="beta-user-head"><b>Tester usage this month</b><small>Limits: ${x.limits?.daily_images||0}/day · ${x.limits?.monthly_images||0}/month</small></div><div class="beta-user-list">${(x.users||[]).map(u=>`<div class="beta-user-row"><div><b>${esc(u.display_name||u.email)}</b><small>${u.role==="admin"?"Owner":"Tester"} · ${u.active?"Active":"Disabled"}</small></div><span><b>${u.images_today||0}</b><small>images today</small></span><span><b>${u.images_month||0}</b><small>images month</small></span><span><b>${u.text_calls_month||0}</b><small>AI calls</small></span><span><b>${betaMoney(u.text_cost_month||0)}</b><small>text est.</small></span><span><b>${readableBytes(u.storage_bytes||0)}</b><small>storage</small></span></div>`).join("")}</div>`;
   note.textContent=x.pricing_note||"";
  }catch(err){banner.className="beta-readiness-banner not-ready";banner.innerHTML=`<small>${esc(err.message)}</small>`}
 }
@@ -1300,7 +1302,7 @@ const ONBOARDING_STEPS=[
  {
   icon:"◇",eyebrow:"YOU'RE READY",title:"Use the whole wardrobe, not isolated features.",screen:"home",
   body:"Shop only for useful gaps, build packing capsules, save repeatable looks and use Wardrobe Insights to see what your collection is actually doing.",
-  tips:["Saved Looks are available from the bottom bar.","You can restart this walkthrough anytime from My Account."]
+  tips:["Saved Looks are available from the bottom bar.","If anything feels confusing or wrong, send Beta Feedback from My Account.","You can restart this walkthrough anytime from My Account."]
  }
 ];
 
@@ -1680,7 +1682,19 @@ function renderGarments(){
  const list=garments.filter(g=>(!f||g.category===f)&&(!q||JSON.stringify(g).toLowerCase().includes(q)));
 
  if(!list.length){
-  $("garments").innerHTML='<div class="empty">No garments match this view.</div>';
+  if(!garments.length && !q && !f){
+   $("garments").innerHTML=`<div class="empty empty-first-wardrobe">
+    <small class="eyebrow">START YOUR WARDROBE</small>
+    <h4>Add the clothes you actually wear first.</h4>
+    <p>Six useful pieces is enough to start getting personalised outfit suggestions. Add photos individually or describe several items at once.</p>
+    <div>
+     <button class="primary" type="button" data-go="add">Add with photos</button>
+     <button class="ghost" type="button" data-go="quickwardrobe">Quick Add several items</button>
+    </div>
+   </div>`;
+  }else{
+   $("garments").innerHTML='<div class="empty">No garments match this search or category.</div>';
+  }
   return;
  }
 
@@ -3024,7 +3038,11 @@ function renderSavedLooksCollection(){
  const pinned=savedLooksRows.filter(x=>x.is_pinned).length;
  if($("savedLooksSummary"))$("savedLooksSummary").innerHTML=`<span><b>${total}</b> saved</span><span><b>${worn}</b> worn</span><span><b>${pinned}</b> pinned</span>`;
  if(!total){
-  box.innerHTML='<div class="notice">No saved looks yet. Favourite an outfit from Ask My Stylist and it will appear here.</div>';
+  box.innerHTML=`<div class="notice saved-empty-state">
+   <b>Your best outfits can live here.</b>
+   <p>Ask the stylist for a real occasion, then save any look you would genuinely wear. Saved Looks become stronger style-learning evidence over time.</p>
+   <button class="primary" type="button" data-go="stylistv4">Ask My Stylist</button>
+  </div>`;
   return;
  }
  if(!rows.length){
