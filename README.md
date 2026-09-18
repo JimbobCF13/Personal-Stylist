@@ -1872,3 +1872,35 @@ Garment reference prompts now prioritise the actual garment photograph and expli
 
 ### Data safety
 One safe additive profile field only: `home_location`. No wardrobe, media, Saved Looks, trips, tester accounts or usage history are reset.
+
+
+## V7.10.7 — Premium Working States & Image Reliability
+
+### Premium progress messaging
+Long-running operations now rotate concise, stylist-led progress messages rather than displaying one static technical sentence. The sequences cover:
+- Ask My Stylist
+- Help Me Pack
+- Plan My Week
+- Wardrobe Intelligence
+- Fit Intelligence
+- personalised outfit/image creation
+
+Help Me Pack also uses improved inline copy while trip research and capsule building are underway.
+
+### Help Me Pack image fix
+The outfit cards were requesting the full-resolution garment image for every small garment tile. A trip with many looks could therefore trigger dozens of large image responses at once. Pack outfit tiles and the packing list now use the existing cached 420×520 catalogue thumbnails, significantly reducing browser/network/memory pressure.
+
+### App-wide image resilience
+Dynamically inserted images are now watched across the app. For app imagery the client:
+- forces a local repaint after load (important for Safari/composited layers)
+- retries a transient failed request
+- switches between garment thumbnail and validated full-image endpoints if necessary
+- retries generated visuals before giving up
+- shows a visible `Image didn’t load · Tap to retry` control instead of a blank rectangle
+
+The same reliability layer applies to Help Me Pack, Ask My Stylist, Saved Looks, Plan My Week, Build My Own Look, shopping/wardrobe intelligence and other dynamically rendered image areas.
+
+### Server thumbnail fallback
+If a cleaned/catalogue image is missing or cannot be decoded, the thumbnail endpoint now attempts the original saved upload rather than returning broken image bytes.
+
+No database migration and no user data changes.

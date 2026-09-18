@@ -3469,3 +3469,66 @@ input:focus,select:focus,textarea:focus,#search:focus,#filter:focus{
 .stylist-weather-status b,.stylist-weather-status small{display:block}
 .stylist-weather-status b{font-size:9px}
 .stylist-weather-status small{margin-top:3px;font-size:8px;line-height:1.4;color:#70786c}
+
+
+/* =========================================================
+   V7.10.7 — PREMIUM WORKING STATES & IMAGE RELIABILITY
+   ========================================================= */
+.premium-working-copy b{font-family:var(--display-font);font-weight:500;letter-spacing:-.02em}
+.premium-working-copy small{line-height:1.45}
+
+.reliable-image-failed{visibility:hidden!important}
+.reliable-image-fallback{
+ appearance:none;
+ width:100%;
+ min-height:82px;
+ display:grid;
+ place-items:center;
+ align-content:center;
+ gap:2px;
+ border:1px dashed rgba(83,72,63,.18);
+ border-radius:11px;
+ background:linear-gradient(145deg,#f6f3ee,#eeebe6);
+ color:#716860;
+ cursor:pointer;
+ text-align:center;
+ padding:9px;
+}
+.reliable-image-fallback>span{
+ width:25px;height:25px;border-radius:50%;display:grid;place-items:center;
+ background:#fff;color:#60564f;font-size:11px;margin-bottom:2px
+}
+.reliable-image-fallback b{font-size:8px}
+.reliable-image-fallback small{font-size:7px;color:#978d84}
+
+/* Outfit-card fallbacks should occupy the image slot, never leave a blank void. */
+.mini-garment,.outfitPiece,.v4-piece,.saved-piece,.intel-saved-item,.build-selected-strip>div{
+ position:relative;
+}
+.mini-garment>.reliable-image-fallback{
+ min-height:108px;
+}
+.outfitPiece>.reliable-image-fallback,
+.v4-piece>.reliable-image-fallback,
+.saved-piece>.reliable-image-fallback,
+.intel-saved-item>.reliable-image-fallback{
+ min-width:72px;
+ min-height:82px;
+}
+.packing-generated>.reliable-image-fallback,
+.model-visual>.reliable-image-fallback,
+.generated-look>.reliable-image-fallback{
+ min-height:260px;
+}
+
+/* Prevent unloaded images from presenting as large empty white blocks. */
+img[data-reliable-prepared="1"]:not(.image-paint-ready){
+ background:linear-gradient(110deg,#f5f2ee 30%,#fbfaf7 45%,#f5f2ee 60%);
+ background-size:220% 100%;
+ animation:imageReliabilityShimmer 1.4s linear infinite;
+}
+img[data-reliable-prepared="1"].image-paint-ready{animation:none;background:transparent}
+@keyframes imageReliabilityShimmer{to{background-position-x:-220%}}
+@media (prefers-reduced-motion:reduce){
+ img[data-reliable-prepared="1"]:not(.image-paint-ready){animation:none}
+}

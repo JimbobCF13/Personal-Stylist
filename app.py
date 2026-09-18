@@ -1247,7 +1247,7 @@ def account_data_manifest():
     payload={
       "export_format":"get-dressed-portable-backup-v1",
       "exported_at":utc_now().isoformat(),
-      "app_version":"7.10.6",
+      "app_version":"7.10.7",
       "account":{
         "id":u.get("id"),
         "email":u.get("email"),
@@ -1756,10 +1756,19 @@ def garment_thumbnail(gid:int):
         raise HTTPException(404,"Garment not found.")
 
     data=dict(row)
-    rel=data.get("image_path") or data.get("original_image_path") or ""
+    rel=data.get("image_path") or ""
     source=resolve_saved_image_path(rel) if rel else None
+
+    # If the current catalogue/cleaned image disappeared, try the original
+    # upload before giving the browser a broken thumbnail.
     if not source or not source.exists():
-        raise HTTPException(404,"Garment photo unavailable.")
+        original=data.get("original_image_path") or ""
+        original_path=resolve_saved_image_path(original) if original else None
+        if original_path and original_path.exists():
+            rel=original
+            source=original_path
+        else:
+            raise HTTPException(404,"Garment photo unavailable.")
 
     thumbs=active_user_root()/"thumbs"
     thumbs.mkdir(parents=True,exist_ok=True)
@@ -1786,7 +1795,15 @@ def garment_thumbnail(gid:int):
                 canvas.paste(im,(x,y))
                 canvas.save(out,"JPEG",quality=82,optimize=True)
         except Exception:
-            return FileResponse(source,headers={"Cache-Control":"private, max-age=86400"})
+            # A corrupt/partially-written cleaned image can exist on disk yet fail
+            # Pillow decode. Try the validated original rather than returning the
+            # same broken bytes to every outfit card.
+            fallback_rel,fallback_source=best_garment_image(data)
+            if fallback_rel:
+                fallback_path=resolve_saved_image_path(fallback_rel)
+                if fallback_path.exists():
+                    return FileResponse(fallback_path,headers={"Cache-Control":"private, max-age=3600"})
+            raise HTTPException(404,"Garment photo could not be decoded.")
 
     return FileResponse(out,headers={"Cache-Control":"private, max-age=604800, immutable"})
 

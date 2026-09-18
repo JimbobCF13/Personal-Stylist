@@ -66,6 +66,86 @@ let currentSavedTripId=null;
 let currentTripChecklist={};
 let currentTripContext=null;
 const appActivities=new Map();
+const appActivityRotators=new Map();
+
+const PREMIUM_ACTIVITY_SEQUENCES={
+ "stylist-plan":[
+  "Reviewing your wardrobe, fit history and the pieces you actually wear.",
+  "Checking weather, occasion and the right level of dress.",
+  "Your stylist is curating the strongest combinations for you.",
+  "Refining the final options so each look earns its place."
+ ],
+ "packing-plan":[
+  "Checking your destination, weather and itinerary.",
+  "Reviewing your wardrobe against each part of the trip.",
+  "Your stylist is curating the right looks for travel, daytime and evenings.",
+  "Balancing re-wears so the case stays lighter without feeling repetitive.",
+  "Finalising your capsule and outfit lineup."
+ ],
+ "week-plan":[
+  "Reviewing the shape of your week and any dress requirements.",
+  "Checking the weather and practical needs for each day.",
+  "Your stylist is balancing variety with pieces you genuinely wear.",
+  "Finalising a week that feels considered without overthinking it."
+ ],
+ "wardrobe-intel":[
+  "Reading the shape of your wardrobe and the pieces you rely on most.",
+  "Looking for genuine gaps rather than inventing reasons to shop.",
+  "Your stylist is turning your wardrobe into useful patterns."
+ ],
+ "fit-intel":[
+  "Reviewing your fit feedback, sizes and brand history.",
+  "Looking for the cuts and measurements that work most consistently.",
+  "Your stylist is building a clearer picture of what fits you best."
+ ],
+ "built-look-image":[
+  "Dressing the exact pieces you selected.",
+  "Matching colour, texture and garment details to your references.",
+  "Finishing your personalised look."
+ ]
+};
+
+function premiumActivitySequence(key,mode){
+ if(PREMIUM_ACTIVITY_SEQUENCES[key])return PREMIUM_ACTIVITY_SEQUENCES[key];
+ if(String(key).startsWith("packing-image-"))return [
+  "Preparing this trip look on you.",
+  "Matching the saved garments to their reference photos.",
+  "Finishing the outfit while keeping the clothing details intact."
+ ];
+ if(String(key).startsWith("image-"))return [
+  "Preparing the look on you.",
+  "Matching colour, texture and garment details to your references.",
+  "Your stylist is finishing the visual."
+ ];
+ if(mode==="image")return [
+  "Preparing your personalised visual.",
+  "Keeping the garment references as faithful as possible.",
+  "Finishing the look."
+ ];
+ return [];
+}
+
+function stopActivityRotator(key){
+ const timer=appActivityRotators.get(key);
+ if(timer)clearInterval(timer);
+ appActivityRotators.delete(key);
+}
+
+function startActivityRotator(key,mode){
+ stopActivityRotator(key);
+ const sequence=premiumActivitySequence(key,mode);
+ if(sequence.length<2 || !appActivities.has(key))return;
+ let index=0;
+ const timer=setInterval(()=>{
+  if(!appActivities.has(key)){stopActivityRotator(key);return}
+  index=(index+1)%sequence.length;
+  const item=appActivities.get(key);
+  appActivities.set(key,{...item,detail:sequence[index]});
+  renderAppActivity();
+ },3600);
+ appActivityRotators.set(key,timer);
+}
+
 const packingVisualCache=new Map();
 let lastPackingBriefParsed="";
 const backgroundVisualQueue=[];
@@ -109,9 +189,12 @@ function renderAppActivity(){
  }
 }
 function beginAppActivity(key,title,detail="",mode="working"){
+ stopActivityRotator(key);
  appActivities.delete(key);
- appActivities.set(key,{title,detail,mode});
+ const sequence=premiumActivitySequence(key,mode);
+ appActivities.set(key,{title,detail:sequence[0]||detail,mode});
  renderAppActivity();
+ startActivityRotator(key,mode);
 }
 function updateAppActivity(key,title,detail="",mode=null){
  if(!appActivities.has(key))return;
@@ -120,6 +203,7 @@ function updateAppActivity(key,title,detail="",mode=null){
  renderAppActivity();
 }
 function endAppActivity(key){
+ stopActivityRotator(key);
  appActivities.delete(key);
  renderAppActivity();
 }
@@ -1827,7 +1911,8 @@ function stabiliseImagePaint(img){
 
 function stabiliseDynamicImages(root=document){
  const scope=root?.querySelectorAll ? root : document;
- scope.querySelectorAll("img.dynamic-ai-image,img.saved-look-visual,img.saved-piece-image").forEach(stabiliseImagePaint);
+ scope.querySelectorAll("img.dynamic-ai-image,img.saved-look-visual,img.saved-piece-image,img[data-reliable-prepared='1']").forEach(stabiliseImagePaint);
+ prepareReliableImages(root);
 }
 
 function setDynamicImageHtml(container,html){
@@ -1836,15 +1921,145 @@ function setDynamicImageHtml(container,html){
  requestAnimationFrame(()=>stabiliseDynamicImages(container));
 }
 
-window.addEventListener("pageshow",()=>requestAnimationFrame(()=>stabiliseDynamicImages(document)));
+window.addEventListener("pageshow",()=>requestAnimationFrame(()=>{
+ prepareReliableImages(document);
+ stabiliseDynamicImages(document);
+}));
 document.addEventListener("visibilitychange",()=>{
- if(!document.hidden)requestAnimationFrame(()=>stabiliseDynamicImages(document));
+ if(!document.hidden)requestAnimationFrame(()=>{
+  prepareReliableImages(document);
+  stabiliseDynamicImages(document);
+ });
 });
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",startImageReliabilityObserver,{once:true});
+else startImageReliabilityObserver();
 
 function retryableImageSrc(src){
  if(!src)return "";
  const joiner=src.includes("?")?"&":"?";
  return `${src}${joiner}img_retry=${Date.now()}`;
+}
+
+function cleanRetryParam(src){
+ try{
+  const u=new URL(src,window.location.href);
+  u.searchParams.delete("img_retry");
+  return u.pathname+u.search;
+ }catch{
+  return String(src||"").replace(/([?&])img_retry=\d+/g,"$1").replace(/[?&]$/,"");
+ }
+}
+
+function reliableImageFallback(img){
+ if(!img || !img.parentElement)return;
+ img.classList.add("reliable-image-failed");
+ const wrap=img.parentElement;
+ if(wrap.querySelector(":scope > .reliable-image-fallback"))return;
+
+ const fallback=document.createElement("button");
+ fallback.type="button";
+ fallback.className="reliable-image-fallback";
+ fallback.innerHTML='<span>↻</span><b>Image didn’t load</b><small>Tap to retry</small>';
+ fallback.addEventListener("click",()=>{
+  fallback.remove();
+  img.classList.remove("reliable-image-failed");
+  img.dataset.reliableAttempt="0";
+  img.dataset.reliableFallbackUsed="";
+  const primary=img.dataset.reliablePrimary||cleanRetryParam(img.getAttribute("src")||"");
+  if(primary)img.src=retryableImageSrc(primary);
+ });
+ wrap.appendChild(fallback);
+}
+
+function handleReliableImageError(img){
+ if(!img || img.dataset.reliableHandling==="1")return;
+ img.dataset.reliableHandling="1";
+
+ const current=cleanRetryParam(img.getAttribute("src")||"");
+ if(!img.dataset.reliablePrimary)img.dataset.reliablePrimary=current;
+ const attempt=Number(img.dataset.reliableAttempt||0);
+ const garment=current.match(/\/api\/garments\/(\d+)\/(thumbnail|image)/);
+
+ const release=()=>{setTimeout(()=>{img.dataset.reliableHandling=""},60)};
+
+ // First response may simply have raced a newly-written file or Safari decode.
+ if(attempt===0 && current){
+  img.dataset.reliableAttempt="1";
+  setTimeout(()=>{
+   img.src=retryableImageSrc(current);
+   release();
+  },280);
+  return;
+ }
+
+ // For garment imagery, switch endpoint once. Thumbnail generation and the
+ // validated full-image endpoint have independent fallback paths.
+ if(garment && !img.dataset.reliableFallbackUsed){
+  img.dataset.reliableFallbackUsed="1";
+  img.dataset.reliableAttempt="2";
+  const gid=garment[1];
+  const alternate=garment[2]==="thumbnail"
+    ? `/api/garments/${gid}/image`
+    : `/api/garments/${gid}/thumbnail`;
+  setTimeout(()=>{
+   img.src=retryableImageSrc(alternate);
+   release();
+  },180);
+  return;
+ }
+
+ // Generated visuals are written before their URL is returned, but a browser
+ // can still hit a transient decode/network failure. Give them one extra try.
+ if((current.includes("/generated/") || img.classList.contains("dynamic-ai-image")) && attempt<2){
+  img.dataset.reliableAttempt=String(attempt+1);
+  setTimeout(()=>{
+   img.src=retryableImageSrc(img.dataset.reliablePrimary||current);
+   release();
+  },450);
+  return;
+ }
+
+ release();
+ reliableImageFallback(img);
+}
+
+function prepareReliableImages(root=document){
+ const imgs=[];
+ if(root?.tagName==="IMG")imgs.push(root);
+ else if(root?.querySelectorAll)imgs.push(...root.querySelectorAll("img"));
+
+ imgs.forEach(img=>{
+  if(img.dataset.reliablePrepared==="1")return;
+  const src=img.getAttribute("src")||"";
+  if(!src || src.startsWith("data:") || src.startsWith("blob:"))return;
+  img.dataset.reliablePrepared="1";
+  img.dataset.reliablePrimary=cleanRetryParam(src);
+  img.dataset.reliableAttempt="0";
+
+  // Wardrobe/detail images already have a specialised inline fallback handler.
+  if(!img.hasAttribute("onerror")){
+   img.addEventListener("error",()=>handleReliableImageError(img));
+  }
+  img.addEventListener("load",()=>{
+   img.dataset.reliableHandling="";
+   img.classList.remove("reliable-image-failed");
+   const fallback=img.parentElement?.querySelector(":scope > .reliable-image-fallback");
+   if(fallback)fallback.remove();
+   stabiliseImagePaint(img);
+  });
+  stabiliseImagePaint(img);
+ });
+}
+
+function startImageReliabilityObserver(){
+ prepareReliableImages(document);
+ if(!document.body || typeof MutationObserver==="undefined")return;
+ const observer=new MutationObserver(records=>{
+  records.forEach(record=>record.addedNodes.forEach(node=>{
+   if(node.nodeType===1)prepareReliableImages(node);
+  }));
+ });
+ observer.observe(document.body,{childList:true,subtree:true});
 }
 
 function handleWardrobeImageError(img){
@@ -2805,7 +3020,7 @@ function renderWardrobeIntelligence(x){
  const colourChips=colours.map(c=>`<span class="intel-chip">${esc(c.name)} <b>${c.count}</b></span>`).join("");
 
  const savedItems=saved.length?saved.map(item=>`<div class="intel-saved-item">
-  <img src="/api/garments/${item.id}/image" loading="eager" decoding="async" onload="stabiliseImagePaint(this)" alt="">
+  <img src="${garmentThumbUrl(item)}" loading="lazy" decoding="async" alt="">
   <div><b>${esc(item.label||"Garment")}</b><small>${esc([item.colour,item.category].filter(Boolean).join(" · "))}</small></div>
   <span>${item.count}× saved</span>
  </div>`).join(""):`<p class="muted-copy">Save a few outfits and this will start showing which pieces recur in looks you deliberately keep.</p>`;
@@ -4401,7 +4616,7 @@ function renderPackingLook(d,index){
  const pieces=(d.garment_ids||[]).map(id=>{
   const g=garments.find(z=>z.id===id);
   return g?`<div class="mini-garment">
-   <img src="/api/garments/${g.id}/image" alt="">
+   <img src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" alt="${esc(g.garment_type||g.category||"Garment")}">
    <span>${esc(g.garment_type||g.category)}</span>
   </div>`:"";
  }).join("");
@@ -4616,7 +4831,7 @@ function renderPackingPlan(x){
  const packed=(x.packing_list||[]).map(p=>{
   const g=garments.find(z=>z.id===p.garment_id);
   return g?`<div class="outfitPiece">
-   <img src="/api/garments/${g.id}/image" alt="">
+   <img src="${garmentThumbUrl(g)}" loading="lazy" decoding="async" alt="${esc(g.garment_type||g.category||"Garment")}">
    <div><b>${esc((g.brand?g.brand+" ":"")+(g.garment_type||g.category))}</b><small>${esc(p.why_pack)} · wear ~${p.wear_count}×</small></div>
   </div>`:"";
  }).join("");
@@ -4659,6 +4874,7 @@ function renderPackingPlan(x){
    </div>
    ${missing}
    <div class="card"><b>Packing tip</b><p>${esc(x.packing_tip||"")}</p></div>`;
+ requestAnimationFrame(()=>prepareReliableImages(box));
  setTimeout(preGeneratePackingVisuals,120);
 }
 
@@ -4950,7 +5166,7 @@ $("makePackingPlan")?.addEventListener("click",async()=>{
  currentPackingRequest=payload;
 
  beginAppActivity("packing-plan","Researching your trip…","Checking weather, destination and any named hotels, restaurants or venues.","research");
- box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Researching the trip…</b><small>I’ll use a real forecast when the dates are close enough; otherwise I’ll use seasonal conditions.</small></div></div>';
+ box.innerHTML='<div class="card v4-thinking premium-working-copy"><span class="spinner"></span><div><b>Getting to know your trip…</b><small>Checking destination, weather and itinerary before your stylist starts building the wardrobe plan.</small></div></div>';
 
  try{
   currentTripContext=await api("/api/trip-context",{
@@ -4958,8 +5174,8 @@ $("makePackingPlan")?.addEventListener("click",async()=>{
   });
 
   box.innerHTML=renderTripContext(currentTripContext)+
-   '<div class="card v4-thinking"><span class="spinner"></span><div><b>Building your capsule…</b><small>Now matching the trip context to your actual wardrobe.</small></div></div>';
-  updateAppActivity("packing-plan","Building your capsule…","Choosing versatile pieces and planning intentional re-wears.","working");
+   '<div class="card v4-thinking premium-working-copy"><span class="spinner"></span><div><b>Your stylist is building the capsule…</b><small>Matching the trip to your actual wardrobe and choosing pieces that work hard across the itinerary.</small></div></div>';
+  updateAppActivity("packing-plan","Your stylist is building the capsule…","Reviewing your wardrobe against each part of the trip.","working");
 
   const x=await api("/api/help-me-pack",{
    method:"POST",headers:{"Content-Type":"application/json"},
