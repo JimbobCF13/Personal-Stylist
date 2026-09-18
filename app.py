@@ -1246,7 +1246,7 @@ def account_data_manifest():
     payload={
       "export_format":"get-dressed-portable-backup-v1",
       "exported_at":utc_now().isoformat(),
-      "app_version":"7.10.4",
+      "app_version":"7.10.5",
       "account":{
         "id":u.get("id"),
         "email":u.get("email"),

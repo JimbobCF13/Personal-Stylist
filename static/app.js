@@ -765,17 +765,23 @@ let adminUserRows=[];
 let adminBetaSnapshot=null;
 
 function selectAdminTab(tab){
- const allowed=["overview","invites","testers","usage","feedback","system"];
+ const allowed=["overview","invites","testers","usage","feedback","system","tester-detail"];
  currentAdminTab=allowed.includes(tab)?tab:"overview";
  document.querySelectorAll("[data-admin-tab]").forEach(b=>b.classList.toggle("active",b.dataset.adminTab===currentAdminTab));
  document.querySelectorAll("[data-admin-panel]").forEach(p=>p.classList.toggle("active",p.dataset.adminPanel===currentAdminTab));
 }
 document.querySelector(".admin-tabs")?.addEventListener("click",e=>{
- const b=e.target.closest("[data-admin-tab]");if(b)selectAdminTab(b.dataset.adminTab);
+ const b=e.target.closest("[data-admin-tab]");
+ if(!b)return;
+ adminTesterReturnTab=b.dataset.adminTab;
+ selectAdminTab(b.dataset.adminTab);
+ $("adminHub")?.scrollIntoView({behavior:"smooth",block:"start"});
 });
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-open-admin-tab]");if(!b)return;
- selectAdminTab(b.dataset.openAdminTab);
+ const target=b.dataset.openAdminTab;
+ if(target!=="tester-detail")adminTesterReturnTab=target;
+ selectAdminTab(target);
  $("adminHub")?.scrollIntoView({behavior:"smooth",block:"start"});
 });
 
@@ -786,16 +792,80 @@ function renderAdminOverview(){
   const unused=adminInviteRows.filter(r=>Number(r.uses||0)<Number(r.max_uses||1) && (!r.expires_at || new Date(r.expires_at)>new Date()));
   const usage=adminBetaSnapshot?.totals||{};
   metrics.innerHTML=`
-   <div><strong>${testers.length}</strong><span>Active testers</span></div>
-   <div><strong>${unused.length}</strong><span>Unused invites</span></div>
-   <div><strong>${Number(usage.images_month||0)}</strong><span>Images this month</span></div>
-   <div><strong>${betaMoney(usage.estimated_text_cost_month||0)}</strong><span>Text AI estimate</span></div>`;
+   <button type="button" data-open-admin-tab="testers"><strong>${testers.length}</strong><span>Active testers</span><em>Manage people →</em></button>
+   <button type="button" data-open-admin-tab="invites"><strong>${unused.length}</strong><span>Unused invites</span><em>Manage invitations →</em></button>
+   <button type="button" data-open-admin-tab="usage"><strong>${Number(usage.images_month||0)}</strong><span>Images this month</span><em>View usage →</em></button>
+   <button type="button" data-open-admin-tab="usage"><strong>${betaMoney(usage.estimated_text_cost_month||0)}</strong><span>Text AI estimate</span><em>View costs →</em></button>`;
  }
  if(ready && adminBetaSnapshot){
   const ok=Boolean(adminBetaSnapshot.ready_for_small_beta);
   ready.className=`admin-overview-readiness ${ok?"ready":"warn"}`;
-  ready.innerHTML=`<span>${ok?"✓":"!"}</span><div><b>${ok?"Ready for a small beta":"Check before inviting"}</b><small>${ok?"Start with 5–8 testers":"Open Usage & costs for details"}</small></div>`;
+  ready.setAttribute("role","button");
+  ready.setAttribute("tabindex","0");
+  ready.dataset.openAdminTab="usage";
+  ready.innerHTML=`<span>${ok?"✓":"!"}</span><div><b>${ok?"Ready for a small beta":"Check before inviting"}</b><small>${ok?"Start with 5–8 testers · view checks →":"Open Usage & costs for details →"}</small></div>`;
  }
+}
+
+let adminTesterReturnTab="testers";
+let adminSelectedUserId=null;
+
+function adminUserUsage(uid){
+ return (adminBetaSnapshot?.users||[]).find(u=>Number(u.id)===Number(uid))||{};
+}
+function adminUserRecord(uid){
+ return adminUserRows.find(u=>Number(u.id)===Number(uid))||adminUserUsage(uid)||null;
+}
+function openAdminUserDetail(uid,fromTab="testers"){
+ const user=adminUserRecord(uid);
+ if(!user)return;
+ adminTesterReturnTab=fromTab==="usage"?"usage":"testers";
+ adminSelectedUserId=Number(uid);
+ const usage=adminUserUsage(uid);
+ const box=$("adminTesterDetailContent");if(!box)return;
+ const isOwner=user.role==="admin";
+ const active=Number(user.active)!==0;
+ box.innerHTML=`
+  <div class="admin-detail-identity">
+   <div class="admin-user-avatar">${esc((user.display_name||user.email||"U").charAt(0).toUpperCase())}</div>
+   <div><small class="eyebrow">${isOwner?"OWNER ACCOUNT":"BETA TESTER"}</small><h4>${esc(user.display_name||"User")}</h4><p>${esc(user.email||"")}</p>
+    <span class="admin-detail-status ${active?"active":"disabled"}">${active?"Active":"Disabled"}</span></div>
+  </div>
+  <div class="admin-detail-grid">
+   <section><small>ACCOUNT</small><div><b>${esc(user.styling_profile==="womenswear"?"Get Her Dressed":"Get Him Dressed")}</b><span>Styling profile</span></div><div><b>${esc(formatLastActive(user.created_at))}</b><span>Joined</span></div><div><b>${esc(formatLastActive(user.last_session_at))}</b><span>Last session</span></div></section>
+   <section><small>WARDROBE ACTIVITY</small><div><b>${Number(user.wardrobe_items||0)}</b><span>Wardrobe items</span></div><div><b>${Number(user.saved_looks||0)}</b><span>Saved Looks</span></div><div><b>${Number(user.fit_reviews||0)}</b><span>Fit reviews</span></div><div><b>${Number(user.feedback_count||0)}</b><span>Feedback notes</span></div></section>
+  </div>
+  <div class="admin-detail-usage">
+   <small class="eyebrow">USAGE THIS MONTH</small>
+   <div>
+    <span><b>${Number(usage.images_today||0)}</b><small>Images today</small></span>
+    <span><b>${Number(usage.images_month||0)}</b><small>Images this month</small></span>
+    <span><b>${Number(usage.text_calls_month||0)}</b><small>AI text calls</small></span>
+    <span><b>${betaMoney(usage.text_cost_month||0)}</b><small>Text AI estimate</small></span>
+    <span><b>${readableBytes(usage.storage_bytes||0)}</b><small>Storage</small></span>
+   </div>
+  </div>
+  <div class="admin-detail-actions">
+   <button class="ghost" type="button" data-open-admin-tab="usage">View all usage & costs</button>
+   ${!isOwner?`<button class="${active?"danger-soft":"primary"}" type="button" onclick="toggleTesterAccessFromDetail(${Number(user.id)},${active?"false":"true"},this)">${active?"Disable tester access":"Re-enable tester"}</button>`:""}
+  </div>`;
+ selectAdminTab("tester-detail");
+ $("adminHub")?.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+$("adminTesterBack")?.addEventListener("click",()=>{
+ selectAdminTab(adminTesterReturnTab||"testers");
+ $("adminHub")?.scrollIntoView({behavior:"smooth",block:"start"});
+});
+
+async function toggleTesterAccessFromDetail(id,enable,button){
+ if(!enable && !confirm("Disable this tester's access? Their wardrobe and data will be kept."))return;
+ button.disabled=true;
+ try{
+  await api(`/api/admin/users/${id}/${enable?"enable":"disable"}`,{method:"POST"});
+  await Promise.all([loadAdminUsers(),loadBetaUsage()]);
+  openAdminUserDetail(id,adminTesterReturnTab);
+ }catch(err){alert(err.message);button.disabled=false}
 }
 
 function betaMoney(value){const n=Number(value||0);return n<0.01?`$${n.toFixed(4)}`:`$${n.toFixed(2)}`}
@@ -810,7 +880,7 @@ async function loadBetaUsage(){
   banner.innerHTML=`<div><span>${x.ready_for_small_beta?"✓":"!"}</span><div><b>${x.ready_for_small_beta?"Ready for a small private beta":"Not quite ready for testers"}</b><small>${x.ready_for_small_beta?`Start with ${esc(x.recommended_first_wave)}.`:"Resolve the checks below first."}</small></div></div><div class="beta-checks">${(x.checks||[]).map(c=>`<span class="${c.ok?"ok":"warn"}">${c.ok?"✓":"!"} ${esc(c.label)}<small>${esc(c.detail||"")}</small></span>`).join("")}</div>`;
   const t=x.totals||{};
   metrics.innerHTML=`<div><strong>${t.images_today||0}</strong><span>Images today</span></div><div><strong>${t.images_month||0}</strong><span>Images this month</span></div><div><strong>${t.text_calls_month||0}</strong><span>AI text calls this month</span></div><div><strong>${betaMoney(t.estimated_text_cost_month||0)}</strong><span>Measured text estimate</span></div><div><strong>${readableBytes(t.storage_bytes||0)}</strong><span>Stored data/media</span></div>`;
-  users.innerHTML=`<div class="beta-user-head"><b>Tester usage this month</b><small>Limits: ${x.limits?.daily_images||0}/day · ${x.limits?.monthly_images||0}/month</small></div><div class="beta-user-list">${(x.users||[]).map(u=>`<div class="beta-user-row"><div><b>${esc(u.display_name||u.email)}</b><small>${u.role==="admin"?"Owner":"Tester"} · ${u.active?"Active":"Disabled"}</small></div><span><b>${u.images_today||0}</b><small>images today</small></span><span><b>${u.images_month||0}</b><small>images month</small></span><span><b>${u.text_calls_month||0}</b><small>AI calls</small></span><span><b>${betaMoney(u.text_cost_month||0)}</b><small>text est.</small></span><span><b>${readableBytes(u.storage_bytes||0)}</b><small>storage</small></span></div>`).join("")}</div>`;
+  users.innerHTML=`<div class="beta-user-head"><b>Tester usage this month</b><small>Limits: ${x.limits?.daily_images||0}/day · ${x.limits?.monthly_images||0}/month</small></div><div class="beta-user-list">${(x.users||[]).map(u=>`<button class="beta-user-row admin-user-drill" type="button" onclick="openAdminUserDetail(${Number(u.id)},'usage')"><div><b>${esc(u.display_name||u.email)}</b><small>${u.role==="admin"?"Owner":"Tester"} · ${u.active?"Active":"Disabled"}</small></div><span><b>${u.images_today||0}</b><small>images today</small></span><span><b>${u.images_month||0}</b><small>images month</small></span><span><b>${u.text_calls_month||0}</b><small>AI calls</small></span><span><b>${betaMoney(u.text_cost_month||0)}</b><small>text est.</small></span><span><b>${readableBytes(u.storage_bytes||0)}</b><small>storage</small></span><i aria-hidden="true">›</i></button>`).join("")}</div>`;
   note.textContent=x.pricing_note||"";
  }catch(err){banner.className="beta-readiness-banner not-ready";banner.innerHTML=`<small>${esc(err.message)}</small>`}
 }
@@ -828,19 +898,21 @@ async function loadAdminUsers(){
   adminUserRows=rows;
   renderAdminOverview();
   const testerRows=rows.filter(u=>u.role!=="admin");
-  box.innerHTML=testerRows.length?testerRows.map(u=>`<div class="admin-user-row ${u.active===0?"disabled-user":""}">
-   <div class="admin-user-main"><div class="admin-user-avatar">${esc((u.display_name||"U").charAt(0).toUpperCase())}</div><div><b>${esc(u.display_name||"User")}</b><small>${esc(u.email||"")}</small><span>${u.role==="admin"?"Owner / Admin":"Tester"} · ${u.active===0?"Disabled":"Active"}</span></div></div>
+  box.innerHTML=testerRows.length?testerRows.map(u=>`<div class="admin-user-row admin-user-drill ${u.active===0?"disabled-user":""}" role="button" tabindex="0" onclick="openAdminUserDetail(${u.id},'testers')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAdminUserDetail(${u.id},'testers')}">
+   <div class="admin-user-main"><div class="admin-user-avatar">${esc((u.display_name||"U").charAt(0).toUpperCase())}</div><div><b>${esc(u.display_name||"User")}</b><small>${esc(u.email||"")}</small><span>${u.role==="admin"?"Owner / Admin":"Tester"} · ${u.active===0?"Disabled":"Active"} · Open details →</span></div></div>
    <div class="admin-user-stats"><span><b>${u.wardrobe_items||0}</b> wardrobe</span><span><b>${u.saved_looks||0}</b> saved looks</span><span><b>${u.fit_reviews||0}</b> fit reviews</span><span><b>${u.feedback_count||0}</b> feedback</span></div>
    <div class="admin-user-meta"><small>Joined ${formatLastActive(u.created_at)}</small><small>Last session ${formatLastActive(u.last_session_at)}</small></div>
-   ${u.role!=="admin"?`<button class="${u.active===0?"primary":"ghost"} admin-user-toggle" type="button" onclick="toggleTesterAccess(${u.id},${u.active===0?"true":"false"},this)">${u.active===0?"Re-enable tester":"Disable access"}</button>`:""}
+   ${u.role!=="admin"?`<button class="${u.active===0?"primary":"ghost"} admin-user-toggle" type="button" onclick="event.stopPropagation();toggleTesterAccess(${u.id},${u.active===0?"true":"false"},this)">${u.active===0?"Re-enable tester":"Disable access"}</button>`:""}
   </div>`).join(""):`<div class="admin-empty-state"><b>No testers yet</b><p>Create an invitation and send it to your first tester. Their account will appear here after they register.</p><button class="primary" type="button" data-open-admin-tab="invites">Create an invitation</button></div>`;
  }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
 }
 async function toggleTesterAccess(id,enable,button){
  if(!enable && !confirm("Disable this tester's access? Their wardrobe and data will be kept."))return;
  button.disabled=true;
- try{await api(`/api/admin/users/${id}/${enable?"enable":"disable"}`,{method:"POST"});await loadAdminUsers()}
- catch(err){alert(err.message);button.disabled=false}
+ try{
+  await api(`/api/admin/users/${id}/${enable?"enable":"disable"}`,{method:"POST"});
+  await Promise.all([loadAdminUsers(),loadBetaUsage()]);
+ }catch(err){alert(err.message);button.disabled=false}
 }
 $("refreshAdminUsers")?.addEventListener("click",loadAdminUsers);
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.10.4">
+<link rel="stylesheet" href="/static/style.css?v=7.10.5">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.10.4</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.10.5</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -565,6 +565,7 @@
    </div>
 
    <div id="adminInviteCard" class="admin-panel" data-admin-panel="invites">
+    <button class="admin-back-button" type="button" data-open-admin-tab="overview">← Back to overview</button>
     <div class="admin-panel-head">
      <div><small class="eyebrow">INVITATIONS</small><h4>Invite a tester</h4><p>Create one code per person, then copy the ready-to-send invitation.</p></div>
      <button id="createInviteBtn" class="primary" type="button">＋ Create invitation</button>
@@ -574,6 +575,7 @@
    </div>
 
    <div id="adminUsersCard" class="admin-panel" data-admin-panel="testers">
+    <button class="admin-back-button" type="button" data-open-admin-tab="overview">← Back to overview</button>
     <div class="admin-panel-head">
      <div><small class="eyebrow">TESTERS</small><h4>People in the beta</h4><p>See setup activity and temporarily disable access without deleting anyone's data.</p></div>
      <button id="refreshAdminUsers" class="ghost" type="button">Refresh</button>
@@ -582,6 +584,7 @@
    </div>
 
    <div id="adminBetaUsageCard" class="admin-panel beta-usage-card" data-admin-panel="usage">
+    <button class="admin-back-button" type="button" data-open-admin-tab="overview">← Back to overview</button>
     <div class="admin-panel-head">
      <div><small class="eyebrow">USAGE & COSTS</small><h4>Keep spend under control</h4><p>Monitor image generation, AI text usage and storage by tester.</p></div>
      <button id="refreshBetaUsage" class="ghost" type="button">Refresh</button>
@@ -592,7 +595,13 @@
     <small id="betaUsageNote" class="beta-usage-note"></small>
    </div>
 
+   <div id="adminTesterDetail" class="admin-panel admin-tester-detail" data-admin-panel="tester-detail">
+    <button id="adminTesterBack" class="admin-back-button" type="button">← Back</button>
+    <div id="adminTesterDetailContent"></div>
+   </div>
+
    <div id="adminFeedbackCard" class="admin-panel" data-admin-panel="feedback">
+    <button class="admin-back-button" type="button" data-open-admin-tab="overview">← Back to overview</button>
     <div class="admin-panel-head">
      <div><small class="eyebrow">FEEDBACK</small><h4>What testers are telling you</h4><p>Comments arrive here from each tester's My Account page.</p></div>
      <button id="refreshAdminFeedback" class="ghost" type="button">Refresh</button>
@@ -601,6 +610,7 @@
    </div>
 
    <div id="adminSystemCard" class="admin-panel" data-admin-panel="system">
+    <button class="admin-back-button" type="button" data-open-admin-tab="overview">← Back to overview</button>
     <div class="admin-panel-head">
      <div><small class="eyebrow">SYSTEM</small><h4>Reliability check</h4><p>Check storage, wardrobe images and connected AI services.</p></div>
      <button id="refreshSystemStatus" class="ghost" type="button">Check now</button>
@@ -751,5 +761,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.10.4"></script>
+<script src="/static/app.js?v=7.10.5"></script>
 </body></html>

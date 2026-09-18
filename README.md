@@ -1809,3 +1809,39 @@ Creating an invitation no longer opens a raw browser alert. The new invitation i
 The Beta Feedback submission form is shown to testers, not the owner. Owner feedback review lives inside Beta Admin.
 
 No destructive migration and no changes to wardrobe/profile/media data.
+
+
+## V7.10.5 — Admin Navigation & Drill-down
+
+Fixes the navigation dead-end in Beta Admin and makes the dashboard metrics actionable.
+
+### Navigation
+Every admin sub-section now has a clear `← Back to overview` action. Tester detail pages have a contextual Back button that returns to Testers or Usage & costs depending on where the owner came from.
+
+### Clickable overview
+The four overview metrics now act as shortcuts:
+- Active testers → Testers
+- Unused invites → Invitations
+- Images this month → Usage & costs
+- Text AI estimate → Usage & costs
+
+The readiness status also opens the detailed usage/readiness checks.
+
+### Tester drill-down
+Tester cards and per-user Usage rows are clickable. The owner can open a person and see:
+- email and account status
+- Get Him / Get Her styling profile
+- joined date and last session
+- wardrobe-item count
+- Saved Looks
+- fit reviews
+- feedback count
+- images today
+- images this month
+- AI text calls this month
+- estimated text-AI cost
+- storage footprint
+
+A tester can be disabled or re-enabled directly from the detail view without deleting their wardrobe or data.
+
+No destructive migration.
