@@ -1775,3 +1775,37 @@ Final private-beta onboarding/readiness cleanup.
 - Admin Usage & Capacity now shows each tester's image generations today as well as the monthly count.
 
 No destructive migration.
+
+
+## V7.10.4 — Beta Admin Experience
+
+The owner/admin experience has been redesigned around the actual beta workflow rather than stacking unrelated cards.
+
+### Beta Admin hub
+Owner-only tabs:
+- Overview
+- Invitations
+- Testers
+- Usage & costs
+- Feedback
+- System
+
+The Overview explains the three-step beta workflow and surfaces active testers, unused invitations, monthly image generation and estimated text-AI spend.
+
+### Invitations
+Each invitation now clearly shows:
+- invite code
+- Ready to send / Used / Expired state
+- unambiguous UK-style expiry date such as `2 October 2026`
+- Copy invitation
+- Copy code
+- Revoke / remove expired invitation where appropriate
+
+`Copy invitation` puts a complete ready-to-send message on the clipboard containing the live app address, invite code, account-creation instructions, Get Him/Get Her Dressed choice, expiry and where to leave feedback.
+
+Creating an invitation no longer opens a raw browser alert. The new invitation is highlighted and the UI tells the owner exactly what to do next.
+
+### Cleaner roles
+The Beta Feedback submission form is shown to testers, not the owner. Owner feedback review lives inside Beta Admin.
+
+No destructive migration and no changes to wardrobe/profile/media data.

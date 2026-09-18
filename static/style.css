@@ -3188,3 +3188,161 @@ input:focus,select:focus,textarea:focus,#search:focus,#filter:focus{
  .beta-user-row{grid-template-columns:1fr 1fr 1fr!important}
  .beta-user-row>div{grid-column:1/-1!important}
 }
+
+
+/* =========================================================
+   V7.10.4 — BETA ADMIN EXPERIENCE
+   ========================================================= */
+.admin-hub{
+ margin:20px 0;
+ border:1px solid rgba(69,58,49,.12);
+ border-radius:24px;
+ background:rgba(255,253,249,.78);
+ box-shadow:0 15px 45px rgba(44,35,29,.055);
+ overflow:hidden;
+}
+.admin-hub.hidden{display:none!important}
+.admin-hub-heading{
+ display:flex;justify-content:space-between;align-items:flex-start;gap:20px;
+ padding:24px 25px 18px;
+ background:linear-gradient(135deg,#f1ebe4 0%,#faf7f2 65%,#f4efe9 100%);
+}
+.admin-hub-heading h3{
+ margin:4px 0 4px;font-family:var(--display-font);font-size:30px;font-weight:500;letter-spacing:-.045em;
+}
+.admin-hub-heading p{margin:0;max-width:610px;font-size:10px;line-height:1.5;color:#766d65}
+.admin-private-pill{
+ flex:0 0 auto;padding:7px 11px;border-radius:999px;background:#221f1c;color:#fff;
+ font-size:7px;font-weight:750;letter-spacing:.08em;text-transform:uppercase
+}
+.admin-tabs{
+ display:flex;gap:3px;padding:8px 10px;border-top:1px solid rgba(70,59,50,.07);
+ border-bottom:1px solid rgba(70,59,50,.09);overflow-x:auto;background:rgba(251,249,245,.92);
+ scrollbar-width:none;
+}
+.admin-tabs::-webkit-scrollbar{display:none}
+.admin-tabs button{
+ flex:0 0 auto;min-height:34px;padding:7px 12px;border:0;border-radius:999px;background:transparent;
+ color:#786f67;font-size:8px;font-weight:700;white-space:nowrap;
+}
+.admin-tabs button.active{background:#211e1b;color:#fff}
+
+.admin-panel{display:none;padding:23px 25px 25px}
+.admin-panel.active{display:block}
+.admin-panel.card{margin:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.admin-panel-head{
+ display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:16px
+}
+.admin-panel-head h4{
+ margin:3px 0 3px;font-family:var(--display-font);font-size:23px;font-weight:500;letter-spacing:-.035em
+}
+.admin-panel-head p{margin:0;max-width:570px;color:#7c736b;font-size:9px;line-height:1.45}
+.admin-panel-head>button{flex:0 0 auto}
+
+.admin-overview-hero{
+ display:grid;grid-template-columns:1.5fr .85fr;gap:14px;align-items:stretch
+}
+.admin-overview-hero>div:first-child{
+ padding:17px 18px;border-radius:16px;background:#f4efe9;border:1px solid rgba(70,59,50,.08)
+}
+.admin-overview-hero h4{
+ margin:4px 0 5px;font-family:var(--display-font);font-size:23px;font-weight:500;letter-spacing:-.035em
+}
+.admin-overview-hero p{margin:0;color:#766d65;font-size:9px;line-height:1.5}
+.admin-overview-readiness{
+ display:flex;gap:10px;align-items:center;padding:15px;border-radius:16px;
+ background:#f4f1ed;border:1px solid rgba(70,59,50,.09)
+}
+.admin-overview-readiness>span{
+ width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#fff;font-weight:850
+}
+.admin-overview-readiness b,.admin-overview-readiness small{display:block}
+.admin-overview-readiness b{font-size:10px}.admin-overview-readiness small{margin-top:2px;color:#81776f;font-size:8px}
+.admin-overview-readiness.ready{background:#edf2e9;border-color:#d4decf}
+.admin-overview-readiness.warn{background:#f7efea;border-color:#e3d3c9}
+
+.admin-overview-metrics{
+ display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0 18px
+}
+.admin-overview-metrics>div{
+ padding:12px;border:1px solid rgba(70,59,50,.09);border-radius:13px;background:#fffdf9;
+ display:grid;gap:3px
+}
+.admin-overview-metrics strong{font-family:var(--display-font);font-size:22px;font-weight:500}
+.admin-overview-metrics span{font-size:7px;color:#857b73}
+
+.admin-howto{
+ padding:16px;border-radius:16px;border:1px solid rgba(70,59,50,.09);background:#fbf9f5
+}
+.admin-howto-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:11px}
+.admin-howto-steps>div{display:flex;gap:9px;align-items:flex-start}
+.admin-howto-steps>div>span{
+ width:25px;height:25px;flex:0 0 25px;border-radius:50%;display:grid;place-items:center;
+ background:#211e1b;color:#fff;font-size:8px;font-weight:800
+}
+.admin-howto-steps p{margin:0}.admin-howto-steps b,.admin-howto-steps small{display:block}
+.admin-howto-steps b{font-size:9px}.admin-howto-steps small{margin-top:2px;color:#82786f;font-size:8px;line-height:1.35}
+.admin-overview-actions{display:flex;gap:7px;margin-top:14px}
+.admin-overview-actions button{min-height:39px}
+
+.admin-action-status{
+ margin:0 0 12px;padding:11px 13px;border-radius:12px;background:#edf2e9;border:1px solid #d4decf;
+ font-size:9px;color:#555f50
+}
+.admin-action-status.hidden{display:none!important}
+.admin-invite-list{display:grid;gap:9px}
+.admin-invite{
+ border:1px solid rgba(70,59,50,.10);border-radius:16px;padding:14px;background:#fffdf9;
+ transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease
+}
+.admin-invite.just-created{border-color:#917967;box-shadow:0 0 0 4px rgba(145,121,103,.08)}
+.admin-invite.used{background:#f6f4f0}.admin-invite.expired{opacity:.72}
+.admin-invite-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.admin-invite-top>div{display:grid;gap:3px}
+.admin-invite-top small{font-size:7px;color:#9a8f86;letter-spacing:.12em}
+.admin-invite code{
+ font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;font-weight:800;
+ letter-spacing:.09em;color:#211e1b;background:transparent;padding:0
+}
+.invite-status{padding:6px 9px;border-radius:999px;font-size:7px;font-weight:800}
+.invite-status.ready{background:#eaf1e5;color:#52604d}
+.invite-status.used{background:#ebe9e5;color:#6f6963}
+.invite-status.expired{background:#f3e9e4;color:#875f54}
+.admin-invite-meta{margin-top:10px;padding-top:10px;border-top:1px solid rgba(70,59,50,.07)}
+.admin-invite-meta b,.admin-invite-meta small{display:block}
+.admin-invite-meta b{font-size:9px}.admin-invite-meta small{margin-top:2px;font-size:8px;color:#867d75}
+.admin-invite-actions{display:flex;align-items:center;gap:6px;margin-top:12px;flex-wrap:wrap}
+.admin-invite-actions button{min-height:34px;font-size:8px}
+.admin-invite-actions .copied{background:#465241!important;color:#fff!important}
+.admin-invite-used-note{margin-top:10px;font-size:8px;color:#847b73}
+.admin-empty-state{
+ padding:25px;border:1px dashed rgba(70,59,50,.16);border-radius:15px;text-align:center;background:#fbf9f5
+}
+.admin-empty-state b{font-family:var(--display-font);font-size:18px;font-weight:500}
+.admin-empty-state p{max-width:440px;margin:5px auto 12px;color:#7c736b;font-size:9px;line-height:1.5}
+
+#adminUsersCard .admin-user-row{
+ background:#fffdf9;border-color:rgba(70,59,50,.10);box-shadow:none
+}
+#adminUsersCard .admin-user-avatar{width:38px;height:38px;font-size:11px}
+#adminFeedbackCard .admin-feedback-row{background:#fffdf9;padding:12px;border:1px solid rgba(70,59,50,.09);border-radius:12px;margin-top:7px}
+#adminBetaUsageCard{margin-top:0!important;background:transparent!important;border:0!important}
+#adminSystemCard .system-check-grid{margin-top:8px}
+
+@media(max-width:760px){
+ .admin-hub-heading{padding:19px 16px 14px}
+ .admin-hub-heading h3{font-size:26px}
+ .admin-hub-heading p{max-width:290px}
+ .admin-private-pill{padding:6px 8px}
+ .admin-tabs{padding:7px 8px}
+ .admin-panel{padding:18px 14px 20px}
+ .admin-panel-head{display:grid}
+ .admin-panel-head>button{width:100%}
+ .admin-overview-hero{grid-template-columns:1fr}
+ .admin-overview-metrics{grid-template-columns:1fr 1fr}
+ .admin-howto-steps{grid-template-columns:1fr}
+ .admin-overview-actions{display:grid}
+ .admin-overview-actions button{width:100%}
+ .admin-invite-actions{display:grid;grid-template-columns:1fr 1fr}
+ .admin-invite-actions .danger-text{grid-column:1/-1}
+}

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.10.3">
+<link rel="stylesheet" href="/static/style.css?v=7.10.4">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.10.3</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.10.4</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -515,6 +515,7 @@
 <section id="account" class="screen">
  <div class="section account-section">
   <small class="eyebrow">GET HIM DRESSED</small><h3>My Account</h3>
+
   <div class="card account-card">
    <div class="account-identity"><div class="account-avatar" id="accountInitial">G</div><div><h4 id="accountName">Account</h4><p id="accountEmail"></p><span id="accountRole" class="pill"></span></div></div>
    <div class="account-profile-line"><b>Styling profile</b><span id="accountStylingProfile">Menswear</span></div>
@@ -522,6 +523,104 @@
    <button id="restartOnboardingBtn" class="ghost full" type="button">Show me around the app</button>
    <button id="logoutBtn" class="ghost full" type="button">Sign out</button>
   </div>
+
+  <section id="adminHub" class="admin-hub hidden">
+   <div class="admin-hub-heading">
+    <div><small class="eyebrow">OWNER CONTROLS</small><h3>Beta Admin</h3><p>Invite testers, see who is using the app and keep an eye on usage and costs.</p></div>
+    <span class="admin-private-pill">Owner only</span>
+   </div>
+
+   <nav class="admin-tabs" aria-label="Beta admin sections">
+    <button class="active" type="button" data-admin-tab="overview">Overview</button>
+    <button type="button" data-admin-tab="invites">Invitations</button>
+    <button type="button" data-admin-tab="testers">Testers</button>
+    <button type="button" data-admin-tab="usage">Usage & costs</button>
+    <button type="button" data-admin-tab="feedback">Feedback</button>
+    <button type="button" data-admin-tab="system">System</button>
+   </nav>
+
+   <div id="adminPanelOverview" class="admin-panel active" data-admin-panel="overview">
+    <div class="admin-overview-hero">
+     <div><small class="eyebrow">PRIVATE BETA</small><h4 id="adminOverviewTitle">Everything you need to run the test.</h4><p id="adminOverviewCopy">Create one invite per person. When they register, they appear in Testers and their activity starts appearing in Usage & costs.</p></div>
+     <div id="adminOverviewReadiness" class="admin-overview-readiness"><span>…</span><div><b>Checking readiness</b><small>Running your beta checks</small></div></div>
+    </div>
+    <div id="adminOverviewMetrics" class="admin-overview-metrics">
+     <div><strong>—</strong><span>Active testers</span></div>
+     <div><strong>—</strong><span>Unused invites</span></div>
+     <div><strong>—</strong><span>Images this month</span></div>
+     <div><strong>—</strong><span>Text AI estimate</span></div>
+    </div>
+    <div class="admin-howto">
+     <small class="eyebrow">HOW IT WORKS</small>
+     <div class="admin-howto-steps">
+      <div><span>1</span><p><b>Create an invitation</b><small>Each code is for one tester and lasts 14 days.</small></p></div>
+      <div><span>2</span><p><b>Copy and send it</b><small>The message includes the app link, code and simple sign-up instructions.</small></p></div>
+      <div><span>3</span><p><b>Watch the beta</b><small>See tester activity, feedback, storage and AI usage from here.</small></p></div>
+     </div>
+    </div>
+    <div class="admin-overview-actions">
+     <button id="adminOverviewCreateInvite" class="primary" type="button">Create a tester invitation</button>
+     <button class="ghost" type="button" data-open-admin-tab="usage">View usage & costs</button>
+    </div>
+   </div>
+
+   <div id="adminInviteCard" class="admin-panel" data-admin-panel="invites">
+    <div class="admin-panel-head">
+     <div><small class="eyebrow">INVITATIONS</small><h4>Invite a tester</h4><p>Create one code per person, then copy the ready-to-send invitation.</p></div>
+     <button id="createInviteBtn" class="primary" type="button">＋ Create invitation</button>
+    </div>
+    <div id="inviteCreateStatus" class="admin-action-status hidden"></div>
+    <div id="inviteResults" class="admin-invite-list"><div class="visual-loading">Loading invitations…</div></div>
+   </div>
+
+   <div id="adminUsersCard" class="admin-panel" data-admin-panel="testers">
+    <div class="admin-panel-head">
+     <div><small class="eyebrow">TESTERS</small><h4>People in the beta</h4><p>See setup activity and temporarily disable access without deleting anyone's data.</p></div>
+     <button id="refreshAdminUsers" class="ghost" type="button">Refresh</button>
+    </div>
+    <div id="adminUsersResults"></div>
+   </div>
+
+   <div id="adminBetaUsageCard" class="admin-panel beta-usage-card" data-admin-panel="usage">
+    <div class="admin-panel-head">
+     <div><small class="eyebrow">USAGE & COSTS</small><h4>Keep spend under control</h4><p>Monitor image generation, AI text usage and storage by tester.</p></div>
+     <button id="refreshBetaUsage" class="ghost" type="button">Refresh</button>
+    </div>
+    <div id="betaReadinessBanner" class="beta-readiness-banner"><small>Checking readiness…</small></div>
+    <div id="betaUsageMetrics" class="beta-usage-metrics"></div>
+    <div id="betaUsageUsers" class="beta-usage-users"></div>
+    <small id="betaUsageNote" class="beta-usage-note"></small>
+   </div>
+
+   <div id="adminFeedbackCard" class="admin-panel" data-admin-panel="feedback">
+    <div class="admin-panel-head">
+     <div><small class="eyebrow">FEEDBACK</small><h4>What testers are telling you</h4><p>Comments arrive here from each tester's My Account page.</p></div>
+     <button id="refreshAdminFeedback" class="ghost" type="button">Refresh</button>
+    </div>
+    <div id="adminFeedbackResults"></div>
+   </div>
+
+   <div id="adminSystemCard" class="admin-panel" data-admin-panel="system">
+    <div class="admin-panel-head">
+     <div><small class="eyebrow">SYSTEM</small><h4>Reliability check</h4><p>Check storage, wardrobe images and connected AI services.</p></div>
+     <button id="refreshSystemStatus" class="ghost" type="button">Check now</button>
+    </div>
+    <div id="systemStatusResults"><small>Checks storage, wardrobe image references and connected services.</small></div>
+   </div>
+  </section>
+
+  <div id="testerFeedbackCard" class="card tester-feedback-card">
+   <small class="eyebrow">BETA FEEDBACK</small><h4>Tell us what needs improving</h4>
+   <p class="muted-copy">Something confusing, slow or simply not useful? Send a note straight to the beta owner.</p>
+   <div class="two">
+    <label>AREA<select id="testerFeedbackCategory"><option value="general">General</option><option value="onboarding">Getting started / onboarding</option><option value="styling">Styling suggestions</option><option value="wardrobe">Wardrobe</option><option value="saved_looks">Saved Looks</option><option value="shopping">Shopping</option><option value="fit">Fit & sizing</option><option value="packing">Help Me Pack</option><option value="week_planner">Plan My Week</option><option value="home">Home / navigation</option><option value="performance">Speed / performance</option><option value="bug">Bug</option></select></label>
+    <label>RATING<select id="testerFeedbackRating"><option value="">No rating</option><option value="5">5 / 5</option><option value="4">4 / 5</option><option value="3">3 / 5</option><option value="2">2 / 5</option><option value="1">1 / 5</option></select></label>
+   </div>
+   <label>FEEDBACK<textarea id="testerFeedbackMessage" rows="4" placeholder="What worked, what didn't, or what would make this better?"></textarea></label>
+   <button id="sendTesterFeedback" class="primary full" type="button">Send feedback</button>
+   <small id="testerFeedbackStatus"></small>
+  </div>
+
   <div class="card account-security-card">
    <div class="row between">
     <div><small class="eyebrow">SECURITY</small><h4>Account security</h4></div>
@@ -541,6 +640,7 @@
    <button id="signOutOtherSessionsBtn" class="ghost full" type="button">Sign out other devices</button>
    <small id="sessionSecurityStatus" class="account-backup-status"></small>
   </div>
+
   <div class="card account-data-card">
    <div class="row between">
     <div><small class="eyebrow">YOUR DATA</small><h4>Backup & portability</h4></div>
@@ -550,40 +650,6 @@
    <div id="accountDataSummary" class="account-data-summary"><small>Checking your data…</small></div>
    <button id="downloadAccountBackup" class="ghost full" type="button">Download my backup</button>
    <small id="accountBackupStatus" class="account-backup-status"></small>
-  </div>
-  <div id="adminInviteCard" class="card hidden">
-   <div class="row between"><div><small class="eyebrow">TESTER ACCESS</small><h4>Invite a tester</h4></div><button id="createInviteBtn" class="primary" type="button">Create invite</button></div>
-   <p class="muted-copy">Each invite creates a completely separate wardrobe, profile, photos and learning history.</p>
-   <div id="inviteResults"></div>
-  </div>
-  <div id="adminUsersCard" class="card hidden">
-   <div class="row between"><div><small class="eyebrow">TESTER DASHBOARD</small><h4>Users & activity</h4></div><button id="refreshAdminUsers" class="ghost" type="button">Refresh</button></div>
-   <div id="adminUsersResults"></div>
-  </div>
-  <div class="card tester-feedback-card">
-   <small class="eyebrow">BETA FEEDBACK</small><h4>Tell us what needs improving</h4>
-   <div class="two">
-    <label>AREA<select id="testerFeedbackCategory"><option value="general">General</option><option value="onboarding">Getting started / onboarding</option><option value="styling">Styling suggestions</option><option value="wardrobe">Wardrobe</option><option value="saved_looks">Saved Looks</option><option value="shopping">Shopping</option><option value="fit">Fit & sizing</option><option value="packing">Help Me Pack</option><option value="week_planner">Plan My Week</option><option value="home">Home / navigation</option><option value="performance">Speed / performance</option><option value="bug">Bug</option></select></label>
-    <label>RATING<select id="testerFeedbackRating"><option value="">No rating</option><option value="5">5 / 5</option><option value="4">4 / 5</option><option value="3">3 / 5</option><option value="2">2 / 5</option><option value="1">1 / 5</option></select></label>
-   </div>
-   <label>FEEDBACK<textarea id="testerFeedbackMessage" rows="4" placeholder="What worked, what didn't, or what would make this better?"></textarea></label>
-   <button id="sendTesterFeedback" class="primary full" type="button">Send feedback</button>
-   <small id="testerFeedbackStatus"></small>
-  </div>
-  <div id="adminFeedbackCard" class="card hidden">
-   <div class="row between"><div><small class="eyebrow">BETA FEEDBACK</small><h4>Tester comments</h4></div><button id="refreshAdminFeedback" class="ghost" type="button">Refresh</button></div>
-   <div id="adminFeedbackResults"></div>
-  </div>
-  <div id="adminBetaUsageCard" class="card hidden beta-usage-card">
-   <div class="row between"><div><small class="eyebrow">BETA READINESS</small><h4>Usage & capacity</h4></div><button id="refreshBetaUsage" class="ghost" type="button">Refresh</button></div>
-   <div id="betaReadinessBanner" class="beta-readiness-banner"><small>Checking readiness…</small></div>
-   <div id="betaUsageMetrics" class="beta-usage-metrics"></div>
-   <div id="betaUsageUsers" class="beta-usage-users"></div>
-   <small id="betaUsageNote" class="beta-usage-note"></small>
-  </div>
-  <div id="adminSystemCard" class="card hidden">
-   <div class="row between"><div><small class="eyebrow">RELIABILITY</small><h4>System check</h4></div><button id="refreshSystemStatus" class="ghost" type="button">Check now</button></div>
-   <div id="systemStatusResults"><small>Checks storage, wardrobe image references and connected services.</small></div>
   </div>
  </div>
 </section>
@@ -685,5 +751,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.10.3"></script>
+<script src="/static/app.js?v=7.10.4"></script>
 </body></html>

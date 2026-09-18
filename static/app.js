@@ -630,11 +630,10 @@ async function loadAccount(){
  $("accountRole").textContent=u.role==="admin"?"Owner / Admin":"Tester";
  $("accountStylingProfile").textContent=(u.styling_profile||"menswear")==="womenswear"?"Womenswear":"Menswear";
  $("accountInitial").textContent=(u.display_name||"G").trim().charAt(0).toUpperCase();
- $("adminInviteCard").classList.toggle("hidden",u.role!=="admin");
- $("adminUsersCard").classList.toggle("hidden",u.role!=="admin");
- $("adminFeedbackCard").classList.toggle("hidden",u.role!=="admin");
- $("adminSystemCard").classList.toggle("hidden",u.role!=="admin");
- $("adminBetaUsageCard").classList.toggle("hidden",u.role!=="admin");
+ const isAdmin=u.role==="admin";
+ $("adminHub")?.classList.toggle("hidden",!isAdmin);
+ $("testerFeedbackCard")?.classList.toggle("hidden",isAdmin);
+ if(isAdmin)selectAdminTab(currentAdminTab);
  await Promise.all([loadAccountDataSummary(),loadAccountSecurity()]);
  if(u.role==="admin")await Promise.all([loadInvites(),loadAdminUsers(),loadAdminFeedback(),loadSystemStatus(),loadBetaUsage()]);
 }
@@ -760,12 +759,53 @@ $("downloadAccountBackup")?.addEventListener("click",async()=>{
  }
 });
 
+let currentAdminTab="overview";
+let adminInviteRows=[];
+let adminUserRows=[];
+let adminBetaSnapshot=null;
+
+function selectAdminTab(tab){
+ const allowed=["overview","invites","testers","usage","feedback","system"];
+ currentAdminTab=allowed.includes(tab)?tab:"overview";
+ document.querySelectorAll("[data-admin-tab]").forEach(b=>b.classList.toggle("active",b.dataset.adminTab===currentAdminTab));
+ document.querySelectorAll("[data-admin-panel]").forEach(p=>p.classList.toggle("active",p.dataset.adminPanel===currentAdminTab));
+}
+document.querySelector(".admin-tabs")?.addEventListener("click",e=>{
+ const b=e.target.closest("[data-admin-tab]");if(b)selectAdminTab(b.dataset.adminTab);
+});
+document.addEventListener("click",e=>{
+ const b=e.target.closest("[data-open-admin-tab]");if(!b)return;
+ selectAdminTab(b.dataset.openAdminTab);
+ $("adminHub")?.scrollIntoView({behavior:"smooth",block:"start"});
+});
+
+function renderAdminOverview(){
+ const metrics=$("adminOverviewMetrics"),ready=$("adminOverviewReadiness");
+ if(metrics){
+  const testers=adminUserRows.filter(u=>u.role!=="admin" && Number(u.active)!==0);
+  const unused=adminInviteRows.filter(r=>Number(r.uses||0)<Number(r.max_uses||1) && (!r.expires_at || new Date(r.expires_at)>new Date()));
+  const usage=adminBetaSnapshot?.totals||{};
+  metrics.innerHTML=`
+   <div><strong>${testers.length}</strong><span>Active testers</span></div>
+   <div><strong>${unused.length}</strong><span>Unused invites</span></div>
+   <div><strong>${Number(usage.images_month||0)}</strong><span>Images this month</span></div>
+   <div><strong>${betaMoney(usage.estimated_text_cost_month||0)}</strong><span>Text AI estimate</span></div>`;
+ }
+ if(ready && adminBetaSnapshot){
+  const ok=Boolean(adminBetaSnapshot.ready_for_small_beta);
+  ready.className=`admin-overview-readiness ${ok?"ready":"warn"}`;
+  ready.innerHTML=`<span>${ok?"✓":"!"}</span><div><b>${ok?"Ready for a small beta":"Check before inviting"}</b><small>${ok?"Start with 5–8 testers":"Open Usage & costs for details"}</small></div>`;
+ }
+}
+
 function betaMoney(value){const n=Number(value||0);return n<0.01?`$${n.toFixed(4)}`:`$${n.toFixed(2)}`}
 async function loadBetaUsage(){
  const banner=$("betaReadinessBanner"),metrics=$("betaUsageMetrics"),users=$("betaUsageUsers"),note=$("betaUsageNote");
  if(!banner)return;
  try{
   const x=await api("/api/admin/beta-usage");
+  adminBetaSnapshot=x;
+  renderAdminOverview();
   banner.className=`beta-readiness-banner ${x.ready_for_small_beta?"ready":"not-ready"}`;
   banner.innerHTML=`<div><span>${x.ready_for_small_beta?"✓":"!"}</span><div><b>${x.ready_for_small_beta?"Ready for a small private beta":"Not quite ready for testers"}</b><small>${x.ready_for_small_beta?`Start with ${esc(x.recommended_first_wave)}.`:"Resolve the checks below first."}</small></div></div><div class="beta-checks">${(x.checks||[]).map(c=>`<span class="${c.ok?"ok":"warn"}">${c.ok?"✓":"!"} ${esc(c.label)}<small>${esc(c.detail||"")}</small></span>`).join("")}</div>`;
   const t=x.totals||{};
@@ -785,12 +825,15 @@ async function loadAdminUsers(){
  box.innerHTML='<div class="visual-loading">Loading testers…</div>';
  try{
   const rows=await api("/api/admin/users");
-  box.innerHTML=rows.map(u=>`<div class="admin-user-row ${u.active===0?"disabled-user":""}">
+  adminUserRows=rows;
+  renderAdminOverview();
+  const testerRows=rows.filter(u=>u.role!=="admin");
+  box.innerHTML=testerRows.length?testerRows.map(u=>`<div class="admin-user-row ${u.active===0?"disabled-user":""}">
    <div class="admin-user-main"><div class="admin-user-avatar">${esc((u.display_name||"U").charAt(0).toUpperCase())}</div><div><b>${esc(u.display_name||"User")}</b><small>${esc(u.email||"")}</small><span>${u.role==="admin"?"Owner / Admin":"Tester"} · ${u.active===0?"Disabled":"Active"}</span></div></div>
    <div class="admin-user-stats"><span><b>${u.wardrobe_items||0}</b> wardrobe</span><span><b>${u.saved_looks||0}</b> saved looks</span><span><b>${u.fit_reviews||0}</b> fit reviews</span><span><b>${u.feedback_count||0}</b> feedback</span></div>
    <div class="admin-user-meta"><small>Joined ${formatLastActive(u.created_at)}</small><small>Last session ${formatLastActive(u.last_session_at)}</small></div>
    ${u.role!=="admin"?`<button class="${u.active===0?"primary":"ghost"} admin-user-toggle" type="button" onclick="toggleTesterAccess(${u.id},${u.active===0?"true":"false"},this)">${u.active===0?"Re-enable tester":"Disable access"}</button>`:""}
-  </div>`).join("");
+  </div>`).join(""):`<div class="admin-empty-state"><b>No testers yet</b><p>Create an invitation and send it to your first tester. Their account will appear here after they register.</p><button class="primary" type="button" data-open-admin-tab="invites">Create an invitation</button></div>`;
  }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
 }
 async function toggleTesterAccess(id,enable,button){
@@ -839,27 +882,126 @@ $("sendTesterFeedback")?.addEventListener("click",async()=>{
  }catch(err){status.textContent=err.message}
  finally{btn.disabled=false;btn.textContent="Send feedback"}
 });
+function formatInviteDate(value){
+ if(!value)return "No expiry";
+ try{
+  return new Intl.DateTimeFormat("en-GB",{day:"numeric",month:"long",year:"numeric"}).format(new Date(value));
+ }catch{return String(value)}
+}
+
+function inviteIsAvailable(invite){
+ return Number(invite.uses||0)<Number(invite.max_uses||1) && (!invite.expires_at || new Date(invite.expires_at)>new Date());
+}
+
+function inviteMessage(invite){
+ const url=window.location.origin;
+ return `You're invited to test Get Dressed.
+
+1. Open ${url}
+2. Choose Create account
+3. Enter invite code: ${invite.code}
+4. Choose Get Him Dressed or Get Her Dressed and follow the setup.
+
+This invitation is for one person and expires ${formatInviteDate(invite.expires_at)}.
+
+If anything is confusing while you're testing, please use Beta Feedback in My Account.`;
+}
+
+async function copyAdminText(text,button,successLabel="Copied ✓"){
+ const original=button?.textContent||"Copy";
+ try{
+  if(navigator.clipboard?.writeText){
+   await navigator.clipboard.writeText(text);
+  }else{
+   const area=document.createElement("textarea");
+   area.value=text;area.style.position="fixed";area.style.opacity="0";
+   document.body.appendChild(area);area.select();document.execCommand("copy");area.remove();
+  }
+  if(button){button.textContent=successLabel;button.classList.add("copied")}
+ }catch{
+  if(button)button.textContent="Copy failed";
+ }finally{
+  if(button)setTimeout(()=>{button.textContent=original;button.classList.remove("copied")},1400);
+ }
+}
+
+function copyInviteCode(code,button){
+ copyAdminText(code,button,"Code copied ✓");
+}
+function copyInvitation(code,button){
+ const invite=adminInviteRows.find(r=>r.code===code);
+ if(invite)copyAdminText(inviteMessage(invite),button,"Invitation copied ✓");
+}
+
 async function revokeInvite(code){
- if(!confirm(`Revoke invite ${code}?`))return;
- try{await api(`/api/account/invites/${encodeURIComponent(code)}`,{method:"DELETE"});await loadInvites()}
- catch(err){alert(err.message)}
+ if(!confirm(`Revoke invite ${code}? It will no longer be usable.`))return;
+ try{
+  await api(`/api/account/invites/${encodeURIComponent(code)}`,{method:"DELETE"});
+  await loadInvites();
+ }catch(err){alert(err.message)}
+}
+
+function renderInviteRow(r,index){
+ const available=inviteIsAvailable(r);
+ const used=Number(r.uses||0)>=Number(r.max_uses||1);
+ const expired=!used && r.expires_at && new Date(r.expires_at)<=new Date();
+ const status=used?"Used":expired?"Expired":"Ready to send";
+ const statusClass=used?"used":expired?"expired":"ready";
+ return `<article class="admin-invite ${statusClass}" data-invite-code="${esc(r.code)}">
+  <div class="admin-invite-top">
+   <div><small>INVITE ${String(index+1).padStart(2,"0")}</small><code>${esc(r.code)}</code></div>
+   <span class="invite-status ${statusClass}">${status}</span>
+  </div>
+  <div class="admin-invite-meta">
+   <span><b>${used?"Account created":available?"One person":"Unavailable"}</b><small>${used?"This code has been used":`Expires ${esc(formatInviteDate(r.expires_at))}`}</small></span>
+  </div>
+  ${available?`<div class="admin-invite-actions">
+   <button class="primary" type="button" onclick="copyInvitation('${esc(r.code)}',this)">Copy invitation</button>
+   <button class="ghost" type="button" onclick="copyInviteCode('${esc(r.code)}',this)">Copy code</button>
+   <button class="text-button danger-text" type="button" onclick="revokeInvite('${esc(r.code)}')">Revoke</button>
+  </div>`:expired?`<div class="admin-invite-actions"><button class="text-button danger-text" type="button" onclick="revokeInvite('${esc(r.code)}')">Remove expired invite</button></div>`:`<div class="admin-invite-used-note">No action needed — this invitation has already created a tester account.</div>`}
+ </article>`;
 }
 
 async function loadInvites(){
+ const box=$("inviteResults");if(!box)return;
  try{
   const rows=await api("/api/account/invites");
-  $("inviteResults").innerHTML=rows.length?rows.map(r=>`<div class="invite-row"><code>${esc(r.code)}</code><span>${r.uses}/${r.max_uses} used</span><small>Expires ${new Date(r.expires_at).toLocaleDateString()}</small>${r.uses===0?`<button class="text-button danger-text" type="button" onclick="revokeInvite('${esc(r.code)}')">Revoke</button>`:""}</div>`).join(""):'<p class="muted-copy">No active invites yet.</p>';
- }catch(err){$("inviteResults").innerHTML=`<small>${esc(err.message)}</small>`}
+  adminInviteRows=rows;
+  renderAdminOverview();
+  box.innerHTML=rows.length?rows.map(renderInviteRow).join(""):`<div class="admin-empty-state"><b>No invitations yet</b><p>Create one when you're ready to add a tester. Each invitation works once and expires after 14 days.</p></div>`;
+ }catch(err){box.innerHTML=`<div class="notice">${esc(err.message)}</div>`}
 }
-$("createInviteBtn")?.addEventListener("click",async()=>{
- const btn=$("createInviteBtn");btn.disabled=true;btn.textContent="Creating…";
+
+async function createTesterInvite(button){
+ const btn=button||$("createInviteBtn");
+ const status=$("inviteCreateStatus");
+ const original=btn?.textContent||"Create invitation";
+ if(btn){btn.disabled=true;btn.textContent="Creating…"}
+ if(status){status.classList.add("hidden");status.textContent=""}
  try{
   const x=await api("/api/account/invites",{method:"POST"});
   await loadInvites();
-  alert(`Invite code: ${x.code}`);
- }catch(err){alert(err.message)}
- finally{btn.disabled=false;btn.textContent="Create invite"}
-});
+  selectAdminTab("invites");
+  if(status){
+   status.classList.remove("hidden");
+   status.innerHTML=`<b>Invitation created.</b> Use <b>Copy invitation</b> below and send the whole message to your tester.`;
+  }
+  requestAnimationFrame(()=>{
+   const row=document.querySelector(`[data-invite-code="${CSS.escape(x.code)}"]`);
+   row?.classList.add("just-created");
+   row?.scrollIntoView({behavior:"smooth",block:"center"});
+  });
+ }catch(err){
+  if(status){status.classList.remove("hidden");status.textContent=err.message}
+  else alert(err.message);
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent=original}
+ }
+}
+$("createInviteBtn")?.addEventListener("click",e=>createTesterInvite(e.currentTarget));
+$("adminOverviewCreateInvite")?.addEventListener("click",e=>createTesterInvite(e.currentTarget));
+
 $("logoutBtn")?.addEventListener("click",async()=>{
  await api("/api/auth/logout",{method:"POST"});
  location.reload();
