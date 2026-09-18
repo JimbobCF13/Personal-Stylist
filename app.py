@@ -1,5 +1,5 @@
 
-import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re, tempfile, hashlib, hmac, secrets, zipfile, shutil
+import os, json, base64, sqlite3, mimetypes, uuid, urllib.request, urllib.error, re, tempfile, hashlib, hmac, secrets, zipfile, shutil, time
 from contextvars import ContextVar
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -716,6 +716,7 @@ def init_db():
         "ALTER TABLE profile ADD COLUMN preferred_hem_length TEXT DEFAULT ''",
         "ALTER TABLE profile ADD COLUMN heel_preference TEXT DEFAULT ''",
         "ALTER TABLE profile ADD COLUMN accessory_notes TEXT DEFAULT ''",
+        "ALTER TABLE profile ADD COLUMN home_location TEXT DEFAULT ''",
         "ALTER TABLE outfit_favourites ADD COLUMN tags_json TEXT DEFAULT '[]'",
         "ALTER TABLE outfit_favourites ADD COLUMN occasion TEXT DEFAULT ''",
         "ALTER TABLE outfit_favourites ADD COLUMN season TEXT DEFAULT ''",
@@ -1246,7 +1247,7 @@ def account_data_manifest():
     payload={
       "export_format":"get-dressed-portable-backup-v1",
       "exported_at":utc_now().isoformat(),
-      "app_version":"7.10.5",
+      "app_version":"7.10.6",
       "account":{
         "id":u.get("id"),
         "email":u.get("email"),
@@ -1605,6 +1606,7 @@ class Profile(BaseModel):
     preferred_hem_length: Optional[str]=""
     heel_preference: Optional[str]=""
     accessory_notes: Optional[str]=""
+    home_location: Optional[str]=""
 
 @app.put("/api/profile")
 def save_profile(p: Profile):
@@ -1612,10 +1614,10 @@ def save_profile(p: Profile):
     con.execute("""UPDATE profile SET name=?,height_cm=?,chest_cm=?,waist_cm=?,hips_cm=?,thigh_cm=?,
         inseam_cm=?,sleeve_cm=?,neck_cm=?,preferred_fit=?,style_notes=?,brand_notes=?,
         usual_top_size=?,usual_bottom_size=?,usual_dress_size=?,usual_shoe_size=?,bra_size=?,
-        preferred_rise=?,preferred_hem_length=?,heel_preference=?,accessory_notes=? WHERE id=1""",
+        preferred_rise=?,preferred_hem_length=?,heel_preference=?,accessory_notes=?,home_location=? WHERE id=1""",
         (p.name,p.height_cm,p.chest_cm,p.waist_cm,p.hips_cm,p.thigh_cm,p.inseam_cm,p.sleeve_cm,p.neck_cm,
          p.preferred_fit,p.style_notes,p.brand_notes,p.usual_top_size,p.usual_bottom_size,p.usual_dress_size,
-         p.usual_shoe_size,p.bra_size,p.preferred_rise,p.preferred_hem_length,p.heel_preference,p.accessory_notes))
+         p.usual_shoe_size,p.bra_size,p.preferred_rise,p.preferred_hem_length,p.heel_preference,p.accessory_notes,p.home_location))
     con.commit(); con.close()
     return {"ok": True}
 
@@ -3293,7 +3295,7 @@ def parse_voice_form(req: VoiceFormRequest):
         "name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm",
         "sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes",
         "usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size",
-        "preferred_rise","preferred_hem_length","heel_preference","accessory_notes"
+        "preferred_rise","preferred_hem_length","heel_preference","accessory_notes","home_location"
       },
       "garment":{
         "category","garment_type","brand","model_line","labelled_size","colour",
@@ -3359,6 +3361,7 @@ def parse_voice_form(req: VoiceFormRequest):
 - preferred_hem_length can capture preferred dress/skirt/trouser lengths in the user's own words.
 - heel_preference should capture practical footwear preference, e.g. flats, low heel, block heel, high heel, mixed, avoid heels.
 - accessory_notes should capture stated bag, jewellery or accessory preferences.
+- home_location is the user's usual town/city/area for weather-aware styling; only fill it when explicitly stated.
 - Do not infer body shape or invent preferences from measurements."""
     }[mode]
 
@@ -3850,6 +3853,7 @@ class OutfitVisualisationRequest(BaseModel):
     temperature_c: Optional[float] = None
     use_my_likeness: Optional[bool] = False
     requested_extra_piece: Optional[str] = ""
+    render_mode: Optional[str] = "precise"
 
 @app.post("/api/outfit-visualisation")
 def outfit_visualisation(req: OutfitVisualisationRequest):
@@ -3918,6 +3922,7 @@ Recommended extra piece not yet owned:
 Context:
 - Outfit label: {req.label or 'Outfit'}
 - Occasion: {req.occasion or 'general smart/casual use'}
+- Styling reason / special instruction: {req.reason or 'none'}
 - Approximate temperature: {req.temperature_c if req.temperature_c is not None else 'not specified'} C
 - Preferred fit: {preferred_fit}
 - User style notes: {style_notes}
@@ -3926,9 +3931,12 @@ Context:
 Important:
 - This request represents ONE outfit only. Do not combine it with another look or introduce alternative versions of any garment.
 - Use exactly the supplied outfit garments as the clothing brief. Each saved garment reference belongs to this one look only.
-- Use the reference garment images as closely as reasonably possible for colour, material, silhouette, pattern and footwear.
-- Do not swap colours between garments, merge two garments into one, or substitute a different top/trouser/jacket because another reference looks similar.
+- GARMENT FIDELITY IS A PRIMARY REQUIREMENT. Treat the garment reference photographs as the source of truth and written metadata only as supporting context.
+- Preserve each garment's exact visible colour family and tone, pattern scale, texture, material appearance, silhouette, length, collar/neckline, lapels, fastening, pockets, cuffs, hems and footwear shape wherever visible.
+- Do not make a navy item black, a grey item beige, a washed denim item saturated blue, or otherwise aesthetically reinterpret its colour.
+- Do not swap colours between garments, merge two garments into one, redesign a garment, or substitute a different top/trouser/jacket because another reference looks similar.
 - If multiple upper-body pieces are supplied because the outfit is layered, show them as distinct layers rather than blending their details together.
+- When identity and garment references compete, preserve identity from the personal photos AND clothing construction/colour from the garment photos.
 - Do not add visible logos or brand marks that are not clearly present in the reference images.
 - Do not invent extra statement garments.
 - If a small neutral accessory is needed for realism, keep it unobtrusive.
@@ -3943,17 +3951,25 @@ Important:
 
 
     client = OpenAI()
-    image_model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
+    render_mode=(req.render_mode or "precise").strip().lower()
+    configured_base=(os.getenv("OPENAI_IMAGE_MODEL") or "").strip()
+    if render_mode=="fast":
+        image_model=(os.getenv("OPENAI_IMAGE_MODEL_FAST") or configured_base or "gpt-image-2.5-flare").strip()
+    else:
+        image_model=(os.getenv("OPENAI_IMAGE_MODEL_PRECISE") or configured_base or "gpt-image-2.5-sunburst").strip()
     result = None
 
     # First choice: use the saved garment photographs as high-fidelity visual references.
     opened = []
     try:
         reference_files = []
+        likeness_limit=0
         if req.use_my_likeness:
-            likeness_limit=max(1,min(int(os.getenv("OUTFIT_LIKENESS_REFS","2")),3))
+            default_refs="1" if render_mode=="fast" else "2"
+            likeness_limit=max(1,min(int(os.getenv("OUTFIT_LIKENESS_REFS",default_refs)),3))
             reference_files.extend(likeness_files[:likeness_limit])
         reference_files.extend(garment_image_files[:5])
+        prompt += f"\nReference ordering: first {likeness_limit} image(s) are identity references; remaining garment images follow the OUTFIT list order.\n"
         if reference_files:
             opened = [open(p, "rb") for p in reference_files[:7]]
             result = client.images.edit(
@@ -4004,7 +4020,7 @@ Important:
     out_path = generated_dir() / filename
     out_path.write_bytes(base64.b64decode(b64))
     record_usage_event("image_generation","/api/outfit-visualisation",1,metadata={
-      "model":image_model,"size":"1024x1536","quality":"medium",
+      "model":image_model,"render_mode":render_mode,"size":"1024x1536","quality":"medium",
       "reference_images":len(reference_files[:7]) if 'reference_files' in locals() else 0
     })
 
@@ -4758,6 +4774,9 @@ class WeatherContextRequest(BaseModel):
     location: str
     when: Optional[str] = "today"
 
+WEATHER_CONTEXT_CACHE={}
+WEATHER_CONTEXT_TTL_SECONDS=max(60,int(os.getenv("WEATHER_CONTEXT_TTL_SECONDS","900")))
+
 @app.post("/api/weather-context")
 def weather_context(req: WeatherContextRequest):
     location=(req.location or "").strip()
@@ -4766,6 +4785,14 @@ def weather_context(req: WeatherContextRequest):
         raise HTTPException(400,"Enter a location first.")
     if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
         raise HTTPException(400,"Live weather lookup needs the OpenAI connection.")
+
+    cache_key=f"{location.casefold()}|{when.casefold()}"
+    now_ts=time.time()
+    cached=WEATHER_CONTEXT_CACHE.get(cache_key)
+    if cached and now_ts-float(cached.get("_cached_at",0))<WEATHER_CONTEXT_TTL_SECONDS:
+        result=dict(cached["data"])
+        result["cached"]=True
+        return result
 
     prompt=f"""Find the most relevant current weather forecast available online for:
 LOCATION: {location}
@@ -4778,24 +4805,33 @@ confidence rather than inventing conditions.
 Summarise temperatures in Celsius, precipitation/rain risk, wind and practical clothing implications.
 The styling_context should be concise and useful for choosing layers, fabrics, outerwear and footwear.
 """
-    try:
-        response=tracked_responses_create(OpenAI(),
-            model=os.getenv("OPENAI_SHOPPING_MODEL",os.getenv("OPENAI_MODEL","gpt-5.6-terra")),
-            reasoning={"effort":"low"},
-            tools=[{"type":"web_search"}],
-            tool_choice="auto",
-            include=["web_search_call.action.sources"],
-            input=prompt,
-            text={"format":{
-                "type":"json_schema",
-                "name":"weather_context",
-                "schema":WEATHER_CONTEXT_SCHEMA,
-                "strict":True
-            }}
-        )
-        return json.loads(response.output_text)
-    except Exception as exc:
-        raise HTTPException(502,f"Weather lookup failed: {str(exc)[:260]}")
+    primary_model=(os.getenv("OPENAI_WEATHER_MODEL") or "gpt-5.6-luna").strip()
+    fallback_model=(os.getenv("OPENAI_MODEL") or "gpt-5.6-terra").strip()
+    last_exc=None
+    for model in dict.fromkeys([primary_model,fallback_model]):
+        try:
+            response=tracked_responses_create(OpenAI(),
+                model=model,
+                reasoning={"effort":"low"},
+                tools=[{"type":"web_search"}],
+                tool_choice="auto",
+                include=["web_search_call.action.sources"],
+                input=prompt,
+                text={"format":{
+                    "type":"json_schema",
+                    "name":"weather_context",
+                    "schema":WEATHER_CONTEXT_SCHEMA,
+                    "strict":True
+                }}
+            )
+            result=json.loads(response.output_text)
+            result["cached"]=False
+            result["lookup_model"]=model
+            WEATHER_CONTEXT_CACHE[cache_key]={"_cached_at":now_ts,"data":result}
+            return result
+        except Exception as exc:
+            last_exc=exc
+    raise HTTPException(502,f"Weather lookup failed: {str(last_exc)[:260]}")
 
 class StylistV4Request(BaseModel):
     request_text: str
@@ -4882,10 +4918,10 @@ def stylist_v4(req: StylistV4Request):
     garments = [dict(r) for r in con.execute("SELECT * FROM garments ORDER BY id DESC").fetchall()]
     profile = dict(con.execute("SELECT * FROM profile WHERE id=1").fetchone())
     feedback = [dict(r) for r in con.execute(
-        "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 40"
+        "SELECT rating, outfit_json FROM feedback ORDER BY id DESC LIMIT 24"
     ).fetchall()]
     favourites = [dict(r) for r in con.execute(
-        "SELECT label,outfit_json,request_text,weather_context,wore_count,last_worn_at,is_pinned,tags_json,occasion,season,notes FROM outfit_favourites ORDER BY COALESCE(wore_count,0) DESC, id DESC LIMIT 30"
+        "SELECT label,outfit_json,request_text,weather_context,wore_count,last_worn_at,is_pinned,tags_json,occasion,season,notes FROM outfit_favourites ORDER BY COALESCE(wore_count,0) DESC, id DESC LIMIT 20"
     ).fetchall()]
     con.close()
 
@@ -4901,14 +4937,27 @@ def stylist_v4(req: StylistV4Request):
             raise HTTPException(404, "That wardrobe item could not be found.")
 
     max_options = max(1, min(int(req.max_options or 3), 4))
+    garment_keys=[
+      "id","category","garment_type","brand","model_line","labelled_size","colour",
+      "material","pattern","fit_cut","fit_feedback","season","formality","notes"
+    ]
+    compact_wardrobe=[{k:g.get(k) for k in garment_keys} for g in garments]
+    compact_anchor=({k:anchor.get(k) for k in garment_keys} if anchor else None)
+    profile_keys=[
+      "height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm",
+      "preferred_fit","style_notes","brand_notes","usual_top_size","usual_bottom_size",
+      "usual_dress_size","usual_shoe_size","bra_size","preferred_rise","preferred_hem_length",
+      "heel_preference","accessory_notes"
+    ]
+    compact_profile={k:profile.get(k) for k in profile_keys}
     context = {
       "request_text": request_text,
-      "anchor_garment": anchor,
+      "anchor_garment": compact_anchor,
       "owned_only": bool(req.owned_only),
       "max_options": max_options,
-      "profile": profile,
+      "profile": compact_profile,
       "styling_profile": (current_user() or {}).get("styling_profile","menswear"),
-      "wardrobe": garments,
+      "wardrobe": compact_wardrobe,
       "recent_feedback": feedback,
       "saved_looks": favourites
     }

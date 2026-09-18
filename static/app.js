@@ -71,7 +71,7 @@ let lastPackingBriefParsed="";
 const backgroundVisualQueue=[];
 const backgroundVisualKeys=new Set();
 let backgroundVisualActive=0;
-const BACKGROUND_VISUAL_CONCURRENCY=2;
+const BACKGROUND_VISUAL_CONCURRENCY=3;
 
 function enqueueBackgroundVisual(key,task){
  if(backgroundVisualKeys.has(key))return;
@@ -382,7 +382,8 @@ const SMART_DICTATION_MAPS={
   neck_cm:"neck_cm",preferred_fit:"preferred_fit",style_notes:"style_notes",brand_notes:"brand_notes",
   usual_top_size:"usual_top_size",usual_bottom_size:"usual_bottom_size",usual_dress_size:"usual_dress_size",
   usual_shoe_size:"usual_shoe_size",bra_size:"bra_size",preferred_rise:"preferred_rise",
-  preferred_hem_length:"preferred_hem_length",heel_preference:"heel_preference",accessory_notes:"accessory_notes"
+  preferred_hem_length:"preferred_hem_length",heel_preference:"heel_preference",accessory_notes:"accessory_notes",
+  home_location:"home_location"
  },
  garment:{
   category:"category",garment_type:"garment_type",brand:"brand",model_line:"model_line",
@@ -3052,11 +3053,18 @@ if(modelPhotoInput){
   }
  });
 }
+let profileHomeLocation="";
 async function loadProfile(){
- const p=await api("/api/profile");Object.entries(p).forEach(([k,v])=>{if($(k)&&v!==null)$(k).value=v});if(p.name)$("greeting").textContent=`Good morning, ${p.name}`;
+ const p=await api("/api/profile");
+ Object.entries(p).forEach(([k,v])=>{if($(k)&&v!==null)$(k).value=v});
+ profileHomeLocation=String(p.home_location||"").trim();
+ if(p.name)$("greeting").textContent=`Good morning, ${p.name}`;
+ ["v4Location","location","weekLocation"].forEach(id=>{
+  const el=$(id);if(el && !String(el.value||"").trim() && profileHomeLocation)el.value=profileHomeLocation;
+ });
 }
 $("saveProfile").addEventListener("click",async()=>{
- const keys=["name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes","usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size","preferred_rise","preferred_hem_length","heel_preference","accessory_notes"],p={};
+ const keys=["name","height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm","preferred_fit","style_notes","brand_notes","usual_top_size","usual_bottom_size","usual_dress_size","usual_shoe_size","bra_size","preferred_rise","preferred_hem_length","heel_preference","accessory_notes","home_location"],p={};
  keys.forEach(k=>{let v=$(k).value;p[k]=["height_cm","chest_cm","waist_cm","hips_cm","thigh_cm","inseam_cm","sleeve_cm","neck_cm"].includes(k)?(v?Number(v):null):v});
  await api("/api/profile",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
  alert("Profile saved.");
@@ -4131,6 +4139,29 @@ $("gapResults")?.addEventListener("click",e=>{
  searchGapProducts(rec,index,button);
 });
 
+function inferStylistWhen(text){
+ const raw=String(text||"").trim();
+ if(!raw)return "";
+ const patterns=[
+  /\b(today|tonight|tomorrow)\b/i,
+  /\b(this\s+(?:morning|afternoon|evening|weekend|week))\b/i,
+  /\b((?:this|next)\s+(?:week|weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i,
+  /\b(on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i,
+  /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+(?:morning|afternoon|evening|night))?\b/i,
+  /\b(?:in\s+)?\d+\s+(?:day|days|week|weeks)(?:\s+time)?\b/i,
+  /\bin\s+(?:a|one|two|three)\s+(?:day|days|week|weeks)(?:\s+time)?\b/i,
+  /\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b/i,
+  /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i
+ ];
+ for(const p of patterns){const m=raw.match(p);if(m)return m[0]}
+ return "";
+}
+function revealStylistLocation(){
+ const details=$("v4Location")?.closest("details");
+ if(details)details.open=true;
+ setTimeout(()=>$("v4Location")?.focus(),30);
+}
+
 const runStylistV4Btn=$("runStylistV4");
 if(runStylistV4Btn){
  runStylistV4Btn.addEventListener("click",async()=>{
@@ -4142,30 +4173,49 @@ if(runStylistV4Btn){
   let statusTimer=null;
   let timeoutTimer=null;
   let weatherData=null;
-  const location=($("v4Location")?.value||"").trim();
-  const when=($("v4When")?.value||"today").trim()||"today";
+  const explicitWhen=($("v4When")?.value||"").trim();
+  const inferredWhen=inferStylistWhen(text);
+  const when=explicitWhen||inferredWhen||"today";
+  let location=($("v4Location")?.value||"").trim()||profileHomeLocation;
+  const datedRequest=Boolean(explicitWhen||inferredWhen);
 
-  runStylistV4Btn.disabled=true;
-  beginAppActivity("stylist-plan","Stylist is working…","Checking your request, wardrobe, fit history and context.","working");
-
-  if(location){
+  if(datedRequest && !location){
    const weatherBox=$("v4WeatherStatus");
    weatherBox.classList.remove("hidden");
-   weatherBox.innerHTML='<span class="spinner"></span> Checking the live forecast before styling…';
+   weatherBox.innerHTML='<b>Location needed for weather-aware styling.</b><small>Add a location here once, or save your usual location in My Profile.</small>';
+   revealStylistLocation();
+   return;
+  }
+  if(location && !$("v4Location").value.trim())$("v4Location").value=location;
+  if(inferredWhen && !explicitWhen)$("v4When").value=inferredWhen;
+
+  runStylistV4Btn.disabled=true;
+  beginAppActivity("stylist-plan","Stylist is working…","Checking your wardrobe, fit history and context.","working");
+
+  if(location && datedRequest){
+   const weatherBox=$("v4WeatherStatus");
+   weatherBox.classList.remove("hidden");
+   weatherBox.innerHTML='<span class="spinner"></span> Checking temperature, rain and wind before styling…';
    try{
     weatherData=await api("/api/weather-context",{
      method:"POST",headers:{"Content-Type":"application/json"},
      body:JSON.stringify({location,when})
     });
-    weatherBox.innerHTML=`<b>Forecast:</b> ${esc(weatherData.summary||"")}${weatherData.styling_context?`<small>${esc(weatherData.styling_context)}</small>`:""}`;
+    const range=(weatherData.temperature_low_c!=null||weatherData.temperature_high_c!=null)
+      ? `${weatherData.temperature_low_c??"?"}–${weatherData.temperature_high_c??"?"}°C · `:"";
+    const confidence=weatherData.confidence?` · ${weatherData.confidence} confidence`:"";
+    weatherBox.innerHTML=`<b>Weather checked · ${esc(weatherData.date_or_period||when)}</b><small>${esc(range+(weatherData.summary||"")+confidence)}</small>${weatherData.styling_context?`<small>${esc(weatherData.styling_context)}</small>`:""}`;
    }catch(err){
-    weatherBox.innerHTML=`<b>Weather lookup unavailable.</b> <small>${esc(err.message)} I’ll style from your written request instead.</small>`;
+    weatherBox.innerHTML=`<b>Weather check failed.</b><small>${esc(err.message)} Try again, or remove the date/time if you want a weather-neutral recommendation.</small>`;
+    runStylistV4Btn.disabled=false;
+    endAppActivity("stylist-plan");
+    return;
    }
   }else{
    $("v4WeatherStatus")?.classList.add("hidden");
   }
 
-  box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Styling from your wardrobe…</b><small id="v4WaitNote">This usually takes under a minute.</small></div></div>';
+  box.innerHTML='<div class="card v4-thinking"><span class="spinner"></span><div><b>Styling from your wardrobe…</b><small id="v4WaitNote">Building the strongest options from the useful wardrobe details.</small></div></div>';
 
   statusTimer=setTimeout(()=>{
    const note=$("v4WaitNote");
@@ -4667,7 +4717,8 @@ async function packingVisualise(index,force=false,button=null,silent=false){
     occasion:[d.time_of_day,d.occasion].filter(Boolean).join(" · "),
     temperature_c:null,
     use_my_likeness:true,
-    requested_extra_piece:""
+    requested_extra_piece:"",
+    render_mode:silent?"fast":"precise"
    })
   });
   packingVisualCache.set(key,x);

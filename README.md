@@ -1845,3 +1845,30 @@ Tester cards and per-user Usage rows are clickable. The owner can open a person 
 A tester can be disabled or re-enabled directly from the detail view without deleting their wardrobe or data.
 
 No destructive migration.
+
+
+## V7.10.6 — Pre-Beta Performance, Weather & Visual Fidelity
+
+### Weather-aware styling
+Ask My Stylist now treats explicit timeframes such as today, tonight, tomorrow, weekdays and dated requests as weather-aware. A dated request will not silently proceed without a location.
+
+`Usual location` is stored in My Profile and becomes an editable default for Ask My Stylist, What Should I Wear and Plan My Week. Weather checks visibly confirm the forecast period, temperature range and confidence.
+
+Weather lookups use a short 15-minute cache and prefer GPT-5.6 Luna for this lightweight lookup, with automatic fallback to the configured main model.
+
+### Recommendation speed
+The main Ask My Stylist call now sends only styling-relevant garment/profile fields. Image paths, enrichment blobs, purchase URLs, timestamps and other database metadata are excluded. Recent feedback and Saved Looks remain included, with bounded history.
+
+### Image speed and fidelity
+Background packing-image concurrency increases from 2 to 3.
+
+When no explicit image-model environment override is configured:
+- automatic/background packing visuals use `gpt-image-2.5-flare`
+- precise/user-triggered outfit visualisations use `gpt-image-2.5-sunburst`
+
+An explicit `OPENAI_IMAGE_MODEL` setting still takes precedence for both, so existing deployments remain controllable.
+
+Garment reference prompts now prioritise the actual garment photograph and explicitly preserve colour tone, pattern scale, texture, silhouette, length, neckline/collar, lapels, fastenings, pockets, cuffs, hems and footwear shape.
+
+### Data safety
+One safe additive profile field only: `home_location`. No wardrobe, media, Saved Looks, trips, tester accounts or usage history are reset.

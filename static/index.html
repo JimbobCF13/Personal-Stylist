@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f6f1e8"><title>Get Dressed</title>
-<link rel="stylesheet" href="/static/style.css?v=7.10.5">
+<link rel="stylesheet" href="/static/style.css?v=7.10.6">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
   <span class="brand-mark" id="brandMark">GHD</span>
   <span class="brand-copy"><h1 id="appBrandName">Get Him Dressed</h1><small id="status">Connecting…</small></span>
  </div>
- <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.10.5</span></div>
+ <div class="header-actions"><button class="header-account" type="button" data-go="account" aria-label="Open account">○</button><span class="badge">V7.10.6</span></div>
 </header>
 
 <section id="home" class="screen active">
@@ -307,11 +307,12 @@
       <label>SHOPPING<select id="v4Shopping"><option value="open">Can suggest one useful missing piece</option><option value="owned">My wardrobe only</option></select></label>
      </div>
      <div class="two">
-      <label>LOCATION<input id="v4Location" placeholder="Optional"></label>
-      <label>WHEN<input id="v4When" placeholder="Optional"></label>
+      <label>LOCATION<input id="v4Location" placeholder="Uses My Profile location"></label>
+      <label>WHEN<input id="v4When" placeholder="e.g. today, tonight, Friday"></label>
      </div>
     </div>
    </details>
+   <div class="stylist-weather-rule"><span>☁</span><p><b>Weather-aware styling</b><small>For dated requests, I check temperature, rain and wind automatically using this location.</small></p></div>
    <div id="v4WeatherStatus" class="stylist-weather-status hidden"></div>
    <button id="runStylistV4" class="primary full" type="button">Style me</button>
   </div>
@@ -690,6 +691,7 @@
     <summary>Profile details <span>Review or edit measurements</span></summary>
     <div class="brief-more-grid">
    <div class="two"><label>NAME<input id="name"></label><label>HEIGHT (cm)<input id="height_cm" type="number"></label></div>
+   <label>USUAL LOCATION <span class="field-hint">used for local weather when you ask for a dated outfit</span><input id="home_location" placeholder="e.g. Ingatestone, Essex"></label>
    <div class="three"><label><span id="profileChestLabel">CHEST (cm)</span><input id="chest_cm" type="number"></label><label>WAIST (cm)<input id="waist_cm" type="number"></label><label><span id="profileHipsLabel">HIPS / SEAT (cm)</span><input id="hips_cm" type="number"></label></div>
    <div class="three"><label>THIGH (cm)<input id="thigh_cm" type="number"></label><label>INSIDE LEG (cm)<input id="inseam_cm" type="number"></label><label>SLEEVE (cm)<input id="sleeve_cm" type="number"></label></div>
    <div class="two"><label id="profileNeckField">NECK (cm)<input id="neck_cm" type="number"></label><label>PREFERRED FIT<select id="preferred_fit"><option>Tailored / regular</option><option>Slim</option><option>Relaxed</option><option>Mixed by garment</option></select></label></div>
@@ -761,5 +763,5 @@
 <nav><div class="navinner">
 <button data-go="home">⌂<span>Home</span></button><button data-go="wardrobe">▦<span>Wardrobe</span></button><button data-go="add">＋<span>Add</span></button><button data-go="stylistv4">✦<span>Stylist</span></button><button data-go="savedlooks">★<span>Saved</span></button><button data-go="shopping">◈<span>Shop</span></button><button data-go="packing">◇<span>Pack</span></button><button data-go="profile">◎<span>Profile</span></button><button data-go="account">○<span>Account</span></button>
 </div></nav>
-<script src="/static/app.js?v=7.10.5"></script>
+<script src="/static/app.js?v=7.10.6"></script>
 </body></html>

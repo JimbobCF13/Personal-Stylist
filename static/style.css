@@ -3441,3 +3441,31 @@ input:focus,select:focus,textarea:focus,#search:focus,#filter:focus{
  .admin-detail-actions button{width:100%}
  .beta-user-row.admin-user-drill{padding-right:24px}
 }
+
+
+/* =========================================================
+   V7.10.6 — PRE-BETA PERFORMANCE, WEATHER & VISUAL FIDELITY
+   ========================================================= */
+.field-hint{
+ display:inline!important;margin-left:5px!important;text-transform:none!important;
+ letter-spacing:0!important;font-size:7px!important;font-weight:500!important;color:#958b82!important
+}
+.stylist-weather-rule{
+ display:flex;align-items:center;gap:9px;margin:10px 0 7px;padding:10px 12px;
+ border:1px solid rgba(73,62,53,.09);border-radius:12px;background:#f6f2ed
+}
+.stylist-weather-rule>span{
+ width:27px;height:27px;flex:0 0 27px;border-radius:50%;display:grid;place-items:center;
+ background:#fff;color:#625a53;font-size:11px
+}
+.stylist-weather-rule p{margin:0}
+.stylist-weather-rule b,.stylist-weather-rule small{display:block}
+.stylist-weather-rule b{font-size:9px}
+.stylist-weather-rule small{margin-top:2px;font-size:8px;color:#817870;line-height:1.35}
+.stylist-weather-status{
+ margin:7px 0 10px;padding:11px 12px;border-radius:12px;background:#eef1ec;
+ border:1px solid #dbe1d7;color:#4f574b
+}
+.stylist-weather-status b,.stylist-weather-status small{display:block}
+.stylist-weather-status b{font-size:9px}
+.stylist-weather-status small{margin-top:3px;font-size:8px;line-height:1.4;color:#70786c}
